@@ -234,6 +234,16 @@ function ping(){ return { pong:true, time:new Date().toISOString() }; }
    ================================================================== */
 function sheet(name){ return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name); }
 
+// คอลัมน์ที่เป็น "วันที่อย่างเดียว" — Google Sheets มักแปลงเป็นเซลล์ Date
+// ทำให้ค่ากลายเป็น ISO (เช่น 2026-07-19T17:00:00Z ตามเขต +7) → normalize เป็น yyyy-MM-dd
+const DATE_COLS = ['DeliveryDate','ExpenseDate'];
+function dkey(v){
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const s = String(v||'');
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return Utilities.formatDate(new Date(s), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return s.slice(0,10);
+}
+
 function readAll(name, includeDeleted) {
   const sh = sheet(name);
   if (!sh) return [];
@@ -241,7 +251,7 @@ function readAll(name, includeDeleted) {
   if (values.length < 2) return [];
   const headers = values[0];
   const rows = values.slice(1).map(r => {
-    const o = {}; headers.forEach((h, i) => o[h] = r[i]); return o;
+    const o = {}; headers.forEach((h, i) => o[h] = (DATE_COLS.indexOf(h) > -1 && r[i] !== '' && r[i] != null) ? dkey(r[i]) : r[i]); return o;
   });
   if (!includeDeleted && headers.indexOf('IsDeleted') > -1)
     return rows.filter(r => r.IsDeleted !== true && String(r.IsDeleted).toUpperCase() !== 'TRUE');
