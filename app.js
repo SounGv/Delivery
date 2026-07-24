@@ -631,6 +631,8 @@ function openDatePicker(){
    INIT
    ================================================================ */
 async function init(){
+  // รองรับ ?api=<AppsScriptURL> เพื่อ auto-connect (สะดวกตอน deploy/แชร์ให้ทีม)
+  try{ const qp=new URLSearchParams(location.search).get('api'); if(qp){ API.setUrl(qp); history.replaceState(null,'',location.pathname+location.hash); } }catch(e){}
   Store.date = API.configured() ? new Date().toISOString().slice(0,10) : DATA_DATE;
   buildNav(); bindShell(); setDateLabel(); updateSync();
   await loadBootstrap();
