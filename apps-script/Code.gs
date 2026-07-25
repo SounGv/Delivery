@@ -208,7 +208,7 @@ function doPost(e) {
   try {
     const map = {
       createDelivery, updateDelivery, deleteDelivery,
-      createCustomer, updateCustomer,
+      createCustomer, updateCustomer, createEmployee, updateEmployee,
       createRoute, createExternalRoute, updateRoute, updateRouteStop, confirmRoute,
       createVehicle, updateVehicle,
       createExternalVehicle, updateExternalVehicle,
@@ -486,6 +486,16 @@ function createCustomer(b){
   return rec;
 }
 function updateCustomer(b){ autoGeocode(b.data); return updateById('Customers', b.id, b.data); }
+
+function createEmployee(b){
+  const now = new Date().toISOString();
+  const id = nextId('Employees','EMP');
+  const rec = appendRow('Employees', Object.assign({ EmployeeID:id, Status:'Active',
+    CreatedAt:now, UpdatedAt:now, IsDeleted:false }, b.data));
+  logActivity('CREATE_EMPLOYEE', id, 'เพิ่มพนักงาน ' + (b.data.EmployeeName||''), b.user);
+  return rec;
+}
+function updateEmployee(b){ return updateById('Employees', b.id, b.data); }
 
 function createDelivery(b){
   const now = new Date().toISOString();

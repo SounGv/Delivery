@@ -718,13 +718,43 @@ ROUTES.employees = async function(view){
   const rows = await API.get('getEmployees');
   const veh = await API.get('getVehicles');
   page(view, `
-    ${head('พนักงานส่งสินค้า', `${int(rows.length)} คน`)}
+    ${head('พนักงานส่งสินค้า', `${int(rows.length)} คน`, `<button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เพิ่มพนักงาน</button>`)}
     <div class="card" style="padding:0"><div class="tbl-wrap">
-    <table class="tbl"><thead><tr><th>ชื่อ</th><th>โทร</th><th>ตำแหน่ง</th><th>รถประจำ</th><th>สถานะ</th></tr></thead>
-    <tbody>${rows.map(e=>{const v=veh.find(x=>x.VehicleID===e.VehicleID); return `<tr><td class="strong">${esc(e.EmployeeName)}</td><td class="mono small">${esc(e.Phone)}</td><td>${esc(e.Role)}</td><td>${esc(v?v.VehicleName:'—')}</td><td>${e.Status==='Active'?'<span class="badge b-green">ทำงาน</span>':'<span class="badge b-gray">'+esc(e.Status)+'</span>'}</td></tr>`;}).join('')}</tbody></table>
+    <table class="tbl"><thead><tr><th>ชื่อ</th><th>โทร</th><th>ตำแหน่ง</th><th>รถประจำ</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead>
+    <tbody>${rows.map(e=>{const v=veh.find(x=>x.VehicleID===e.VehicleID); return `<tr>
+      <td class="strong">${esc(e.EmployeeName)}</td><td class="mono small">${esc(e.Phone)||'—'}</td>
+      <td>${e.Role==='DRIVER'?'คนขับ':(e.Role==='HELPER'?'ผู้ช่วย':esc(e.Role||'—'))}</td>
+      <td>${esc(v?v.VehicleName:'—')}</td>
+      <td>${e.Status==='Active'?'<span class="badge b-green">ทำงาน</span>':'<span class="badge b-gray">'+esc(e.Status||'')+'</span>'}</td>
+      <td class="r"><button class="btn btn-sm" data-edit="${esc(e.EmployeeID)}"><i data-lucide="pencil"></i></button>
+        <button class="btn btn-sm" data-del="${esc(e.EmployeeID)}"><i data-lucide="trash-2"></i></button></td></tr>`;}).join('')
+      || `<tr><td colspan="6">${emptyState('ยังไม่มีพนักงาน','เพิ่มพนักงานส่งสินค้า/คนขับ')}</td></tr>`}</tbody></table>
     </div></div>
   `);
+  view.querySelector('[data-act="new"]').onclick=()=>employeeForm(null,veh);
+  $$('[data-edit]',view).forEach(b=>b.onclick=()=>employeeForm(rows.find(x=>x.EmployeeID===b.dataset.edit),veh));
+  $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const e=rows.find(x=>x.EmployeeID===b.dataset.del);
+    confirmDialog(`ลบพนักงาน "${e?e.EmployeeName:''}" ? (soft-delete กู้คืนได้)`, async()=>{ await API.post('updateEmployee',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบพนักงานแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
 };
+function employeeForm(e, veh){
+  const isEdit=!!e; e=e||{};
+  const m=modal({ title:isEdit?'แก้ไขพนักงาน':'เพิ่มพนักงานส่งสินค้า', body:`
+    <div class="field row2"><div><label class="label">ชื่อ-นามสกุล *</label><input class="input" id="mpName" value="${esc(e.EmployeeName||'')}"></div>
+      <div><label class="label">เบอร์โทร</label><input class="input" id="mpPhone" value="${esc(e.Phone||'')}"></div></div>
+    <div class="field row2"><div><label class="label">ตำแหน่ง</label><select class="select" id="mpRole">
+        <option value="DRIVER" ${e.Role==='DRIVER'?'selected':''}>คนขับ</option>
+        <option value="HELPER" ${e.Role==='HELPER'?'selected':''}>ผู้ช่วย</option>
+        <option value="ADMIN" ${e.Role==='ADMIN'?'selected':''}>ธุรการ</option></select></div>
+      <div><label class="label">สถานะ</label><select class="select" id="mpStatus">
+        <option value="Active" ${((e.Status||'Active')==='Active')?'selected':''}>ทำงาน</option>
+        <option value="Inactive" ${e.Status==='Inactive'?'selected':''}>พักงาน</option></select></div></div>
+    <div class="field"><label class="label">รถประจำ</label><select class="select" id="mpVeh"><option value="">— ไม่ระบุ —</option>${(veh||[]).map(v=>`<option value="${esc(v.VehicleID)}" ${e.VehicleID===v.VehicleID?'selected':''}>${esc(v.VehicleName)} · ${esc(v.LicensePlate)}</option>`).join('')}</select></div>
+  `, foot:`<button class="btn" id="mpCancel">ยกเลิก</button><button class="btn btn-primary" id="mpSave"><i data-lucide="check"></i>บันทึก</button>`});
+  el('mpCancel').onclick=m.close;
+  el('mpSave').onclick=async()=>{ const data={ EmployeeName:el('mpName').value.trim(), Phone:el('mpPhone').value.trim(), Role:el('mpRole').value, Status:el('mpStatus').value, VehicleID:el('mpVeh').value };
+    if(!data.EmployeeName){ toast('กรอกชื่อพนักงาน','warn'); return; } el('mpSave').disabled=true;
+    try{ if(isEdit) await API.post('updateEmployee',{id:e.EmployeeID,data}); else await API.post('createEmployee',{data}); m.close(); await refresh(); toast('บันทึกพนักงานแล้ว','ok'); }catch(err){ toast(err.message,'err'); el('mpSave').disabled=false; } };
+}
 
 /* ================================================================
    REPORTS

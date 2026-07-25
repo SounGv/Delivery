@@ -223,6 +223,8 @@ const Mock = (() => {
       case 'deleteDelivery': { log('DELETE_DELIVERY',p.id,'ลบงานส่ง'); return patch(db.deliveries,'DeliveryID',p.id,{IsDeleted:true}); }
       case 'createCustomer': { const id=nid('CUS'); const rec=Object.assign({ CustomerID:id, Status:'Active' }, p.data); db.customers.push(rec); log('CREATE_CUSTOMER',id,'เพิ่มลูกค้า '+(p.data.CustomerName||'')); return rec; }
       case 'updateCustomer': return patch(db.customers,'CustomerID',p.id,p.data);
+      case 'createEmployee': { const id=nid('EMP'); const rec=Object.assign({ EmployeeID:id, Status:'Active', IsDeleted:false }, p.data); db.employees.push(rec); log('CREATE_EMPLOYEE',id,'เพิ่มพนักงาน '+(p.data.EmployeeName||'')); return rec; }
+      case 'updateEmployee': return patch(db.employees,'EmployeeID',p.id,p.data);
       case 'createVehicle': { const id=nid('V'); const rec=Object.assign({ VehicleID:id, VehicleStatus:'Available', CurrentLatitude:warehouse().lat, CurrentLongitude:warehouse().lng }, p.data); db.vehicles.push(rec); log('CREATE_VEHICLE',id,'เพิ่มรถบริษัท '+(p.data.VehicleName||'')); return rec; }
       case 'updateVehicle': return patch(db.vehicles,'VehicleID',p.id,p.data);
       case 'createExternalVehicle': { const id=nid('EV'); const rec=Object.assign({ ExternalVehicleID:id, Status:'Available' }, p.data); db.externalVehicles.push(rec); log('CREATE_EXT_VEHICLE',id,'เพิ่มรถภายนอก'); return rec; }
