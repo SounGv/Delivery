@@ -273,3 +273,30 @@ table.tbl{width:100%;border-collapse:collapse;}
 /* Driver mobile mode full screen */
 .driver{max-width:520px;margin:0 auto;}
 .driver .big-btn{height:60px;font-size:17px;border-radius:14px;}
+
+/* ============================================================
+   GADGET VILLA BRAND THEME — lime green (#B4DC00) + black
+   ============================================================ */
+:root{
+  --brand:#B4DC00; --brand-2:#9FC400; --brand-ink:#4F7A0A;
+  --brand-soft:#F4FBDD; --brand-soft-2:#E7F4C0; --brand-ink-dark:#152400;
+}
+a{color:var(--brand-ink);} a:hover{color:#3c5f06;}
+.btn-primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink-dark);}
+.btn-primary:hover{background:var(--brand-2);border-color:var(--brand-2);color:var(--brand-ink-dark);}
+.btn-ghost{background:var(--brand-soft);color:var(--brand-ink);}
+.btn-ghost:hover{background:var(--brand-soft-2);}
+.nav-item.active{background:var(--brand);color:var(--brand-ink-dark);}
+.nav-item.active i{color:var(--brand-ink-dark);}
+.b-blue{color:var(--brand-ink);background:var(--brand-soft);}
+.input:focus,.select:focus,.textarea:focus,.search input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(180,220,0,.28);}
+.opt.sel{border-color:var(--brand);box-shadow:0 0 0 3px rgba(180,220,0,.22);}
+.check-item.on{border-color:var(--brand);background:var(--brand-soft);}
+.check-item.on .cbx{background:var(--brand);border-color:var(--brand);}
+.check-item.on .cbx i{color:var(--brand-ink-dark);opacity:1;}
+.seg button.on{color:var(--brand-ink-dark);}
+.avatar{background:linear-gradient(135deg,#2b3444,#0B1220);}
+/* refined logo card */
+.brand-logo-wrap{padding:11px 16px;box-shadow:0 3px 10px rgba(0,0,0,.28);border:1px solid rgba(180,220,0,.35);}
+.brand-logo{height:46px;}
+.brand-cap{color:#9fb84a;letter-spacing:.18em;font-weight:700;font-size:9.5px;}
