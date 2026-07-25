@@ -17,7 +17,7 @@
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;height:100%;}
-body{font-family:'IBM Plex Sans Thai Looped',system-ui,-apple-system,sans-serif;
+body{font-family:'Prompt',system-ui,-apple-system,sans-serif;
   background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden;}
 a{color:var(--blue);text-decoration:none;} a:hover{color:var(--blue-dark);}
 button{font-family:inherit;cursor:pointer;}
