@@ -41,6 +41,17 @@ input,select,textarea{font-family:inherit;}
 .brand .logo i{width:24px;height:24px;}
 .brand-title{font-size:15px;font-weight:700;color:#fff;letter-spacing:.02em;line-height:1.1;}
 .brand-sub{font-size:11px;font-weight:600;color:#7E8AA3;letter-spacing:.08em;}
+/* Gadget Villa logo brand */
+.brand{flex-direction:column;align-items:stretch;gap:9px;}
+.brand-logo-wrap{background:#fff;border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:center;}
+.brand-logo{height:44px;width:auto;max-width:100%;display:block;}
+.brand-cap{font-size:10px;font-weight:600;letter-spacing:.14em;color:#7E8AA3;text-align:center;}
+.brand-fallback{display:none;align-items:center;gap:11px;}
+.brand-fallback .gv{width:48px;height:42px;border-radius:10px;background:#C4E600;color:#0B1220;display:flex;align-items:center;justify-content:center;font-weight:800;font-style:italic;font-size:21px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3);}
+.brand-fallback .gv-name{font-size:15px;font-weight:800;color:#fff;letter-spacing:.02em;}
+.brand-fallback .gv-sub{font-size:9px;font-weight:600;color:#7E8AA3;letter-spacing:.06em;margin-top:2px;}
+.brand.nologo .brand-logo-wrap,.brand.nologo .brand-cap{display:none;}
+.brand.nologo .brand-fallback{display:flex;}
 .nav{flex:1;overflow-y:auto;padding:14px 12px 8px;}
 .nav-group{font-size:11px;font-weight:600;letter-spacing:.09em;color:#59627A;padding:16px 14px 8px;}
 .nav-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:9px;color:#C7CEDB;
