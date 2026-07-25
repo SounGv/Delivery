@@ -207,7 +207,7 @@ function doPost(e) {
   const action = body.action || (e.parameter && e.parameter.action);
   try {
     const map = {
-      createDelivery, updateDelivery, deleteDelivery,
+      createDelivery, updateDelivery, deleteDelivery, bulkImportDeliveries,
       createCustomer, updateCustomer, createEmployee, updateEmployee,
       createRoute, createExternalRoute, updateRoute, updateRouteStop, confirmRoute,
       createVehicle, updateVehicle,
@@ -509,6 +509,32 @@ function createDelivery(b){
   return rec;
 }
 function updateDelivery(b){ return updateById('Deliveries', b.id, b.data); }
+
+// นำเข้างานส่งจำนวนมากในครั้งเดียว (เขียน batch เดียว ไม่ geocode ไม่ log ทีละแถว)
+// POST { action:'bulkImportDeliveries', rows:[ {DeliveryDate,CustomerName,InvoiceNo,BoxQty,Status,Note,...}, ... ] }
+function bulkImportDeliveries(b){
+  const list = b.rows || b.data || [];
+  if (!list.length) return { ok:true, inserted:0 };
+  const sh = sheet('Deliveries');
+  const H = SCHEMA.Deliveries;
+  const now = new Date().toISOString();
+  // หาเลขรันสูงสุดที่มีอยู่ เพื่อไม่ให้ ID ชนกัน
+  const existing = readAll('Deliveries', true);
+  let seq = 0;
+  existing.forEach(r => { const m = String(r.DeliveryID||'').match(/(\d+)\s*$/); if (m) seq = Math.max(seq, Number(m[1])); });
+  seq = Math.max(seq, 10000);   // งานนำเข้าเริ่มที่ DEL-10001 (แยกจากงานที่สร้างในระบบ)
+  const rowsOut = list.map((d, i) => {
+    const rec = Object.assign({
+      DeliveryID: 'DEL-' + (seq + i + 1),
+      BranchName:'', Address:'', Latitude:'', Longitude:'', Priority:'NORMAL', Status:'Completed', RouteID:'',
+      CreatedAt: now, UpdatedAt: now, CreatedBy:'import', UpdatedBy:'import', Version:1, IsDeleted:false
+    }, d);
+    return H.map(h => rec[h] !== undefined ? rec[h] : '');
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, rowsOut.length, H.length).setValues(rowsOut);
+  logActivity('IMPORT_DELIVERIES', '-', 'นำเข้างานส่ง ' + rowsOut.length + ' รายการ', b.user);
+  return { ok:true, inserted: rowsOut.length };
+}
 function deleteDelivery(b){ logActivity('DELETE_DELIVERY', b.id, 'ลบงานส่ง (soft)', b.user); return softDelete('Deliveries', b.id); }
 
 function createVehicle(b){
