@@ -296,7 +296,8 @@ a{color:var(--brand-ink);} a:hover{color:#3c5f06;}
 .check-item.on .cbx i{color:var(--brand-ink-dark);opacity:1;}
 .seg button.on{color:var(--brand-ink-dark);}
 .avatar{background:linear-gradient(135deg,#2b3444,#0B1220);}
-/* refined logo card */
-.brand-logo-wrap{padding:11px 16px;box-shadow:0 3px 10px rgba(0,0,0,.28);border:1px solid rgba(180,220,0,.35);}
-.brand-logo{height:46px;}
-.brand-cap{color:#9fb84a;letter-spacing:.18em;font-weight:700;font-size:9.5px;}
+/* text logo mark (GV / GADGET VILLA) on dark sidebar */
+.brand{flex-direction:column;align-items:center;gap:1px;text-align:center;padding:22px 20px 18px;}
+.gv-mark{font-size:40px;font-weight:800;color:var(--brand);line-height:1;letter-spacing:.01em;text-shadow:0 2px 10px rgba(0,0,0,.45);}
+.gv-word{font-size:13px;font-weight:700;letter-spacing:.32em;color:#EAEFF6;margin-top:6px;padding-left:.32em;}
+.brand-cap{font-size:9px;font-weight:600;letter-spacing:.15em;color:#7E8AA3;margin-top:5px;}
