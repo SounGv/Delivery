@@ -150,10 +150,9 @@ function deliveryForm(d){
     <div class="field row2">
       <div><label class="label">เลขบิล</label><input class="input" id="fInv" value="${esc(d.InvoiceNo||'')}"></div>
       <div><label class="label">จำนวนกล่อง</label><input class="input" type="number" id="fBox" value="${esc(d.BoxQty||'')}"></div></div>
-    <div class="field"><label class="label">ที่อยู่</label><input class="input" id="fAddr" value="${esc(d.Address||'')}"></div>
-    <div class="field row2">
-      <div><label class="label">Latitude</label><input class="input" id="fLat" value="${esc(d.Latitude||'')}"></div>
-      <div><label class="label">Longitude</label><input class="input" id="fLng" value="${esc(d.Longitude||'')}"></div></div>
+    <div class="field"><label class="label">ที่อยู่ (ถ้าไม่ได้เลือกลูกค้า ระบบจะหาพิกัดจากที่อยู่นี้ให้)</label><input class="input" id="fAddr" value="${esc(d.Address||'')}"></div>
+    <input type="hidden" id="fLat" value="${esc(d.Latitude||'')}"><input type="hidden" id="fLng" value="${esc(d.Longitude||'')}">
+    <div id="fGeoStat"></div>
     <div class="field row2">
       <div><label class="label">Priority</label><select class="select" id="fPri">${Object.keys(PRIORITY).map(p=>`<option value="${p}" ${d.Priority===p?'selected':''}>${PRIORITY[p].label}</option>`).join('')}</select></div>
       <div><label class="label">สถานะ</label><select class="select" id="fStatus">${Object.keys(DSTATUS).map(s=>`<option value="${s}" ${((d.Status||'Draft')===s)?'selected':''}>${DSTATUS[s].label}</option>`).join('')}</select></div></div>
@@ -162,11 +161,17 @@ function deliveryForm(d){
   el('fCust').onchange = e=>{ const o=e.target.selectedOptions[0]; if(!o.value)return; el('fName').value=o.dataset.name; el('fBranch').value=o.dataset.br; el('fAddr').value=o.dataset.addr; el('fLat').value=o.dataset.lat; el('fLng').value=o.dataset.lng; };
   el('fCancel').onclick = m.close;
   el('fSave').onclick = async ()=>{
+    if(!el('fName').value.trim()){ toast('กรุณากรอกชื่อลูกค้า','warn'); return; }
+    el('fSave').disabled=true;
+    // ไม่มีพิกัด แต่มีที่อยู่ → หาพิกัดอัตโนมัติ
+    if((!el('fLat').value||!el('fLng').value) && el('fAddr').value.trim().length>=6){
+      el('fSave').innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>หาพิกัด…'; icons();
+      const g=await Geo.geocode(el('fAddr').value.trim()+' ประเทศไทย'); if(g){ el('fLat').value=g.lat; el('fLng').value=g.lng; }
+      el('fSave').innerHTML='<i data-lucide="check"></i>บันทึก'; icons();
+    }
     const data = { CustomerName:el('fName').value.trim(), BranchName:el('fBranch').value.trim(), InvoiceNo:el('fInv').value.trim(),
       Address:el('fAddr').value.trim(), Latitude:+el('fLat').value||'', Longitude:+el('fLng').value||'', BoxQty:+el('fBox').value||0,
       Priority:el('fPri').value, Status:el('fStatus').value, Note:el('fNote').value.trim(), DeliveryDate:Store.date };
-    if(!data.CustomerName){ toast('กรุณากรอกชื่อลูกค้า','warn'); return; }
-    el('fSave').disabled=true;
     try{ if(isEdit) await API.post('updateDelivery',{id:d.DeliveryID,data}); else await API.post('createDelivery',{data}); m.close(); await refresh(); toast(isEdit?'แก้ไขงานส่งแล้ว':'เพิ่มงานส่งแล้ว','ok'); }
     catch(e){ toast(e.message,'err'); el('fSave').disabled=false; }
   };
@@ -640,22 +645,65 @@ ROUTES.customers = async function(view){
       <td class="r"><button class="btn btn-sm" data-edit="${esc(c.CustomerID)}"><i data-lucide="pencil"></i></button></td></tr>`).join('')||`<tr><td colspan="6">${emptyState('ยังไม่มีลูกค้า')}</td></tr>`}</tbody></table>
     </div></div>
   `);
-  const openC=(c)=>{ const isEdit=!!c; c=c||{};
-    const m=modal({title:isEdit?'แก้ไขลูกค้า':'เพิ่มลูกค้า / สาขา',body:`
-      <div class="field row2"><div><label class="label">ชื่อลูกค้า</label><input class="input" id="cN" value="${esc(c.CustomerName||'')}"></div>
-        <div><label class="label">สาขา</label><input class="input" id="cB" value="${esc(c.BranchName||'')}"></div></div>
-      <div class="field"><label class="label">ที่อยู่</label><input class="input" id="cA" value="${esc(c.Address||'')}"></div>
-      <div class="field row2"><div><label class="label">Latitude</label><input class="input" id="cLat" value="${esc(c.Latitude||'')}"></div>
-        <div><label class="label">Longitude</label><input class="input" id="cLng" value="${esc(c.Longitude||'')}"></div></div>
-      <div class="field row2"><div><label class="label">โทรศัพท์</label><input class="input" id="cP" value="${esc(c.Phone||'')}"></div>
-        <div><label class="label">ผู้ติดต่อ</label><input class="input" id="cC" value="${esc(c.ContactPerson||'')}"></div></div>
-    `,foot:`<button class="btn" id="cCancel">ยกเลิก</button><button class="btn btn-primary" id="cSave"><i data-lucide="check"></i>บันทึก</button>`});
-    el('cCancel').onclick=m.close;
-    el('cSave').onclick=async()=>{ const data={CustomerName:el('cN').value.trim(),BranchName:el('cB').value.trim(),Address:el('cA').value.trim(),Latitude:+el('cLat').value||'',Longitude:+el('cLng').value||'',Phone:el('cP').value.trim(),ContactPerson:el('cC').value.trim()}; if(!data.CustomerName){toast('กรอกชื่อลูกค้า','warn');return;} el('cSave').disabled=true; try{ if(isEdit)await API.post('updateCustomer',{id:c.CustomerID,data}); else await API.post('createCustomer',{data}); m.close(); await refresh(); toast('บันทึกลูกค้าแล้ว','ok'); }catch(e){toast(e.message,'err');el('cSave').disabled=false;} };
-  };
+  const openC=(c)=>customerForm(c);
+
   view.querySelector('[data-act="new"]').onclick=()=>openC(null);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>openC(rows.find(x=>x.CustomerID===b.dataset.edit)));
 };
+
+function customerForm(c){
+  const isEdit=!!c; c=c||{};
+  const m=modal({title:isEdit?'แก้ไขลูกค้า / สาขา':'เพิ่มลูกค้า / สาขา', body:`
+    <div class="notice info mb14"><i data-lucide="info"></i><div>กรอกที่อยู่ให้ครบ (ถนน เขต จังหวัด รหัสไปรษณีย์) แล้วกด <b>ค้นหาพิกัด</b> — ระบบหาตำแหน่ง GPS ให้อัตโนมัติ ไม่ต้องกรอกพิกัดเอง</div></div>
+    <div class="field row2"><div><label class="label">ชื่อลูกค้า / ร้าน *</label><input class="input" id="cN" value="${esc(c.CustomerName||'')}"></div>
+      <div><label class="label">สาขา</label><input class="input" id="cB" value="${esc(c.BranchName||'')}"></div></div>
+    <div class="field"><label class="label">ที่อยู่ (บ้านเลขที่ · ถนน · แขวง/ตำบล · เขต/อำเภอ · จังหวัด)</label>
+      <textarea class="textarea" id="cA" placeholder="เช่น 729/28-37 ถ.รัชดาภิเษก แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ">${esc(c.Address||'')}</textarea></div>
+    <div class="field row2"><div><label class="label">รหัสไปรษณีย์</label><input class="input" id="cPost" inputmode="numeric" value="${esc(c.PostalCode||'')}"></div>
+      <div><label class="label">โทรศัพท์</label><input class="input" id="cP" value="${esc(c.Phone||'')}"></div></div>
+    <div class="field"><label class="label">ผู้ติดต่อ</label><input class="input" id="cC" value="${esc(c.ContactPerson||'')}"></div>
+
+    <button class="btn btn-ghost btn-block" id="cGeo" type="button"><i data-lucide="map-pin"></i>ค้นหาพิกัด GPS จากที่อยู่</button>
+    <div id="cGeoStat" style="margin-top:10px"></div>
+    <input type="hidden" id="cLat" value="${esc(c.Latitude||'')}"><input type="hidden" id="cLng" value="${esc(c.Longitude||'')}">
+  `, foot:`<button class="btn" id="cCancel">ยกเลิก</button><button class="btn btn-primary" id="cSave"><i data-lucide="check"></i>บันทึก</button>`});
+
+  const buildAddr=()=>[el('cA').value.trim(), el('cPost').value.trim(), 'ประเทศไทย'].filter(Boolean).join(' ');
+  const showPin=(g,manual)=>{
+    if(g){ el('cLat').value=g.lat; el('cLng').value=g.lng;
+      el('cGeoStat').innerHTML=`<div class="notice ok"><i data-lucide="map-pin-check"></i><div>พบพิกัด: <b class="mono">${(+g.lat).toFixed(6)}, ${(+g.lng).toFixed(6)}</b>${g.display?`<br><span class="small muted">${esc(g.display).slice(0,90)}</span>`:''}<br><a href="#" id="cManual">ปรับพิกัดเอง</a></div></div>`; }
+    else if(manual){ el('cGeoStat').innerHTML=`<div class="notice warn"><i data-lucide="search-x"></i><div>หาพิกัดจากที่อยู่ไม่พบ — ลองใส่ที่อยู่ให้ละเอียดขึ้น หรือ <a href="#" id="cManual">กรอกพิกัดเอง</a></div></div>`; }
+    icons(); const mn=el('cManual'); if(mn) mn.onclick=(e)=>{ e.preventDefault(); el('cGeoStat').innerHTML=`<div class="field row2"><div><label class="label">Latitude</label><input class="input" id="cLatV" value="${esc(el('cLat').value)}"></div><div><label class="label">Longitude</label><input class="input" id="cLngV" value="${esc(el('cLng').value)}"></div></div>`; el('cLatV').oninput=()=>el('cLat').value=el('cLatV').value; el('cLngV').oninput=()=>el('cLng').value=el('cLngV').value; };
+  };
+  if(c.Latitude&&c.Longitude) showPin({lat:c.Latitude,lng:c.Longitude});
+
+  el('cGeo').onclick=async()=>{
+    const q=buildAddr(); if(el('cA').value.trim().length<6){ toast('กรอกที่อยู่ให้ละเอียดขึ้นก่อน','warn'); return; }
+    el('cGeo').disabled=true; el('cGeoStat').innerHTML='<div class="flex aic gap8 small muted"><span class="spinner" style="width:18px;height:18px;border-width:2px"></span>กำลังค้นหาพิกัด…</div>';
+    const g=await Geo.geocode(q); el('cGeo').disabled=false; showPin(g,true);
+    if(g) toast('พบพิกัด GPS แล้ว','ok');
+  };
+  el('cCancel').onclick=m.close;
+  el('cSave').onclick=async()=>{
+    const name=el('cN').value.trim(); if(!name){ toast('กรอกชื่อลูกค้า','warn'); return; }
+    el('cSave').disabled=true;
+    // ยังไม่มีพิกัด → ลอง geocode อัตโนมัติตอนบันทึก
+    if((!el('cLat').value||!el('cLng').value) && el('cA').value.trim().length>=6){
+      el('cSave').innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>หาพิกัด…'; icons();
+      const g=await Geo.geocode(buildAddr()); if(g){ el('cLat').value=g.lat; el('cLng').value=g.lng; }
+    }
+    const addr=[el('cA').value.trim(), el('cPost').value.trim()].filter(Boolean).join(' ');
+    const data={ CustomerName:name, BranchName:el('cB').value.trim(), Address:addr, PostalCode:el('cPost').value.trim(),
+      Latitude:+el('cLat').value||'', Longitude:+el('cLng').value||'', Phone:el('cP').value.trim(), ContactPerson:el('cC').value.trim() };
+    if(!data.Latitude){ el('cSave').disabled=false; el('cSave').innerHTML='<i data-lucide="check"></i>บันทึกทั้งที่ไม่มีพิกัด'; icons();
+      confirmDialog('ยังไม่มีพิกัด GPS ของที่อยู่นี้ (แผนที่/การจัด Route จะไม่แสดงจุดนี้จนกว่าจะมีพิกัด) ต้องการบันทึกต่อไหม?', ()=>saveC(data), {yes:'บันทึกต่อ'}); return; }
+    saveC(data);
+  };
+  async function saveC(data){
+    try{ if(isEdit) await API.post('updateCustomer',{id:c.CustomerID,data}); else await API.post('createCustomer',{data}); m.close(); await refresh(); toast('บันทึกลูกค้าแล้ว','ok'); }
+    catch(e){ toast(e.message,'err'); const b=el('cSave'); if(b){b.disabled=false; b.innerHTML='<i data-lucide="check"></i>บันทึก'; icons();} }
+  }
+}
 
 /* ================================================================
    EMPLOYEES

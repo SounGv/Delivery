@@ -281,6 +281,30 @@ const API = {
 function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 180)); }
 
 /* ================================================================
+   GEOCODING — แปลงที่อยู่ (ข้อความ) → พิกัด GPS อัตโนมัติ
+   live: ใช้ Google Geocoder ผ่าน Apps Script (แม่นกับที่อยู่ไทย)
+   fallback: OpenStreetMap Nominatim (ฟรี ไม่ต้องมี key)
+   ================================================================ */
+const Geo = {
+  async geocode(address){
+    address = String(address||'').trim();
+    if(!address) return null;
+    // 1) backend (Google) เมื่อเชื่อมต่อจริง
+    if(API.configured()){
+      try{ const r = await API.get('geocode',{ q:address }); if(r && r.lat) return { lat:+r.lat, lng:+r.lng, display:r.display||address, source:'google' }; }catch(e){}
+    }
+    // 2) fallback Nominatim
+    try{
+      const u='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=th&q='+encodeURIComponent(address);
+      const res = await fetch(u, { headers:{'Accept':'application/json'} });
+      const a = await res.json();
+      if(a && a[0]) return { lat:+a[0].lat, lng:+a[0].lon, display:a[0].display_name, source:'osm' };
+    }catch(e){}
+    return null;
+  }
+};
+
+/* ================================================================
    UI PRIMITIVES — toast / modal / states
    ================================================================ */
 function toast(msg, type='info', title){

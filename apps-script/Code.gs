@@ -192,7 +192,7 @@ function doGet(e) {
       getBootstrap, getDashboardData, getDeliveries, getRoutes, getRouteStops,
       getCustomers, getEmployees, getVehicles, getExternalProviders, getExternalVehicles,
       getCartrackVehicles, getLiveVehicleStatus, getExpenses, getClaims, getRouteCosts,
-      getReports, getSettings, getRealtime, getCartrackStatus, ping
+      getReports, getSettings, getRealtime, getCartrackStatus, geocode, ping
     };
     if (!map[action]) return json({ ok:false, error:'unknown action: '+action });
     return json({ ok:true, data: map[action](e.parameter) });
@@ -228,6 +228,29 @@ function json(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 function ping(){ return { pong:true, time:new Date().toISOString() }; }
+
+/* GEOCODE — แปลงที่อยู่ → พิกัด ด้วย Google Geocoder (built-in Maps service, ไม่ต้องมี API key)
+   frontend เรียก ?action=geocode&q=<ที่อยู่> */
+function geocode(p){
+  const addr = (p && (p.q || p.address)) ? String(p.q || p.address) : '';
+  if (!addr) return { lat:'', lng:'', status:'NO_ADDRESS' };
+  try {
+    const res = Maps.newGeocoder().setRegion('th').setLanguage('th').geocode(addr);
+    if (res && res.status === 'OK' && res.results.length) {
+      const loc = res.results[0].geometry.location;
+      return { lat:loc.lat, lng:loc.lng, display:res.results[0].formatted_address, status:'OK' };
+    }
+    return { lat:'', lng:'', status: res ? res.status : 'ERROR' };
+  } catch (e) { return { lat:'', lng:'', status:'ERROR', error:String(e) }; }
+}
+// เติมพิกัดอัตโนมัติถ้ายังไม่มี แต่มีที่อยู่
+function autoGeocode(rec){
+  if (rec && rec.Address && (!rec.Latitude || !rec.Longitude)) {
+    const g = geocode({ q: rec.Address });
+    if (g.status === 'OK') { rec.Latitude = g.lat; rec.Longitude = g.lng; }
+  }
+  return rec;
+}
 
 /* ==================================================================
    4. CORE HELPERS — read / write / soft-delete
@@ -456,16 +479,18 @@ function recentActivities(n){
 function createCustomer(b){
   const now = new Date().toISOString();
   const id = nextId('Customers','CUS');
+  autoGeocode(b.data);
   const rec = appendRow('Customers', Object.assign({ CustomerID:id, Status:'Active',
     CreatedAt:now, UpdatedAt:now, IsDeleted:false }, b.data));
   logActivity('CREATE_CUSTOMER', id, 'เพิ่มลูกค้า ' + (b.data.CustomerName||''), b.user);
   return rec;
 }
-function updateCustomer(b){ return updateById('Customers', b.id, b.data); }
+function updateCustomer(b){ autoGeocode(b.data); return updateById('Customers', b.id, b.data); }
 
 function createDelivery(b){
   const now = new Date().toISOString();
   const id = nextId('Deliveries','DEL');
+  autoGeocode(b.data);
   const rec = appendRow('Deliveries', Object.assign({
     DeliveryID:id, Status:'Draft', CreatedAt:now, UpdatedAt:now,
     CreatedBy:b.user||'', UpdatedBy:b.user||'', Version:1, IsDeleted:false
