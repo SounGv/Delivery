@@ -770,6 +770,34 @@ function syncCartrack(){
   return { ok:true, fetched:list.length, matched:matched, at:now };
 }
 
+// ทดสอบ/ตรวจโครงสร้าง response จาก Cartrack — รันจาก editor แล้วดู Logs
+// เพื่อ map ชื่อฟิลด์จริงให้ตรง (docs ไม่ได้ระบุชื่อฟิลด์)
+function testCartrackRaw(){
+  const base  = secret('CARTRACK_BASE_URL','https://fleetapi-th.cartrack.com/rest');
+  const user  = secret('CARTRACK_USERNAME');
+  const token = secret('CARTRACK_API_TOKEN');
+  if (!user || !token) return 'ยังไม่ได้ตั้งค่า credentials — รัน setupCartrackCredentials() ก่อน';
+  const url = base.replace(/\/+$/,'') + '/vehicles/status';
+  const res = UrlFetchApp.fetch(url, {
+    method:'get',
+    headers:{ 'Accept':'application/json',
+      'Authorization':'Basic ' + Utilities.base64Encode(user + ':' + token) },
+    muteHttpExceptions:true
+  });
+  const code = res.getResponseCode();
+  const text = res.getContentText() || '';
+  let keys = [], sample = null;
+  try {
+    const body = JSON.parse(text);
+    const list = body.data || body.vehicles || (Array.isArray(body) ? body : []);
+    if (list.length) { sample = list[0]; keys = Object.keys(list[0]); }
+  } catch (e) {}
+  const out = { httpCode:code, count:(keys.length?'(มีข้อมูล)':'?'), fieldKeys:keys,
+    firstVehicle:sample, rawPreview:text.slice(0,1500) };
+  Logger.log(JSON.stringify(out, null, 2));   // ดูที่ View → Logs
+  return out;
+}
+
 // frontend เรียกดูสถานะ (ไม่มี secret) — connected/ lastSync / counts + พิกัดล่าสุด
 function getCartrackStatus(){
   const enabled = String(settingValue('CARTRACK_ENABLED','false')).toLowerCase() === 'true';
