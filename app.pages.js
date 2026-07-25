@@ -455,7 +455,7 @@ ROUTES.livemap = async function(view){
   function draw(){
     const list=vehicles();
     el('vehList').innerHTML = list.length? list.map(v=>`<div class="flex between aic" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
-      <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีคนขับ')}</div></div>
+      <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีชื่อคนขับ')}</div></div>
       <div style="text-align:right">${vstatusBadge(v.VehicleStatus)}<div class="small muted tab" style="margin-top:3px">${int(v.speed)} กม./ชม.</div></div></div>`).join('') : emptyState('ไม่มีรถตามตัวกรอง');
     if(liveMapRef){ liveMapRef.remove(); liveMapRef=null; }
     const wh=warehouse(); liveMapRef=MapUtil.make('liveMap',wh); MapUtil.whMarker(liveMapRef,wh);
@@ -481,13 +481,16 @@ ROUTES.vehicles = async function(view){
     <tbody>${rows.map(v=>`<tr>
       <td class="strong">${esc(v.VehicleName)}</td><td class="mono small">${esc(v.LicensePlate)}</td>
       <td>${esc(v.VehicleType)}</td><td class="r tab">${int(v.CapacityBox)} กล่อง</td>
-      <td>${esc(v.CurrentDriver||'—')}</td><td>${vstatusBadge(v.VehicleStatus)}</td>
+      <td>${v.CurrentDriver?esc(v.CurrentDriver):'<span class="muted">ไม่มีชื่อคนขับ</span>'}</td><td>${vstatusBadge(v.VehicleStatus)}</td>
       <td class="small muted">${v.CurrentLatitude?num1(v.CurrentLatitude)+', '+num1(v.CurrentLongitude):'—'}<br>${v.LastSyncAt?ago(v.LastSyncAt):(v.LastPositionTime?ago(v.LastPositionTime):'')}</td>
-      <td class="r"><button class="btn btn-sm" data-edit="${esc(v.VehicleID)}"><i data-lucide="pencil"></i></button></td></tr>`).join('')}</tbody></table>
+      <td class="r"><button class="btn btn-sm" data-edit="${esc(v.VehicleID)}"><i data-lucide="pencil"></i></button>
+        <button class="btn btn-sm" data-del="${esc(v.VehicleID)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('')}</tbody></table>
     </div></div>
   `);
   view.querySelector('[data-act="new"]').onclick=()=>vehicleForm(null);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>vehicleForm(rows.find(x=>x.VehicleID===b.dataset.edit)));
+  $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const v=rows.find(x=>x.VehicleID===b.dataset.del);
+    confirmDialog(`ลบรถ "${v?v.VehicleName:''}" ? (ใช้ soft-delete — ข้อมูลจริงไม่ถูกลบถาวร กู้คืนได้)`, async()=>{ await API.post('updateVehicle',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบรถแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
 };
 function vehicleForm(v){
   const isEdit=!!v; v=v||{};
@@ -522,11 +525,14 @@ ROUTES.external = async function(view){
       <td>${esc(v.VehicleType)}</td><td class="mono small">${esc(v.LicensePlate)}</td><td class="r tab">${int(v.CapacityBox)}</td>
       <td class="r tab">${money(v.Rate)}</td><td><span class="badge b-gray">${RATE_TYPE[v.RateType]||v.RateType}</span></td>
       <td>${v.Status==='Available'?'<span class="badge b-green">พร้อม</span>':'<span class="badge b-gray">'+esc(v.Status)+'</span>'}</td>
-      <td class="r"><button class="btn btn-sm" data-edit="${esc(v.ExternalVehicleID)}"><i data-lucide="pencil"></i></button></td></tr>`).join('')}</tbody></table>
+      <td class="r"><button class="btn btn-sm" data-edit="${esc(v.ExternalVehicleID)}"><i data-lucide="pencil"></i></button>
+        <button class="btn btn-sm" data-del="${esc(v.ExternalVehicleID)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('')}</tbody></table>
     </div></div>
   `);
   view.querySelector('[data-act="new"]').onclick=()=>extForm(null,provs);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>extForm(rows.find(x=>x.ExternalVehicleID===b.dataset.edit),provs));
+  $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const v=rows.find(x=>x.ExternalVehicleID===b.dataset.del);
+    confirmDialog(`ลบรถภายนอก "${v?v.ProviderName:''}" ? (soft-delete กู้คืนได้)`, async()=>{ await API.post('updateExternalVehicle',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบรถภายนอกแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
 };
 function extForm(v,provs){
   const isEdit=!!v; v=v||{};
