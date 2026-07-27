@@ -931,13 +931,16 @@ ROUTES.customers = async function(view){
     <table class="tbl"><thead><tr><th>ลูกค้า</th><th>สาขา</th><th>ที่อยู่</th><th>พิกัด</th><th>โทร</th><th class="r"></th></tr></thead>
     <tbody>${rows.map(c=>`<tr><td class="strong">${esc(c.CustomerName)}</td><td>${esc(c.BranchName)}</td><td class="muted small">${esc(c.Address)}</td>
       <td class="mono small">${c.Latitude?num1(c.Latitude)+', '+num1(c.Longitude):'—'}</td><td class="mono small">${esc(c.Phone||'')}</td>
-      <td class="r"><button class="btn btn-sm" data-edit="${esc(c.CustomerID)}"><i data-lucide="pencil"></i></button></td></tr>`).join('')||`<tr><td colspan="6">${emptyState('ยังไม่มีลูกค้า')}</td></tr>`}</tbody></table>
+      <td class="r"><button class="btn btn-sm" data-edit="${esc(c.CustomerID)}"><i data-lucide="pencil"></i></button>
+        <button class="btn btn-sm" data-del="${esc(c.CustomerID)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('')||`<tr><td colspan="6">${emptyState('ยังไม่มีลูกค้า')}</td></tr>`}</tbody></table>
     </div></div>
   `);
   const openC=(c)=>customerForm(c);
 
   view.querySelector('[data-act="new"]').onclick=()=>openC(null);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>openC(rows.find(x=>x.CustomerID===b.dataset.edit)));
+  $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const c=rows.find(x=>x.CustomerID===b.dataset.del);
+    confirmDialog(`ลบลูกค้า "${c?c.CustomerName:''}" ? (soft-delete กู้คืนได้)`, async()=>{ await API.post('updateCustomer',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบลูกค้าแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
 };
 
 function customerForm(c){
