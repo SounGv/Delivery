@@ -1136,7 +1136,7 @@ function printReport(from,to,rep){
       <div><span>ต้นทุนรวม:</span> <b>${money(total)} บาท</b></div>
     </div>
     <div class="sec-title">รายการ Route</div>
-    <table><thead><tr><th>Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">ต้นทุน</th><th>สถานะ</th></tr></thead>
+    <table><thead><tr><th class="tl">Route</th><th>วันที่</th><th>ประเภท</th><th class="tl">คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">ต้นทุน</th><th>สถานะ</th></tr></thead>
     <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'-')}</td><td class="r">${int(r.TotalStops)}</td><td class="r">${int(r.TotalBoxes)}</td><td class="r">${num1(r.TotalDistance)}</td><td class="r">${money(r.EstimatedTotalCost)}</td><td>${(DSTATUS[r.Status]||{}).label||r.Status}</td></tr>`).join('')||'<tr><td colspan="9" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
     <tfoot><tr><th colspan="7" class="r">รวมต้นทุน</th><th class="r" colspan="2">${money(total)} บาท</th></tr></tfoot></table>`;
   Printer.open('รายงานการจัดส่ง', rSize(), body);
@@ -1151,12 +1151,14 @@ async function printRouteNote(r){
       ${row('คนขับ',r.DriverName)}${row('รถ',r.VehicleName||r.ProviderName)}${row('ทะเบียน',r.LicensePlate)}
       ${row('จำนวนจุด',int(r.TotalStops))}${row('กล่องรวม',int(r.TotalBoxes))}${row('ระยะทาง',num1(r.TotalDistance)+' กม.')}${row('สถานะ',(DSTATUS[r.Status]||{}).label||r.Status)}</div>
     <div class="sec-title">รายการจุดส่ง</div>
-    <table><thead><tr><th class="c">ลำดับ</th><th>ลูกค้า</th><th>สาขา / ที่อยู่</th><th class="r">กล่อง</th><th class="c">เซ็นรับ</th></tr></thead>
-    <tbody>${stops.map(s=>`<tr><td class="c">${s.StopOrder}</td><td>${esc(s.CustomerName)}</td><td>${esc(s.BranchName||s.Address||'')}</td><td class="r">${int(s.BoxQty)}</td><td></td></tr>`).join('')||'<tr><td colspan="5" class="c muted">ไม่มีจุดส่ง</td></tr>'}</tbody></table>
-    <div class="sec-title">สรุปค่าใช้จ่าย</div>
-    <div class="kv">${row('ค่าน้ำมัน',money(r.EstimatedFuelCost))}${row('ค่าทางด่วน',money(r.EstimatedTollCost))}${row('ค่าจอดรถ',money(r.EstimatedParkingCost))}${row('ค่ารถภายนอก',money(r.EstimatedExternalCost))}${row('รวมทั้งสิ้น',money(r.EstimatedTotalCost)+' บาท')}</div>
-    <div class="sign"><div>ผู้ส่งสินค้า (คนขับ)</div><div>ผู้รับสินค้า</div><div>ผู้ตรวจสอบ</div></div>`;
-  Printer.open('ใบส่งสินค้า / Delivery Note', rSize(), body);
+    <table>
+      <colgroup><col style="width:8%"><col style="width:30%"><col><col style="width:11%"><col style="width:15%"></colgroup>
+      <thead><tr><th>ลำดับ</th><th class="tl">ลูกค้า</th><th class="tl">สาขา / ที่อยู่</th><th>กล่อง</th><th>หมายเหตุ</th></tr></thead>
+      <tbody>${stops.map(s=>`<tr><td class="c">${s.StopOrder}</td><td>${esc(s.CustomerName)}</td><td class="addr">${esc(s.BranchName||s.Address||'')}</td><td class="r">${int(s.BoxQty)}</td><td></td></tr>`).join('')||'<tr><td colspan="5" class="c muted">ไม่มีจุดส่ง</td></tr>'}</tbody></table>
+    <div class="sec-title">สรุปค่าใช้จ่าย (สำหรับเบิกกับฝ่ายบัญชี)</div>
+    <div class="kv">${row('ค่าน้ำมัน',money(r.EstimatedFuelCost))}${row('ค่าทางด่วน',money(r.EstimatedTollCost))}${row('ค่าจอดรถ',money(r.EstimatedParkingCost))}${row('ค่ารถภายนอก',money(r.EstimatedExternalCost))}${row('ค่าอื่นๆ',money(r.EstimatedOtherCost))}${row('รวมเบิกทั้งสิ้น',money(r.EstimatedTotalCost)+' บาท')}</div>
+    <div class="sign"><div>ผู้มอบหมายงาน / หัวหน้า</div><div>คนขับ (ผู้เบิก)</div><div>ฝ่ายบัญชี (ผู้อนุมัติจ่าย)</div></div>`;
+  Printer.open('ใบสรุปงาน-เบิกค่าใช้จ่าย / TRIP & EXPENSE', rSize(), body);
 }
 
 /* ================================================================

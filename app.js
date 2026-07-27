@@ -702,8 +702,11 @@ const Printer = {
         .hd .rt .sub{font-size:${A5?'9.5px':'11px'};color:#6f8a00;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-top:2px;}
         .hd .rt .n{font-size:10px;color:#8a93a0;margin-top:6px;}
         table{width:100%;border-collapse:collapse;margin:8px 0;}
-        th,td{border:1px solid #d6dbe2;padding:${A5?'5px 8px':'7px 10px'};text-align:left;font-size:inherit;vertical-align:top;}
-        th{background:#0B1220;color:#fff;font-weight:600;}
+        th,td{border:1px solid #d6dbe2;padding:${A5?'6px 9px':'8px 11px'};text-align:left;font-size:inherit;vertical-align:middle;}
+        td{line-height:1.4;}
+        th{background:#0B1220;color:#fff;font-weight:600;white-space:nowrap;text-align:center;}
+        th.tl{text-align:left;}
+        td.addr{vertical-align:top;}
         tbody tr:nth-child(even) td{background:#f7f9f4;}
         tfoot th{background:#f0f5dd;color:#0B1220;}
         .r{text-align:right;} .c{text-align:center;}
