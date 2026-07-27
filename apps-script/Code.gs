@@ -209,6 +209,7 @@ function doPost(e) {
     const map = {
       createDelivery, updateDelivery, deleteDelivery, bulkImportDeliveries,
       createCustomer, updateCustomer, createEmployee, updateEmployee,
+      bulkImportCustomers, bulkImportEmployees,
       createRoute, createExternalRoute, updateRoute, updateRouteStop, confirmRoute,
       createVehicle, updateVehicle,
       createExternalVehicle, updateExternalVehicle,
@@ -496,6 +497,26 @@ function createEmployee(b){
   return rec;
 }
 function updateEmployee(b){ return updateById('Employees', b.id, b.data); }
+
+// นำเข้าจำนวนมาก (batch) — ลูกค้า / พนักงาน
+function bulkImportCustomers(b){
+  const list=b.rows||[]; if(!list.length) return { ok:true, inserted:0 };
+  const sh=sheet('Customers'), H=SCHEMA.Customers, now=new Date().toISOString();
+  let seq=1000; readAll('Customers',true).forEach(r=>{ const m=String(r.CustomerID||'').match(/(\d+)\s*$/); if(m)seq=Math.max(seq,Number(m[1])); });
+  const rows=list.map((d,i)=>{ const rec=Object.assign({ CustomerID:'CUS-'+(seq+i+1), Status:'Active', CreatedAt:now, UpdatedAt:now, IsDeleted:false }, d); return H.map(h=>rec[h]!==undefined?rec[h]:''); });
+  sh.getRange(sh.getLastRow()+1,1,rows.length,H.length).setValues(rows);
+  logActivity('IMPORT_CUSTOMERS','-','นำเข้าลูกค้า '+rows.length+' ราย', b.user);
+  return { ok:true, inserted:rows.length };
+}
+function bulkImportEmployees(b){
+  const list=b.rows||[]; if(!list.length) return { ok:true, inserted:0 };
+  const sh=sheet('Employees'), H=SCHEMA.Employees, now=new Date().toISOString();
+  let seq=1000; readAll('Employees',true).forEach(r=>{ const m=String(r.EmployeeID||'').match(/(\d+)\s*$/); if(m)seq=Math.max(seq,Number(m[1])); });
+  const rows=list.map((d,i)=>{ const rec=Object.assign({ EmployeeID:'EMP-'+(seq+i+1), Role:'DRIVER', Status:'Active', CreatedAt:now, UpdatedAt:now, IsDeleted:false }, d); return H.map(h=>rec[h]!==undefined?rec[h]:''); });
+  sh.getRange(sh.getLastRow()+1,1,rows.length,H.length).setValues(rows);
+  logActivity('IMPORT_EMPLOYEES','-','นำเข้าพนักงาน '+rows.length+' คน', b.user);
+  return { ok:true, inserted:rows.length };
+}
 
 function createDelivery(b){
   const now = new Date().toISOString();
