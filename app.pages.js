@@ -125,8 +125,10 @@ ROUTES.deliveries = async function(view){
           <td class="mono small">${esc(d.InvoiceNo||'—')}</td><td class="r tab">${int(d.BoxQty)}</td>
           <td>${d.RouteID?`<span class="mono small">${esc(d.RouteID)}</span>`:'<span class="muted small">—</span>'}</td>
           <td>${dstatusBadge(d.Status)}</td>
-          <td class="r"><button class="btn btn-sm" data-edit="${esc(d.DeliveryID)}"><i data-lucide="pencil"></i></button>
-            <button class="btn btn-sm" data-del="${esc(d.DeliveryID)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('')}</tbody></table>`
+          <td class="r"><div class="flex gap8" style="justify-content:flex-end">
+            ${d.Status==='Draft'?`<button class="btn btn-ghost btn-sm" data-dispatch="${esc(d.DeliveryID)}"><i data-lucide="truck"></i>จัดรถด่วน</button>`:''}
+            <button class="btn btn-sm" data-edit="${esc(d.DeliveryID)}"><i data-lucide="pencil"></i></button>
+            <button class="btn btn-sm" data-del="${esc(d.DeliveryID)}"><i data-lucide="trash-2"></i></button></div></td></tr>`).join('')}</tbody></table>`
         : emptyState('ยังไม่มีงานส่งในวันนี้','เพิ่มงานส่งใหม่ หรือเปลี่ยนวันที่','<button class="btn btn-primary" data-act="new2"><i data-lucide="plus"></i>เพิ่มงานส่ง</button>')}
       </div>
     </div>
@@ -137,7 +139,69 @@ ROUTES.deliveries = async function(view){
   view.querySelector('[data-act="csv"]').onclick = ()=>Exporter.csv(rows,'deliveries_'+Store.date);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>openForm((Store.data.deliveries||[]).find(x=>x.DeliveryID===b.dataset.edit)));
   $$('[data-del]',view).forEach(b=>b.onclick=()=>confirmDialog('ลบงานส่งนี้? (ระบบใช้ soft-delete ข้อมูลจริงไม่ถูกลบ)',async()=>{ await API.post('deleteDelivery',{id:b.dataset.del}); await refresh(); toast('ลบงานส่งแล้ว','ok'); },{danger:true,yes:'ลบ'}));
+  $$('[data-dispatch]',view).forEach(b=>b.onclick=()=>quickDispatch((Store.data.deliveries||[]).find(x=>x.DeliveryID===b.dataset.dispatch)));
 };
+
+/* ---- QUICK DISPATCH — จ่ายรถให้งานเดียวในคลิกเดียว ---- */
+const QD = { type:'COMPANY', vehId:'', extId:'', driver:'', d:null, m:null, modal:null };
+function qdVehicle(){ return QD.type==='EXTERNAL' ? (Store.data.externalVehicles||[]).find(v=>v.ExternalVehicleID===QD.extId) : (Store.data.vehicles||[]).find(v=>v.VehicleID===QD.vehId); }
+function qdCost(){ const v=qdVehicle(); return QD.type==='EXTERNAL' ? (v?Planner.externalCost(QD.m.distance,v):{fuel:0,toll:Planner.toll(),parking:Planner.parking(),external:0,total:Planner.toll()+Planner.parking()}) : Planner.companyCost(QD.m.distance,v); }
+function quickDispatch(d){
+  if(!d) return;
+  QD.d=d; QD.m=Planner.metrics([d]);
+  const rec=Planner.recommendVehicle(Number(d.BoxQty)||0)||Planner.availableVehicles()[0]||(Store.data.vehicles||[])[0];
+  const emp=rec&&(Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
+  QD.type='COMPANY'; QD.vehId=rec?rec.VehicleID:''; QD.extId=((Store.data.externalVehicles||[])[0]||{}).ExternalVehicleID||'';
+  QD.driver=rec?(rec.CurrentDriver||(emp&&emp.EmployeeName)||''):'';
+  const m=modal({ title:'จัดรถด่วน — '+esc(d.CustomerName||''), body:`<div id="qdBody">${qdBody()}</div>`,
+    foot:`<button class="btn" id="qdCancel">ยกเลิก</button><button class="btn btn-primary" id="qdSave"><i data-lucide="check-circle-2"></i>ยืนยัน & จ่ายรถ</button>` });
+  QD.modal=m; el('qdCancel').onclick=m.close; el('qdSave').onclick=qdConfirm; qdBind();
+}
+function qdBody(){
+  const d=QD.d, m=QD.m, isExt=QD.type==='EXTERNAL', v=qdVehicle(), c=qdCost();
+  const veh=Store.data.vehicles||[], ext=Store.data.externalVehicles||[], emps=Store.data.employees||[];
+  const cap=v?Number(v.CapacityBox):0;
+  const warn=(cap&&Number(d.BoxQty)>cap)?`<div class="notice warn" style="margin-bottom:10px"><i data-lucide="alert-triangle"></i><div>ความจุรถ ${int(cap)} กล่อง &lt; งาน ${int(d.BoxQty)} กล่อง</div></div>`:'';
+  const noGeo=(!d.Latitude||!d.Longitude)?`<div class="notice info" style="margin-bottom:10px"><i data-lucide="info"></i><div>งานนี้ยังไม่มีพิกัด — ระยะทาง/ค่าน้ำมันจะเป็น 0 (แก้ที่อยู่เพื่อหาพิกัดก่อนได้)</div></div>`:'';
+  const row=(l,x)=>`<div class="flex between" style="padding:4px 0;font-size:13px"><span class="muted">${l}</span><span class="tab">${money(x)}</span></div>`;
+  return `
+    <div class="notice info" style="margin-bottom:12px"><i data-lucide="package"></i><div><b>${esc(d.CustomerName)}</b>${d.BranchName?' · '+esc(d.BranchName):''}<br>${esc(d.Address||'')} · ${int(d.BoxQty)} กล่อง · ${priBadge(d.Priority)}</div></div>
+    ${noGeo}
+    <div class="field"><label class="label">ประเภทรถ</label>
+      <div class="seg" id="qdType"><button class="${!isExt?'on':''}" data-t="COMPANY">รถบริษัท</button><button class="${isExt?'on':''}" data-t="EXTERNAL">รถภายนอก</button></div></div>
+    <div class="field"><label class="label">เลือกรถ</label>
+      ${isExt?`<select class="select" id="qdExt">${ext.length?ext.map(x=>`<option value="${esc(x.ExternalVehicleID)}" ${QD.extId===x.ExternalVehicleID?'selected':''}>${esc(x.ProviderName)} · ${esc(x.LicensePlate)} (${int(x.CapacityBox)} กล่อง)</option>`).join(''):'<option value="">— ไม่มีรถภายนอก —</option>'}</select>`
+        :`<select class="select" id="qdVeh">${veh.map(x=>`<option value="${esc(x.VehicleID)}" ${QD.vehId===x.VehicleID?'selected':''}>${esc(x.VehicleName)} · ${esc(x.LicensePlate)} (${int(x.CapacityBox)} กล่อง)</option>`).join('')}</select>`}</div>
+    <div class="field"><label class="label">คนขับ</label><input class="input" id="qdDriver" list="qdEmp" value="${esc(QD.driver)}" placeholder="ชื่อคนขับ"><datalist id="qdEmp">${emps.map(e=>`<option value="${esc(e.EmployeeName)}">`).join('')}</datalist></div>
+    ${warn}
+    <div style="border:1px solid var(--border);border-radius:11px;padding:14px">
+      <div class="flex between" style="font-size:13px;margin-bottom:6px"><span class="muted">ระยะทาง (ไป-กลับคลัง)</span><span class="tab strong">${num1(m.distance)} กม.</span></div>
+      ${row('ค่าน้ำมัน (Fuel)',c.fuel)}${row('ค่าทางด่วน (Toll)',c.toll)}${row('ค่าจอดรถ (Parking)',c.parking)}${c.external?row('ค่ารถภายนอก',c.external):''}
+      <div class="divider"></div>
+      <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวม</span><span class="strong tab" style="color:var(--brand-ink)">${money(c.total)} ฿</span></div>
+    </div>`;
+}
+function qdBind(){
+  const t=el('qdType'); if(t) $$('#qdType button').forEach(b=>b.onclick=()=>{ QD.type=b.dataset.t; if(b.dataset.t==='EXTERNAL'&&!QD.extId){ const e=(Store.data.externalVehicles||[])[0]; QD.extId=e?e.ExternalVehicleID:''; } qdRefresh(); });
+  const sv=el('qdVeh'); if(sv) sv.onchange=()=>{ QD.vehId=sv.value; const v=qdVehicle(); if(v&&v.CurrentDriver)QD.driver=v.CurrentDriver; qdRefresh(); };
+  const se=el('qdExt'); if(se) se.onchange=()=>{ QD.extId=se.value; const v=qdVehicle(); if(v&&v.DriverName)QD.driver=v.DriverName; qdRefresh(); };
+  const sd=el('qdDriver'); if(sd) sd.oninput=()=>QD.driver=sd.value;
+}
+function qdRefresh(){ el('qdBody').innerHTML=qdBody(); icons(); qdBind(); }
+async function qdConfirm(){
+  const d=QD.d, m=QD.m, isExt=QD.type==='EXTERNAL', v=qdVehicle(), c=qdCost();
+  if(!v){ toast('เลือกรถก่อน','warn'); return; }
+  const emp=!isExt&&(Store.data.employees||[]).find(e=>e.VehicleID===v.VehicleID);
+  const data={ DeliveryDate:Store.date, RouteType:isExt?'EXTERNAL_VEHICLE':'COMPANY_VEHICLE',
+    DriverName:QD.driver||(isExt?v.DriverName:v.CurrentDriver)||'', DriverPhone:(emp&&emp.Phone)||(isExt?v.DriverPhone:'')||'',
+    VehicleType:v.VehicleType||'', VehicleName:isExt?'':(v.VehicleName||''), LicensePlate:v.LicensePlate||'', ProviderName:isExt?(v.ProviderName||''):'',
+    TotalStops:1, TotalBoxes:Number(d.BoxQty)||0, TotalDistance:m.distance, EstimatedDuration:m.durationMin,
+    EstimatedFuelCost:c.fuel, EstimatedTollCost:c.toll, EstimatedParkingCost:c.parking, EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
+  const stops=[{ DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName, Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty, DistanceFromPrevious:m.distance }];
+  const btn=el('qdSave'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังจ่ายรถ…'; icons();
+  try{ const r=await API.post('confirmRoute',{data,stops}); QD.modal.close(); await refresh(); toast('จ่ายรถแล้ว · '+r.RouteID+' · '+money(c.total)+' ฿','ok','จัดรถด่วนสำเร็จ'); }
+  catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check-circle-2"></i>ยืนยัน & จ่ายรถ'; icons(); }
+}
 function deliveryForm(d){
   const custs = Store.data.customers||[];
   const isEdit = !!d; d = d||{};
