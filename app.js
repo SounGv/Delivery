@@ -37,6 +37,7 @@ const NAV = [
     { id:'deliveries', label:'งานส่งสินค้า', icon:'package' },
     { id:'planning', label:'วางแผนเส้นทาง', icon:'route' },
     { id:'rounds', label:'รอบส่งสินค้า', icon:'list-checks' },
+    { id:'tracking', label:'ติดตามพัสดุ', icon:'package-search' },
     { id:'livemap', label:'แผนที่ติดตาม', icon:'map-pin' },
   ]},
   { group:'FLEET', items:[
@@ -598,6 +599,67 @@ const Exporter = {
     const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     toast('ดาวน์โหลด '+name,'ok');
+  }
+};
+
+/* ================================================================
+   PRINT — เอกสาร A4/A5 พร้อมหัวโลโก้ Gadget Villa
+   ================================================================ */
+const Printer = {
+  company(){
+    return {
+      name: setting('COMPANY_NAME','บริษัท แก็ดเจ็ต วิลล่า จำกัด'),
+      addr: setting('WAREHOUSE_ADDRESS','729/28-37 ถ.รัชดาภิเษก แขวงบางโพงพาง เขตยานนาวา กรุงเทพฯ 10120'),
+      wh: setting('WAREHOUSE_NAME','คลัง แก็ดเจ็ต วิลล่า')
+    };
+  },
+  // เปิดหน้าต่างพิมพ์: title, ขนาด (A4/A5), เนื้อหา html (ไม่รวม header)
+  open(title, size, bodyHtml){
+    const c = this.company();
+    const logo = location.origin + location.pathname.replace(/[^/]*$/,'') + 'logo.png';
+    const w = window.open('', '_blank', 'width=900,height=1000');
+    if(!w){ toast('เบราว์เซอร์บล็อกป๊อปอัพ — อนุญาตป๊อปอัพแล้วลองใหม่','warn'); return; }
+    w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        @page{ size:${size}; margin:12mm; }
+        *{box-sizing:border-box;} body{font-family:'Prompt',sans-serif;color:#0B1220;margin:0;padding:0;font-size:${size==='A5'?'11px':'12.5px'};}
+        .doc{padding:0;}
+        .hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid #B4DC00;padding-bottom:12px;margin-bottom:14px;}
+        .hd img{height:${size==='A5'?'44px':'56px'};width:auto;}
+        .hd .co{font-size:${size==='A5'?'15px':'18px'};font-weight:700;color:#0B1220;}
+        .hd .ad{font-size:${size==='A5'?'9.5px':'11px'};color:#555;margin-top:2px;max-width:420px;line-height:1.4;}
+        .hd .rt{margin-left:auto;text-align:right;}
+        .hd .rt .t{font-size:${size==='A5'?'16px':'20px'};font-weight:700;letter-spacing:.02em;}
+        .hd .rt .n{font-size:11px;color:#666;margin-top:2px;}
+        table{width:100%;border-collapse:collapse;margin:8px 0;}
+        th,td{border:1px solid #d0d5dd;padding:6px 8px;text-align:left;font-size:inherit;}
+        th{background:#0B1220;color:#fff;font-weight:600;}
+        .r{text-align:right;} .c{text-align:center;}
+        .kv{display:flex;flex-wrap:wrap;gap:6px 26px;margin:10px 0;}
+        .kv div{font-size:inherit;} .kv b{color:#0B1220;} .kv span{color:#555;}
+        .sec-title{font-weight:700;font-size:${size==='A5'?'12px':'14px'};margin:14px 0 6px;color:#0B1220;}
+        .sign{display:flex;justify-content:space-between;margin-top:${size==='A5'?'26px':'46px'};gap:30px;}
+        .sign div{flex:1;text-align:center;border-top:1px solid #999;padding-top:6px;font-size:11px;color:#555;}
+        .muted{color:#777;} .foot{margin-top:16px;font-size:10px;color:#999;text-align:center;}
+        @media print{ .noprint{display:none;} }
+        .noprint{position:fixed;top:8px;right:8px;display:flex;gap:8px;}
+        .noprint button{font-family:'Prompt',sans-serif;border:none;border-radius:7px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13px;}
+        .noprint .p{background:#B4DC00;color:#152400;} .noprint .c{background:#eee;color:#333;}
+      </style></head><body>
+      <div class="noprint"><button class="p" onclick="window.print()">🖨️ พิมพ์</button><button class="c" onclick="window.close()">ปิด</button></div>
+      <div class="doc">
+        <div class="hd">
+          <img src="${logo}" onerror="this.style.display='none'">
+          <div><div class="co">${esc(c.name)}</div><div class="ad">${esc(c.addr)}</div></div>
+          <div class="rt"><div class="t">${esc(title)}</div><div class="n">พิมพ์ ${new Date().toLocaleString('th-TH')}</div></div>
+        </div>
+        ${bodyHtml}
+        <div class="foot">เอกสารนี้พิมพ์จากระบบ DELIVERY DISPATCH & ROUTE CONTROL CENTER · Gadget Villa</div>
+      </div>
+      <script>setTimeout(function(){try{window.focus();}catch(e){}},200);<\/script>
+      </body></html>`);
+    w.document.close();
   }
 };
 
