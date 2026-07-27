@@ -246,8 +246,9 @@ const Mock = (() => {
       case 'syncCartrack': { const en=String(setting('CARTRACK_ENABLED','false')).toLowerCase()==='true'; if(!en) return {ok:false,skipped:true,message:'โหมดทดลอง — Cartrack ปิดอยู่'}; return {ok:false,mock:true,message:'โหมดทดลองไม่เชื่อมต่อ Cartrack จริง'}; }
       case 'startRoute': { patch(db.routes,'RouteID',p.routeId,{Status:'In Progress'}); log('START_ROUTE',p.routeId,'เริ่มรอบส่ง'); return {ok:true}; }
       case 'checkIn': { const m=Number(p.distanceMeters)||9999; return { proximity: m<=100?'GREEN':(m<=500?'YELLOW':'RED') }; }
-      case 'completeDelivery': { if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Completed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s)s.Status='Completed'; log('COMPLETE_DELIVERY',p.deliveryId||p.routeId,'ส่งสินค้าเสร็จ'); return {ok:true}; }
-      case 'failDelivery': { if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Failed'}); log('FAILED_DELIVERY',p.deliveryId||p.routeId,'ส่งไม่สำเร็จ'); return {ok:true}; }
+      case 'uploadPOD': return { ok:true, url:p.base64||'', viewUrl:p.base64||'', mock:true };
+      case 'completeDelivery': { if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Completed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Completed';s.DeliveryCompletedTime=now();if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('COMPLETE_DELIVERY',p.deliveryId||p.routeId,'ส่งสินค้าเสร็จ'); return {ok:true}; }
+      case 'failDelivery': { if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Failed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Failed';if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('FAILED_DELIVERY',p.deliveryId||p.routeId,'ส่งไม่สำเร็จ'); return {ok:true}; }
       default: throw new Error('mock: unknown action '+action);
     }
   }

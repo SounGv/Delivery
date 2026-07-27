@@ -675,6 +675,7 @@ function trackCard(d, stops){
       </div>
     </div>
     ${d.Note?`<div class="small muted" style="margin-bottom:10px">${esc(d.Note)}</div>`:''}
+    ${stop&&stop.PhotoURL?`<div style="margin-bottom:10px"><a href="${esc(stop.PhotoURL)}" target="_blank" class="chip" style="text-decoration:none;color:var(--brand-ink)"><i data-lucide="image" style="width:13px;height:13px;vertical-align:-2px"></i> ดูรูปหลักฐานการส่ง</a></div>`:''}
     <div style="display:flex;flex-direction:column;gap:0">
       ${steps.map((s,i)=>`<div class="flex gap12" style="align-items:flex-start">
         <div style="display:flex;flex-direction:column;align-items:center">
@@ -1291,9 +1292,46 @@ ROUTES.driver = async function(view){
   const ds=el('dStart'); if(ds)ds.onclick=async()=>{ await API.post('startRoute',{routeId:active.RouteID}); await refresh(); toast('เริ่มรอบส่งแล้ว','ok'); };
   const dm=el('dMap'); if(dm)dm.onclick=()=>{ if(cur&&cur.Latitude) window.open(`https://www.google.com/maps/dir/?api=1&destination=${cur.Latitude},${cur.Longitude}`,'_blank'); };
   const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur);
-  const dd=el('dDone'); if(dd)dd.onclick=async()=>{ await API.post('completeDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID}); await refresh(); toast('บันทึกส่งสำเร็จ','ok'); };
-  const df=el('dFail'); if(df)df.onclick=()=>{ const reason=prompt('เหตุผลที่ส่งไม่สำเร็จ:'); if(reason==null)return; API.post('failDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,reason}).then(refresh).then(()=>toast('บันทึกส่งไม่สำเร็จ','warn')); };
+  const dd=el('dDone'); if(dd)dd.onclick=()=>podModal('complete',active,cur);
+  const df=el('dFail'); if(df)df.onclick=()=>podModal('fail',active,cur);
 };
+/* ---- ถ่ายรูปหลักฐานการส่ง (POD) ---- */
+function compressImage(file, maxW, q){
+  return new Promise(res=>{ const rd=new FileReader();
+    rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const s=Math.min(1,maxW/img.width);
+      const c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',q)); };
+      img.onerror=()=>res(rd.result); img.src=rd.result; };
+    rd.readAsDataURL(file); });
+}
+async function uploadPOD(dataUrl){ const r=await API.post('uploadPOD',{base64:dataUrl,filename:'POD-'+Date.now()+'.jpg'}); return r.url||r.viewUrl||''; }
+function podModal(type, active, cur){
+  const isFail=type==='fail'; let photoData=null;
+  const m=modal({ title:(isFail?'บันทึกส่งไม่สำเร็จ':'ยืนยันส่งเสร็จ')+' — '+esc(cur.CustomerName), body:`
+    <div class="notice info" style="margin-bottom:12px"><i data-lucide="map-pin"></i><div>${esc(cur.BranchName||'')} · ${int(cur.BoxQty)} กล่อง</div></div>
+    ${isFail?`<div class="field"><label class="label">เหตุผลที่ส่งไม่สำเร็จ *</label><textarea class="textarea" id="podReason" placeholder="เช่น ร้านปิด / ลูกค้าไม่รับ / ที่อยู่ผิด"></textarea></div>`:''}
+    <div class="field" style="margin:0"><label class="label">รูปหลักฐาน (หน้าร้าน / ลายเซ็น / พัสดุ)</label>
+      <input type="file" accept="image/*" capture="environment" id="podFile" style="display:none">
+      <button class="btn btn-block" id="podPick" type="button"><i data-lucide="camera"></i>ถ่าย / เลือกรูป</button>
+      <div id="podPrev" style="margin-top:10px"></div></div>
+  `, foot:`<button class="btn" id="podCancel">ยกเลิก</button><button class="btn ${isFail?'btn-danger':'btn-primary'}" id="podOk"><i data-lucide="check"></i>${isFail?'บันทึก':'ยืนยันส่งเสร็จ'}</button>` });
+  el('podPick').onclick=()=>el('podFile').click();
+  el('podFile').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; el('podPrev').innerHTML='<span class="small muted">กำลังย่อรูป…</span>';
+    photoData=await compressImage(f,1024,0.7);
+    el('podPrev').innerHTML=`<img src="${photoData}" style="width:100%;max-height:240px;object-fit:contain;border-radius:10px;border:1px solid var(--border)"><button class="btn btn-sm" id="podClr" style="margin-top:6px"><i data-lucide="x"></i>เอารูปออก</button>`; icons();
+    el('podClr').onclick=()=>{ photoData=null; el('podFile').value=''; el('podPrev').innerHTML=''; }; };
+  el('podCancel').onclick=m.close;
+  el('podOk').onclick=async()=>{
+    const reason=isFail?el('podReason').value.trim():''; if(isFail&&!reason){ toast('ใส่เหตุผลก่อน','warn'); return; }
+    const btn=el('podOk'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังบันทึก…'; icons();
+    let photoUrl=''; if(photoData){ try{ photoUrl=await uploadPOD(photoData); }catch(err){ toast('อัปโหลดรูปไม่สำเร็จ ('+err.message+') — บันทึกต่อโดยไม่มีรูป','warn'); } }
+    try{
+      if(isFail) await API.post('failDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,reason,photoUrl});
+      else       await API.post('completeDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,photoUrl});
+      m.close(); await refresh(); toast((isFail?'บันทึกส่งไม่สำเร็จ':'บันทึกส่งสำเร็จ')+(photoUrl?' + แนบรูป':''), isFail?'warn':'ok');
+    }catch(err){ toast(err.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check"></i>'+(isFail?'บันทึก':'ยืนยันส่งเสร็จ'); icons(); }
+  };
+}
 function doCheckin(route, stop){
   if(!navigator.geolocation){ toast('อุปกรณ์ไม่รองรับ GPS','err'); return; }
   toast('กำลังระบุตำแหน่ง…','info');

@@ -238,7 +238,7 @@ function doPost(e) {
       createExternalVehicle, updateExternalVehicle,
       createExpense, updateExpense, createClaim, updateClaim,
       updateSetting, syncCartrack,
-      logGPS, checkIn, startRoute, completeDelivery, failDelivery
+      logGPS, checkIn, startRoute, completeDelivery, failDelivery, uploadPOD
     };
     if (!map[action]) return json({ ok:false, error:'unknown action: '+action });
     return json({ ok:true, data: map[action](body) });
@@ -721,8 +721,9 @@ function proximity(m){
   m=Number(m)||9999; return m<=green?'GREEN':(m<=yellow?'YELLOW':'RED');
 }
 function completeDelivery(b){
-  updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data:{
-    DeliveryCompletedTime:new Date().toISOString(), Status:'Completed' }});
+  const cData = { DeliveryCompletedTime:new Date().toISOString(), Status:'Completed' };
+  if (b.photoUrl) { ensureColumn('RouteStops','PhotoURL'); cData.PhotoURL = b.photoUrl; }
+  updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data: cData });
   if (b.deliveryId) updateById('Deliveries', b.deliveryId, { Status:'Completed' });
   logGPS({ data:{ RouteID:b.routeId, DeliveryID:b.deliveryId, Latitude:b.lat,
     Longitude:b.lng, EventType:'DELIVERY_COMPLETE' }});
@@ -730,11 +731,43 @@ function completeDelivery(b){
   return { ok:true };
 }
 function failDelivery(b){
-  updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data:{ Status:'Failed' }});
+  const fData = { Status:'Failed' };
+  if (b.photoUrl) { ensureColumn('RouteStops','PhotoURL'); fData.PhotoURL = b.photoUrl; }
+  updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data: fData });
   if (b.deliveryId) updateById('Deliveries', b.deliveryId, { Status:'Failed', Note:b.reason||'' });
   logGPS({ data:{ RouteID:b.routeId, DeliveryID:b.deliveryId, EventType:'FAILED_DELIVERY' }});
   logActivity('FAILED_DELIVERY', b.deliveryId||b.routeId, 'ส่งไม่สำเร็จ: '+(b.reason||''), b.user);
   return { ok:true };
+}
+
+/* ==================================================================
+   PROOF OF DELIVERY — อัปโหลดรูปหลักฐานเข้า Google Drive
+   frontend ส่ง base64 มา → เก็บใน Drive โฟลเดอร์ "Delivery POD" → คืนลิงก์
+   ================================================================== */
+function ensureColumn(name, col){
+  const sh = sheet(name); if (!sh) return;
+  const last = sh.getLastColumn();
+  const H = sh.getRange(1, 1, 1, last).getValues()[0];
+  if (H.indexOf(col) === -1) {
+    sh.getRange(1, last + 1).setValue(col).setFontWeight('bold').setBackground('#0B1220').setFontColor('#FFFFFF');
+  }
+}
+function getPODFolder(){
+  const name = 'Delivery POD - Gadget Villa';
+  const it = DriveApp.getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
+}
+function uploadPOD(b){
+  const raw = b.base64 || b.data || '';
+  if (!raw) throw new Error('ไม่มีข้อมูลรูป');
+  let b64 = raw, mime = 'image/jpeg';
+  const m = String(raw).match(/^data:([^;]+);base64,(.*)$/);
+  if (m) { mime = m[1]; b64 = m[2]; }
+  const blob = Utilities.newBlob(Utilities.base64Decode(b64), mime, b.filename || ('POD-' + Date.now() + '.jpg'));
+  const file = getPODFolder().createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  const id = file.getId();
+  return { ok:true, fileId:id, url:'https://drive.google.com/uc?export=view&id=' + id, viewUrl:file.getUrl() };
 }
 
 /* ==================================================================
