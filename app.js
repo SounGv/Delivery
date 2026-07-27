@@ -304,6 +304,29 @@ const Geo = {
       if(a && a[0]) return { lat:+a[0].lat, lng:+a[0].lon, display:a[0].display_name, source:'osm' };
     }catch(e){}
     return null;
+  },
+  // ระยะทาง/เวลา "ตามถนนจริง" + เส้นทางจริง ผ่าน OSRM (ฟรี ไม่ต้องมี key)
+  // points = [{lat,lng}, ...] เรียงตามลำดับที่จะวิ่ง (คลัง → จุด1 → ... → คลัง)
+  async route(points){
+    try{
+      const valid = (points||[]).filter(p=>p && p.lat && p.lng);
+      if(valid.length<2) return null;
+      const coords = valid.map(p=>`${p.lng},${p.lat}`).join(';');
+      const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const j = await res.json();
+      if(j.code==='Ok' && j.routes && j.routes[0]){
+        const r = j.routes[0];
+        return {
+          distance: +(r.distance/1000).toFixed(1),
+          durationMin: Math.round(r.duration/60),
+          legsKm: (r.legs||[]).map(l=>+(l.distance/1000).toFixed(1)),
+          geometry: (r.geometry && r.geometry.coordinates || []).map(c=>[c[1],c[0]]),
+          source:'osrm'
+        };
+      }
+    }catch(e){}
+    return null;
   }
 };
 
@@ -455,7 +478,7 @@ const Planner = {
     }
     return seq;
   },
-  // total distance incl return to warehouse
+  // total distance incl return to warehouse (Haversine straight-line — instant, offline)
   metrics(seq){
     const wh = warehouse();
     let dist = 0; let cur = wh;
@@ -464,7 +487,18 @@ const Planner = {
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
     const serviceMin = seq.length*12;
     const durationMin = Math.round(dist/this.speed()*60 + serviceMin);
-    return { distance:+dist.toFixed(1), boxes, stops:seq.length, durationMin };
+    return { distance:+dist.toFixed(1), boxes, stops:seq.length, durationMin, source:'straight' };
+  },
+  // ระยะทางตามถนนจริงผ่าน OSRM (async) — คืน null ถ้าล่ม (ให้ fallback ไป metrics())
+  async roadMetrics(seq){
+    const wh = warehouse();
+    const pts = [{lat:wh.lat,lng:wh.lng}, ...seq.map(s=>({lat:+s.Latitude,lng:+s.Longitude})), {lat:wh.lat,lng:wh.lng}];
+    const r = await Geo.route(pts);
+    if(!r) return null;
+    // legsKm[i] = ระยะจากจุดก่อนหน้าถึง seq[i]  (leg 0 = คลัง→จุด1)
+    if(r.legsKm && r.legsKm.length){ seq.forEach((s,i)=>{ s._distPrev = r.legsKm[i]; }); }
+    const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
+    return { distance:r.distance, boxes, stops:seq.length, durationMin:r.durationMin + seq.length*12, geometry:r.geometry, source:'osrm' };
   },
   companyCost(distanceKm, vehicle){
     const rate = vehicle && vehicle.FuelCostPerKm ? Number(vehicle.FuelCostPerKm) : this.fuelPerKm();
@@ -495,8 +529,9 @@ const Planner = {
   },
 
   // build 3 options
-  options(seq){
+  options(seq, override){
     const m = this.metrics(seq);
+    if(override){ m.distance=override.distance; m.durationMin=override.durationMin; m.geometry=override.geometry; m.source=override.source; }
     const wh = warehouse();
     const avail = this.availableVehicles();
     const totalCap = avail.reduce((n,v)=>n+(Number(v.CapacityBox)||0),0);

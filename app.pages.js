@@ -156,6 +156,8 @@ function quickDispatch(d){
   const m=modal({ title:'จัดรถด่วน — '+esc(d.CustomerName||''), body:`<div id="qdBody">${qdBody()}</div>`,
     foot:`<button class="btn" id="qdCancel">ยกเลิก</button><button class="btn btn-primary" id="qdSave"><i data-lucide="check-circle-2"></i>ยืนยัน & จ่ายรถ</button>` });
   QD.modal=m; el('qdCancel').onclick=m.close; el('qdSave').onclick=qdConfirm; qdBind();
+  // อัปเกรดเป็นระยะทางถนนจริง (OSRM) เมื่อโหลดเสร็จ
+  Planner.roadMetrics([QD.d]).then(road=>{ if(road && document.getElementById('qdBody')){ QD.m=road; qdRefresh(); } });
 }
 function qdBody(){
   const d=QD.d, m=QD.m, isExt=QD.type==='EXTERNAL', v=qdVehicle(), c=qdCost();
@@ -319,7 +321,11 @@ function drawPlanMap(selDels, seq){
   const list = seq || selDels;
   const pts=[[wh.lat,wh.lng]];
   list.forEach((d,i)=>{ if(d.Latitude){ MapUtil.stopMarker(Plan.layer,d,i+1,(PRIORITY[d.Priority]||PRIORITY.NORMAL).color); pts.push([+d.Latitude,+d.Longitude]); } });
-  if(seq){ const line=[[wh.lat,wh.lng],...seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]]; L.polyline(line,{color:'#6f9e0a',weight:4,opacity:.85}).addTo(Plan.layer); }
+  if(seq){
+    const geo = Plan.result && Plan.result.metrics && Plan.result.metrics.geometry;
+    const line = (geo && geo.length) ? geo : [[wh.lat,wh.lng],...seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]];
+    L.polyline(line,{color:'#6f9e0a',weight:4,opacity:.85}).addTo(Plan.layer);
+  }
   if(pts.length>1) Plan.map.fitBounds(pts,{padding:[30,30]});
   icons();
 }
@@ -327,9 +333,9 @@ function drawPlanMap(selDels, seq){
 async function runAutoPlan(){
   const btn=el('autoPlan'); if(btn){btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังวิเคราะห์…'; icons();}
   const drafts=(Store.data.deliveries||[]).filter(d=>Plan.selected.has(d.DeliveryID)&&d.Latitude);
-  await new Promise(r=>setTimeout(r,450));
   const seq=Planner.order(drafts);
-  const out=Planner.options(seq);
+  const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
+  const out=Planner.options(seq, road);
   Plan.result={seq,...out};
   // เลือกอัตโนมัติ: รถแนะนำ > Option ที่รองรับได้และถูกที่สุด > ตัวแรก
   const feasibleCheap = out.options.filter(o=>o.feasible).sort((a,b)=>a.cost.total-b.cost.total)[0];
@@ -360,6 +366,7 @@ function renderDecision(){
       ${miniStat('ระยะทาง',num1(m.distance)+' กม.','navigation')}
       ${miniStat('เวลา',Math.floor(m.durationMin/60)+':'+String(m.durationMin%60).padStart(2,'0')+' ชม.','clock')}
     </div>
+    <div class="small" style="margin:-6px 0 12px;color:${m.source==='osrm'?'#4F7A0A':'#9AA3B2'}">${m.source==='osrm'?'📍 ระยะทาง/เวลา ตามถนนจริง (OSRM)':'📏 ระยะทางเส้นตรงโดยประมาณ'}</div>
 
     ${rec?`<div class="opt reco mb14">
       <div class="opt-head"><span class="flex aic gap8"><i data-lucide="star" style="width:18px;height:18px;color:#059669"></i><span class="opt-name">รถที่แนะนำ</span></span><span class="badge b-green">RECOMMENDED</span></div>
