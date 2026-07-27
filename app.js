@@ -793,10 +793,24 @@ async function init(){
   await loadBootstrap();
   if(!location.hash) location.hash = '#/dashboard';
   render();
-  // realtime polling every 8s on live map / dashboard
+  // realtime polling ทุก 10 วิ — หน้าแผนที่/Cartrack ดึงพิกัดสดจาก Cartrack (light) · หน้าอื่นอ่านสรุป
   Store.pollTimer = setInterval(async ()=>{
-    if(!['dashboard','livemap'].includes(Store.page)) return;
-    try{ const rt = await API.get('getRealtime',{date:Store.date}); Store.data.dashboard = { date:rt.date, kpi:rt.kpi, cost:rt.cost, fleet:rt.fleet, routes:rt.routes, activities:rt.activities }; Store.data.cartrack=rt.cartrack; Store._live={stops:rt.stops, vehicles:rt.vehicles}; Store.lastSync=new Date().toISOString(); updateSync(); if(window._onRealtime) window._onRealtime(rt); }catch(e){}
-  }, 8000);
+    const p = Store.page;
+    if(!['dashboard','livemap'].includes(p)) return;
+    const ctOn = Store.data.cartrack && Store.data.cartrack.enabled;
+    try{
+      if(p==='livemap' && ctOn && API.configured()){
+        // เรียลไทม์: สั่งดึง Cartrack สด (โหมดเบา) แล้วอัปเดตตำแหน่งทันที
+        const r = await API.post('syncCartrack',{light:true});
+        if(r && r.vehicles){ Store._live = Object.assign({}, Store._live||{}, { vehicles:r.vehicles });
+          if(Store.data.cartrack){ Store.data.cartrack.lastSync=r.at; Store.data.cartrack.stale=false; Store.data.cartrack.matched=r.matched; }
+          Store.lastSync=new Date().toISOString(); updateSync(); if(window._onRealtime) window._onRealtime({vehicles:r.vehicles}); }
+      } else {
+        const rt = await API.get('getRealtime',{date:Store.date});
+        Store.data.dashboard = { date:rt.date, kpi:rt.kpi, cost:rt.cost, fleet:rt.fleet, routes:rt.routes, activities:rt.activities };
+        Store.data.cartrack=rt.cartrack; Store._live={stops:rt.stops, vehicles:rt.vehicles}; Store.lastSync=new Date().toISOString(); updateSync(); if(window._onRealtime) window._onRealtime(rt);
+      }
+    }catch(e){}
+  }, 10000);
 }
 document.addEventListener('DOMContentLoaded', init);

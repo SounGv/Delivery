@@ -813,7 +813,8 @@ function secret(key, fallback){
 }
 
 // ดึงสถานะรถทั้งหมดจาก Cartrack → อัปเดต Vehicles + CartrackVehicles + GPSLogs
-function syncCartrack(){
+function syncCartrack(b){
+  const light = !!(b && b.light);   // โหมดเบา: อัปเดตตำแหน่งอย่างเดียว ไม่บวม GPSLogs (ใช้ตอน poll ถี่ ๆ)
   const enabled = String(settingValue('CARTRACK_ENABLED','false')).toLowerCase() === 'true';
   if (!enabled) return { ok:false, skipped:true, message:'CARTRACK_ENABLED = false' };
 
@@ -871,16 +872,16 @@ function syncCartrack(){
         LastPositionTime:posT, LastSyncAt:now, VehicleStatus:vstat });
       matched++;
     }
-    if (lat && lng) appendRow('GPSLogs', {
+    if (!light && lat && lng) appendRow('GPSLogs', {
       LogID:'CT-'+Date.now()+'-'+(reg||Math.random().toString(36).slice(2,6)),
       Latitude:lat, Longitude:lng, Timestamp:posT, EventType:'CARTRACK:'+(reg||'?') });
   });
 
   updateSetting({ key:'CARTRACK_LAST_SYNC', value:now });
-  appendRow('CartrackLogs', { LogID:'CTL-'+Date.now(), SyncAt:now,
+  if (!light) appendRow('CartrackLogs', { LogID:'CTL-'+Date.now(), SyncAt:now,
     Fetched:list.length, Matched:matched, Status:'OK', Message:'sync ok' });
-  logActivity('SYNC_CARTRACK', '-', 'ซิงก์ Cartrack ' + list.length + ' คัน · แมตช์ ' + matched, 'system');
-  return { ok:true, fetched:list.length, matched:matched, at:now };
+  if (!light) logActivity('SYNC_CARTRACK', '-', 'ซิงก์ Cartrack ' + list.length + ' คัน · แมตช์ ' + matched, 'system');
+  return { ok:true, fetched:list.length, matched:matched, at:now, vehicles:getLiveVehicleStatus() };
 }
 
 // ทดสอบ/ตรวจโครงสร้าง response จาก Cartrack — รันจาก editor แล้วดู Logs
