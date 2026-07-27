@@ -672,49 +672,63 @@ const Printer = {
       wh: setting('WAREHOUSE_NAME','คลัง แก็ดเจ็ต วิลล่า')
     };
   },
-  // เปิดหน้าต่างพิมพ์: title, ขนาด (A4/A5), เนื้อหา html (ไม่รวม header)
+  // เปิดหน้าต่างพิมพ์: title ("หัวไทย / English" แยกด้วย ' / '), ขนาด (A4/A5), เนื้อหา html
   open(title, size, bodyHtml){
     const c = this.company();
     const logo = location.origin + location.pathname.replace(/[^/]*$/,'') + 'logo.png';
-    const w = window.open('', '_blank', 'width=900,height=1000');
+    const A5 = size==='A5';
+    const parts = String(title).split(' / ');
+    const tMain = parts[0], tSub = parts.slice(1).join(' / ');
+    const now = new Date().toLocaleString('th-TH', {dateStyle:'medium', timeStyle:'short'});
+    const w = window.open('', '_blank', 'width=920,height=1040');
     if(!w){ toast('เบราว์เซอร์บล็อกป๊อปอัพ — อนุญาตป๊อปอัพแล้วลองใหม่','warn'); return; }
-    w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>${esc(title)}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>${esc(tMain)}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
       <style>
-        @page{ size:${size}; margin:12mm; }
-        *{box-sizing:border-box;} body{font-family:'Prompt',sans-serif;color:#0B1220;margin:0;padding:0;font-size:${size==='A5'?'11px':'12.5px'};}
-        .doc{padding:0;}
-        .hd{display:flex;align-items:center;gap:14px;border-bottom:3px solid #B4DC00;padding-bottom:12px;margin-bottom:14px;}
-        .hd img{height:${size==='A5'?'44px':'56px'};width:auto;}
-        .hd .co{font-size:${size==='A5'?'15px':'18px'};font-weight:700;color:#0B1220;}
-        .hd .ad{font-size:${size==='A5'?'9.5px':'11px'};color:#555;margin-top:2px;max-width:420px;line-height:1.4;}
-        .hd .rt{margin-left:auto;text-align:right;}
-        .hd .rt .t{font-size:${size==='A5'?'16px':'20px'};font-weight:700;letter-spacing:.02em;}
-        .hd .rt .n{font-size:11px;color:#666;margin-top:2px;}
+        @page{ size:${size}; margin:${A5?'10mm':'14mm'}; }
+        *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+        body{font-family:'Prompt',sans-serif;color:#0B1220;background:#e9edf2;font-size:${A5?'11px':'12.5px'};line-height:1.5;}
+        .toolbar{position:sticky;top:0;z-index:9;display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;background:#0B1220;}
+        .toolbar button{font-family:'Prompt',sans-serif;border:none;border-radius:8px;padding:9px 18px;font-weight:700;cursor:pointer;font-size:13px;}
+        .toolbar .p{background:#B4DC00;color:#152400;} .toolbar .c{background:#39424f;color:#fff;}
+        .page{max-width:${A5?'560px':'800px'};margin:18px auto;background:#fff;padding:${A5?'20px 22px':'28px 30px'};box-shadow:0 6px 24px rgba(0,0,0,.14);border-radius:6px;}
+        .hd{display:flex;align-items:flex-start;gap:16px;border-bottom:3px solid #B4DC00;padding-bottom:14px;margin-bottom:18px;}
+        .hd .logo{height:${A5?'46px':'58px'};width:auto;flex-shrink:0;}
+        .hd .co-wrap{flex:1;min-width:0;}
+        .hd .co{font-size:${A5?'15px':'18px'};font-weight:800;color:#0B1220;line-height:1.2;}
+        .hd .ad{font-size:${A5?'9.5px':'11px'};color:#555;margin-top:3px;line-height:1.45;}
+        .hd .rt{text-align:right;flex-shrink:0;padding-left:16px;}
+        .hd .rt .t{font-size:${A5?'19px':'24px'};font-weight:800;color:#0B1220;line-height:1.05;white-space:nowrap;}
+        .hd .rt .sub{font-size:${A5?'9.5px':'11px'};color:#6f8a00;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-top:2px;}
+        .hd .rt .n{font-size:10px;color:#8a93a0;margin-top:6px;}
         table{width:100%;border-collapse:collapse;margin:8px 0;}
-        th,td{border:1px solid #d0d5dd;padding:6px 8px;text-align:left;font-size:inherit;}
+        th,td{border:1px solid #d6dbe2;padding:${A5?'5px 8px':'7px 10px'};text-align:left;font-size:inherit;vertical-align:top;}
         th{background:#0B1220;color:#fff;font-weight:600;}
+        tbody tr:nth-child(even) td{background:#f7f9f4;}
+        tfoot th{background:#f0f5dd;color:#0B1220;}
         .r{text-align:right;} .c{text-align:center;}
-        .kv{display:flex;flex-wrap:wrap;gap:6px 26px;margin:10px 0;}
-        .kv div{font-size:inherit;} .kv b{color:#0B1220;} .kv span{color:#555;}
-        .sec-title{font-weight:700;font-size:${size==='A5'?'12px':'14px'};margin:14px 0 6px;color:#0B1220;}
-        .sign{display:flex;justify-content:space-between;margin-top:${size==='A5'?'26px':'46px'};gap:30px;}
-        .sign div{flex:1;text-align:center;border-top:1px solid #999;padding-top:6px;font-size:11px;color:#555;}
-        .muted{color:#777;} .foot{margin-top:16px;font-size:10px;color:#999;text-align:center;}
-        @media print{ .noprint{display:none;} }
-        .noprint{position:fixed;top:8px;right:8px;display:flex;gap:8px;}
-        .noprint button{font-family:'Prompt',sans-serif;border:none;border-radius:7px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13px;}
-        .noprint .p{background:#B4DC00;color:#152400;} .noprint .c{background:#eee;color:#333;}
+        .kv{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 22px;margin:6px 0 4px;padding:12px 16px;background:#f7f9f4;border:1px solid #e6ebd8;border-radius:9px;}
+        .kv div{font-size:inherit;} .kv span{color:#667085;} .kv b{color:#0B1220;font-weight:600;}
+        .sec-title{font-weight:700;font-size:${A5?'12.5px':'14.5px'};margin:16px 0 6px;color:#0B1220;padding-left:9px;border-left:3px solid #B4DC00;}
+        .sign{display:flex;justify-content:space-between;margin-top:${A5?'30px':'52px'};gap:34px;}
+        .sign div{flex:1;text-align:center;border-top:1px solid #333;padding-top:7px;font-size:11px;color:#555;}
+        .muted{color:#8a93a0;} .foot{margin-top:20px;padding-top:10px;border-top:1px solid #eee;font-size:9.5px;color:#aab;text-align:center;}
+        @media print{
+          body{background:#fff;} .toolbar{display:none;}
+          .page{max-width:none;margin:0;padding:0;box-shadow:none;border-radius:0;}
+          tbody tr:nth-child(even) td{background:#f7f9f4 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+          th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+        }
       </style></head><body>
-      <div class="noprint"><button class="p" onclick="window.print()">🖨️ พิมพ์</button><button class="c" onclick="window.close()">ปิด</button></div>
-      <div class="doc">
+      <div class="toolbar"><button class="p" onclick="window.print()">🖨️ พิมพ์</button><button class="c" onclick="window.close()">ปิด</button></div>
+      <div class="page">
         <div class="hd">
-          <img src="${logo}" onerror="this.style.display='none'">
-          <div><div class="co">${esc(c.name)}</div><div class="ad">${esc(c.addr)}</div></div>
-          <div class="rt"><div class="t">${esc(title)}</div><div class="n">พิมพ์ ${new Date().toLocaleString('th-TH')}</div></div>
+          <img class="logo" src="${logo}" onerror="this.style.display='none'">
+          <div class="co-wrap"><div class="co">${esc(c.name)}</div><div class="ad">${esc(c.addr)}</div></div>
+          <div class="rt"><div class="t">${esc(tMain)}</div>${tSub?`<div class="sub">${esc(tSub)}</div>`:''}<div class="n">พิมพ์ ${now}</div></div>
         </div>
         ${bodyHtml}
-        <div class="foot">เอกสารนี้พิมพ์จากระบบ DELIVERY DISPATCH & ROUTE CONTROL CENTER · Gadget Villa</div>
+        <div class="foot">เอกสารนี้พิมพ์จากระบบ DELIVERY DISPATCH &amp; ROUTE CONTROL CENTER · Gadget Villa</div>
       </div>
       <script>setTimeout(function(){try{window.focus();}catch(e){}},200);<\/script>
       </body></html>`);
