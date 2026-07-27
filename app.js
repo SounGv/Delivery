@@ -39,6 +39,7 @@ const NAV = [
     { id:'rounds', label:'รอบส่งสินค้า', icon:'list-checks' },
     { id:'tracking', label:'ติดตามพัสดุ', icon:'package-search' },
     { id:'livemap', label:'แผนที่ติดตาม', icon:'map-pin' },
+    { id:'driver', label:'โหมดคนขับ', icon:'smartphone' },
   ]},
   { group:'FLEET', items:[
     { id:'vehicles', label:'รถบริษัท', icon:'truck' },

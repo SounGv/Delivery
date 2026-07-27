@@ -1234,17 +1234,36 @@ function ctStat(l,v,ic,col){ return `<div class="card" style="padding:16px"><div
 /* ================================================================
    DRIVER MOBILE MODE
    ================================================================ */
+const Driver = { routeId:null };
+function driverJobCard(r){
+  return `<div class="card mb14">
+    <div class="flex between aic"><div><div class="mono strong" style="font-size:16px">${esc(r.RouteID)}</div>
+      <div class="small muted">${esc(r.DriverName||'ยังไม่ระบุคนขับ')} · ${esc(r.VehicleName||r.ProviderName||'')}</div></div>${dstatusBadge(r.Status)}</div>
+    <div class="flex gap12 small muted" style="margin:12px 0"><span>📍 ${int(r.TotalStops)} จุด</span><span>📦 ${int(r.TotalBoxes)} กล่อง</span><span>🛣️ ${num1(r.TotalDistance)} กม.</span></div>
+    <button class="btn btn-primary btn-block big-btn" data-accept="${esc(r.RouteID)}"><i data-lucide="hand"></i>รับงานนี้</button>
+  </div>`;
+}
 ROUTES.driver = async function(view){
   const routes = await API.get('getRoutes',{date:Store.date});
-  const active = routes.find(r=>r.Status==='In Progress') || routes.find(r=>r.Status==='Planned') || routes[0];
-  if(!active){ page(view, `${head('โหมดคนขับ','ไม่มีรอบส่งวันนี้')}${emptyState('ยังไม่มีรอบส่งที่มอบหมาย','ติดต่อผู้จัดการเพื่อรับงาน')}`); return; }
+  let active = routes.find(r=>r.RouteID===Driver.routeId) || routes.find(r=>r.Status==='In Progress');
+  if(!active){
+    // หน้ากดรับงาน — คนขับเลือกรอบของตัวเอง
+    page(view, `<div class="driver">
+      ${head('โหมดคนขับ · รับงาน', `${thDate(Store.date)} · ${routes.length} รอบ`)}
+      ${routes.length
+        ? `<div class="notice info mb14"><i data-lucide="hand"></i><div>เลือกงานของคุณแล้วกด <b>รับงานนี้</b> เพื่อเริ่มส่ง</div></div>` + routes.map(driverJobCard).join('')
+        : emptyState('ยังไม่มีรอบส่งวันนี้','ติดต่อผู้จัดการเพื่อรับงาน หรือให้แอดมินจัด Route ก่อน')}
+    </div>`);
+    $$('[data-accept]',view).forEach(b=>b.onclick=()=>{ Driver.routeId=b.dataset.accept; render(); toast('รับงาน '+b.dataset.accept+' แล้ว','ok'); });
+    return;
+  }
   const stops = await API.get('getRouteStops',{routeId:active.RouteID});
   const done = stops.filter(s=>s.Status==='Completed').length;
   const pct = stops.length? Math.round(done/stops.length*100):0;
   const cur = stops.find(s=>s.Status!=='Completed');
   page(view, `
     <div class="driver">
-    ${head(active.RouteID,`${active.DriverName||''} · ${active.VehicleName||''}`)}
+    ${head(active.RouteID,`${active.DriverName||''} · ${active.VehicleName||''}`,`<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>`)}
     <div class="card mb14">
       <div class="flex between aic mb14"><span class="h-card">ความคืบหน้ารอบส่ง</span><span class="strong tab">${done}/${stops.length} จุด</span></div>
       <div class="progress" style="height:14px"><span style="width:${pct}%;background:#10B981"></span></div>
@@ -1268,6 +1287,7 @@ ROUTES.driver = async function(view){
         <div style="flex:1"><div class="strong" style="font-size:14px">${esc(s.CustomerName)}</div><div class="small muted">${esc(s.BranchName)} · ${int(s.BoxQty)} กล่อง</div></div></div>`).join('')}
     </div></div>
   `);
+  const dch=el('dChange'); if(dch)dch.onclick=()=>{ Driver.routeId=null; render(); };
   const ds=el('dStart'); if(ds)ds.onclick=async()=>{ await API.post('startRoute',{routeId:active.RouteID}); await refresh(); toast('เริ่มรอบส่งแล้ว','ok'); };
   const dm=el('dMap'); if(dm)dm.onclick=()=>{ if(cur&&cur.Latitude) window.open(`https://www.google.com/maps/dir/?api=1&destination=${cur.Latitude},${cur.Longitude}`,'_blank'); };
   const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur);
