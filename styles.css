@@ -187,6 +187,13 @@ table.tbl{width:100%;border-collapse:collapse;}
 .veh-ring{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;animation:ctpulse 1.8s ease-out infinite;}
 .stop-num{width:30px;height:30px;border-radius:50%;color:#fff;font-weight:700;font-size:14px;
   display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.25);border:2px solid #fff;}
+/* warehouse marker — distinct: black body, lime border, warehouse icon + permanent label */
+.wh-marker{width:42px;height:42px;border-radius:13px;background:#0B1220;border:3px solid #B4DC00;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.45);}
+.wh-marker i{width:23px;height:23px;color:#B4DC00;}
+.leaflet-tooltip.wh-tip{background:#0B1220;color:#fff;border:none;border-radius:7px;font-weight:700;font-size:11.5px;
+  padding:4px 9px;box-shadow:0 2px 8px rgba(0,0,0,.35);font-family:'Prompt',sans-serif;white-space:nowrap;}
+.leaflet-tooltip.wh-tip.leaflet-tooltip-top:before{border-top-color:#0B1220;}
 
 /* ---------- TOAST ---------- */
 .toast-wrap{position:fixed;top:18px;right:18px;z-index:9999;display:flex;flex-direction:column;gap:10px;}

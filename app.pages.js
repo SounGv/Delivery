@@ -250,7 +250,7 @@ function miniStat(l,v,ic){ return `<div class="flex between aic" style="padding:
 function drawPlanMap(selDels, seq){
   if(!Plan.map) return; Plan.layer.clearLayers();
   const wh=warehouse();
-  L.marker([wh.lat,wh.lng],{icon:L.divIcon({className:'veh-pin',html:`<div class="veh-dot" style="background:#10B981;border-radius:11px 11px 11px 4px"><i data-lucide="home"></i></div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(Plan.layer).bindPopup('🏭 '+wh.name);
+  MapUtil.whMarker(Plan.layer, wh);
   (Store.data.vehicles||[]).filter(v=>v.CurrentLatitude).forEach(v=>{ const st=VSTATUS[v.VehicleStatus]||VSTATUS.Unknown; L.marker([+v.CurrentLatitude,+v.CurrentLongitude],{icon:L.divIcon({className:'veh-pin',html:`<div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`,iconSize:[28,28],iconAnchor:[14,14]})}).addTo(Plan.layer).bindPopup(esc(v.VehicleName)); });
   const list = seq || selDels;
   const pts=[[wh.lat,wh.lng]];

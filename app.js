@@ -564,7 +564,11 @@ const MapUtil = {
     return map;
   },
   whMarker(map, wh){
-    return L.marker([wh.lat,wh.lng], { icon:L.divIcon({ className:'veh-pin', html:`<div class="veh-dot" style="background:#10B981;border-radius:11px 11px 11px 4px"><i data-lucide="home"></i></div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup('🏭 '+wh.name);
+    const m = L.marker([wh.lat,wh.lng], { zIndexOffset:1000, icon:L.divIcon({ className:'veh-pin',
+      html:`<div class="wh-marker"><i data-lucide="warehouse"></i></div>`, iconSize:[42,42], iconAnchor:[21,21] }) }).addTo(map);
+    m.bindTooltip('🏭 '+(wh.name||'คลังสินค้า'), { permanent:true, direction:'top', offset:[0,-22], className:'wh-tip' });
+    m.bindPopup('<b>🏭 '+esc(wh.name||'คลังสินค้า')+'</b><br>จุดเริ่มต้น/สิ้นสุดเส้นทาง');
+    return m;
   },
   stopMarker(map, s, n, color){
     return L.marker([+s.Latitude,+s.Longitude], { icon:L.divIcon({ className:'veh-pin', html:`<div class="stop-num" style="background:${color||'#2563EB'}">${n}</div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup(`<b>${esc(s.CustomerName||'')}</b><br>${esc(s.BranchName||'')}<br>${int(s.BoxQty)} กล่อง`);
