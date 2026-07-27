@@ -730,7 +730,7 @@ ROUTES.livemap = async function(view){
     const list=vehicles();
     el('vehList').innerHTML = list.length? list.map(v=>`<div class="flex between aic" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
       <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีชื่อคนขับ')}</div></div>
-      <div style="text-align:right">${vstatusBadge(v.VehicleStatus)}<div class="small muted tab" style="margin-top:3px">${int(v.speed)} กม./ชม.</div></div></div>`).join('') : emptyState('ไม่มีรถตามตัวกรอง');
+      <div style="text-align:right">${vstatusBadge(deriveVehStatus(v))}<div class="small muted tab" style="margin-top:3px">${int(v.speed)} กม./ชม.</div></div></div>`).join('') : emptyState('ไม่มีรถตามตัวกรอง');
     if(liveMapRef){ liveMapRef.remove(); liveMapRef=null; }
     const wh=warehouse(); liveMapRef=MapUtil.make('liveMap',wh); MapUtil.whMarker(liveMapRef,wh);
     const pts=[[wh.lat,wh.lng]]; list.forEach(v=>{ if(v.lat&&v.lng){MapUtil.vehMarker(liveMapRef,v);pts.push([+v.lat,+v.lng]);} });
@@ -755,7 +755,7 @@ ROUTES.vehicles = async function(view){
     <tbody>${rows.map(v=>`<tr>
       <td class="strong">${esc(v.VehicleName)}</td><td class="mono small">${esc(v.LicensePlate)}</td>
       <td>${esc(v.VehicleType)}</td><td class="r tab">${int(v.CapacityBox)} กล่อง</td>
-      <td>${v.CurrentDriver?esc(v.CurrentDriver):'<span class="muted">ไม่มีชื่อคนขับ</span>'}</td><td>${vstatusBadge(v.VehicleStatus)}</td>
+      <td>${v.CurrentDriver?esc(v.CurrentDriver):'<span class="muted">ไม่มีชื่อคนขับ</span>'}</td><td>${vstatusBadge(deriveVehStatus(v))}</td>
       <td class="small muted">${v.CurrentLatitude?num1(v.CurrentLatitude)+', '+num1(v.CurrentLongitude):'—'}<br>${v.LastSyncAt?ago(v.LastSyncAt):(v.LastPositionTime?ago(v.LastPositionTime):'')}</td>
       <td class="r"><button class="btn btn-sm" data-edit="${esc(v.VehicleID)}"><i data-lucide="pencil"></i></button>
         <button class="btn btn-sm" data-del="${esc(v.VehicleID)}"><i data-lucide="trash-2"></i></button></td></tr>`).join('')}</tbody></table>
@@ -1224,7 +1224,7 @@ ROUTES.cartrack = async function(view){
       <tbody>${veh.map(v=>`<tr><td class="strong">${esc(v.VehicleName)}</td><td class="mono small">${esc(v.LicensePlate)}</td>
         <td class="mono small">${v.CartrackRegistration?esc(v.CartrackRegistration):'<span class="badge b-gray">ยังไม่จับคู่</span>'}</td>
         <td class="small muted">${v.CurrentLatitude?num1(v.CurrentLatitude)+', '+num1(v.CurrentLongitude):'—'}</td>
-        <td class="tab">${int(v.CurrentSpeed)} กม./ชม.</td><td>${vstatusBadge(v.VehicleStatus)}</td></tr>`).join('')}</tbody></table>
+        <td class="tab">${int(v.CurrentSpeed)} กม./ชม.</td><td>${vstatusBadge(deriveVehStatus(v))}</td></tr>`).join('')}</tbody></table>
     </div></div>
   `);
   el('ctTest').onclick=async()=>{ try{ const r=await API.post('syncCartrack',{}); toast(r.ok?('เชื่อมต่อสำเร็จ · '+r.fetched+' คัน'):(r.message||'ทดสอบเสร็จ'), r.ok?'ok':'warn'); }catch(e){toast(e.message,'err');} };

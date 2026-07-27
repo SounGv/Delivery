@@ -26,11 +26,18 @@ const DSTATUS = {
 };
 const VSTATUS = {
   Available:{ label:'พร้อมใช้งาน', cls:'b-green', dot:'#10B981' },
-  'In Use': { label:'กำลังใช้งาน', cls:'b-blue',  dot:'#2563EB' },
+  'In Use': { label:'กำลังวิ่ง',   cls:'b-blue',  dot:'#2563EB' },
   Stopped:  { label:'จอดอยู่',     cls:'b-amber', dot:'#F59E0B' },
   Offline:  { label:'ออฟไลน์',     cls:'b-gray',  dot:'#9AA3B2' },
   Unknown:  { label:'ไม่ทราบ',     cls:'b-gray',  dot:'#9AA3B2' }
 };
+// สถานะรถอัตโนมัติจากความเร็ว: มีพิกัด + วิ่ง(>3)=กำลังวิ่ง · หยุด=จอดอยู่ · ไม่มีพิกัด=ออฟไลน์
+function deriveVehStatus(v){
+  const sp = Number(v.speed!=null?v.speed:v.CurrentSpeed) || 0;
+  const hasPos = (v.lat||v.lng||v.CurrentLatitude||v.CurrentLongitude) || v.lastPositionTime || v.LastPositionTime || v.LastSyncAt || v.lastSyncAt;
+  if(!hasPos) return 'Offline';
+  return sp > 3 ? 'In Use' : 'Stopped';
+}
 const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อกิโลเมตร', PER_DAY:'ต่อวัน', CUSTOM:'กำหนดเอง' };
 
 const NAV = [
@@ -621,8 +628,9 @@ const MapUtil = {
     return L.marker([+s.Latitude,+s.Longitude], { icon:L.divIcon({ className:'veh-pin', html:`<div class="stop-num" style="background:${color||'#2563EB'}">${n}</div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup(`<b>${esc(s.CustomerName||'')}</b><br>${esc(s.BranchName||'')}<br>${int(s.BoxQty)} กล่อง`);
   },
   vehMarker(map, v){
-    const st=VSTATUS[v.VehicleStatus]||VSTATUS.Unknown;
-    return L.marker([+v.lat,+v.lng], { icon:L.divIcon({ className:'veh-pin', html:`<div class="veh-ring" style="background:${st.dot}"></div><div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup(`<b>${esc(v.VehicleName)}</b> · ${esc(v.LicensePlate)}<br>${st.label} · ${int(v.speed)} กม./ชม.<br>${esc(v.CurrentDriver||'')}`);
+    const st=VSTATUS[deriveVehStatus(v)]||VSTATUS.Unknown;
+    const moving = deriveVehStatus(v)==='In Use';
+    return L.marker([+v.lat,+v.lng], { icon:L.divIcon({ className:'veh-pin', html:`${moving?`<div class="veh-ring" style="background:${st.dot}"></div>`:''}<div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup(`<b>${esc(v.VehicleName)}</b> · ${esc(v.LicensePlate)}<br>${st.label} · ${int(v.speed)} กม./ชม.<br>${esc(v.CurrentDriver||'')}`);
   }
 };
 
@@ -742,7 +750,15 @@ const Chart = {
 };
 
 /* ---------------- EVENTS: shell ---------------- */
+function setupHint(){
+  const bar = el('hintBar'); if(!bar) return;
+  if(localStorage.getItem('ddc_hint_off')){ bar.style.display='none'; return; }
+  bar.style.display='flex';
+  el('hintClose').onclick = ()=>{ localStorage.setItem('ddc_hint_off','1'); bar.style.display='none'; };
+  el('hintReload').onclick = ()=>{ location.href = location.origin + location.pathname + '?r=' + Date.now() + location.hash; };
+}
 function bindShell(){
+  setupHint();
   el('menuBtn').onclick = ()=>{ el('sidebar').classList.toggle('open'); el('backdrop').classList.toggle('show'); };
   el('backdrop').onclick = ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); };
   el('nav').addEventListener('click', ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); });
