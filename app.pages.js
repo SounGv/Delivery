@@ -145,7 +145,11 @@ ROUTES.deliveries = async function(view){
 /* ---- QUICK DISPATCH — จ่ายรถให้งานเดียวในคลิกเดียว ---- */
 const QD = { type:'COMPANY', vehId:'', extId:'', driver:'', d:null, m:null, modal:null };
 function qdVehicle(){ return QD.type==='EXTERNAL' ? (Store.data.externalVehicles||[]).find(v=>v.ExternalVehicleID===QD.extId) : (Store.data.vehicles||[]).find(v=>v.VehicleID===QD.vehId); }
-function qdCost(){ const v=qdVehicle(); return QD.type==='EXTERNAL' ? (v?Planner.externalCost(QD.m.distance,v):{fuel:0,toll:Planner.toll(),parking:Planner.parking(),external:0,total:Planner.toll()+Planner.parking()}) : Planner.companyCost(QD.m.distance,v); }
+function qdCost(){ const v=qdVehicle(), isExt=QD.type==='EXTERNAL';
+  const fuel=isExt?0:Planner.fuelCost(QD.m.distance,v);
+  const external=isExt&&v?Planner.extAmount(v,QD.m.distance):0;
+  const toll=Number(QD.toll)||0, parking=Number(QD.parking)||0;
+  return { fuel, toll, parking, external, total:+(fuel+toll+parking+external).toFixed(2) }; }
 function quickDispatch(d){
   if(!d) return;
   QD.d=d; QD.m=Planner.metrics([d]);
@@ -153,6 +157,7 @@ function quickDispatch(d){
   const emp=rec&&(Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
   QD.type='COMPANY'; QD.vehId=rec?rec.VehicleID:''; QD.extId=((Store.data.externalVehicles||[])[0]||{}).ExternalVehicleID||'';
   QD.driver=rec?(rec.CurrentDriver||(emp&&emp.EmployeeName)||''):'';
+  QD.toll=Planner.toll(); QD.parking=Planner.autoParking([d]);
   const m=modal({ title:'จัดรถด่วน — '+esc(d.CustomerName||''), body:`<div id="qdBody">${qdBody()}</div>`,
     foot:`<button class="btn" id="qdCancel">ยกเลิก</button><button class="btn btn-primary" id="qdSave"><i data-lucide="check-circle-2"></i>ยืนยัน & จ่ายรถ</button>` });
   QD.modal=m; el('qdCancel').onclick=m.close; el('qdSave').onclick=qdConfirm; qdBind();
@@ -178,16 +183,24 @@ function qdBody(){
     ${warn}
     <div style="border:1px solid var(--border);border-radius:11px;padding:14px">
       <div class="flex between" style="font-size:13px;margin-bottom:6px"><span class="muted">ระยะทาง (ไป-กลับคลัง)</span><span class="tab strong">${num1(m.distance)} กม.</span></div>
-      ${row('ค่าน้ำมัน (Fuel)',c.fuel)}${row('ค่าทางด่วน (Toll)',c.toll)}${row('ค่าจอดรถ (Parking)',c.parking)}${c.external?row('ค่ารถภายนอก',c.external):''}
+      ${row('ค่าน้ำมัน (Fuel)',c.fuel)}
+      ${qdEdit('ค่าทางด่วน (Toll)','qdToll',Number(QD.toll)||0,'ใส่ 0 ถ้าไม่ขึ้นทางด่วน')}
+      ${qdEdit('ค่าจอดรถ (Parking)','qdPark',Number(QD.parking)||0, Planner.isMall(d)?'ปลายทางเป็นห้าง':'ร้านเดี่ยว')}
+      ${c.external?row('ค่ารถภายนอก',c.external):''}
       <div class="divider"></div>
-      <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวม</span><span class="strong tab" style="color:var(--brand-ink)">${money(c.total)} ฿</span></div>
+      <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวม</span><span class="strong tab" style="color:var(--brand-ink)" id="qdTotal">${money(c.total)} ฿</span></div>
     </div>`;
 }
+function qdEdit(l,id,val,hint){ return `<div class="flex between aic" style="padding:4px 0"><span class="muted" style="font-size:13px">${l}${hint?` <span class="small" style="color:#9AA3B2">${hint}</span>`:''}</span>
+  <span class="flex aic" style="gap:4px"><input class="input" id="${id}" type="number" value="${val}" style="width:96px;height:32px;text-align:right;padding:0 8px"><span class="small muted">฿</span></span></div>`; }
 function qdBind(){
   const t=el('qdType'); if(t) $$('#qdType button').forEach(b=>b.onclick=()=>{ QD.type=b.dataset.t; if(b.dataset.t==='EXTERNAL'&&!QD.extId){ const e=(Store.data.externalVehicles||[])[0]; QD.extId=e?e.ExternalVehicleID:''; } qdRefresh(); });
   const sv=el('qdVeh'); if(sv) sv.onchange=()=>{ QD.vehId=sv.value; const v=qdVehicle(); if(v&&v.CurrentDriver)QD.driver=v.CurrentDriver; qdRefresh(); };
   const se=el('qdExt'); if(se) se.onchange=()=>{ QD.extId=se.value; const v=qdVehicle(); if(v&&v.DriverName)QD.driver=v.DriverName; qdRefresh(); };
   const sd=el('qdDriver'); if(sd) sd.oninput=()=>QD.driver=sd.value;
+  const tl=el('qdToll'), pk=el('qdPark');
+  const upd=()=>{ QD.toll=+tl.value||0; QD.parking=+pk.value||0; const c=qdCost(); if(el('qdTotal'))el('qdTotal').textContent=money(c.total)+' ฿'; };
+  if(tl)tl.oninput=upd; if(pk)pk.oninput=upd;
 }
 function qdRefresh(){ el('qdBody').innerHTML=qdBody(); icons(); qdBind(); }
 async function qdConfirm(){
@@ -344,7 +357,8 @@ async function runAutoPlan(){
   const rec = Planner.recommendVehicle(out.metrics.boxes) || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
   const emp = rec && (Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
   Plan.sel = { type:'COMPANY', vehId: rec?rec.VehicleID:'', extId:(Planner.availableExternal()[0]||{}).ExternalVehicleID||'',
-    driver: rec?(rec.CurrentDriver || (emp&&emp.EmployeeName) || ''):'' };
+    driver: rec?(rec.CurrentDriver || (emp&&emp.EmployeeName) || ''):'',
+    toll: Planner.toll(), parking: Planner.autoParking(seq) };
   drawPlanMap(null,seq);
   renderDecision();
 }
@@ -427,27 +441,46 @@ function selVehicle(){ return Plan.sel.type==='EXTERNAL'
   ? (Store.data.externalVehicles||[]).find(v=>v.ExternalVehicleID===Plan.sel.extId)
   : (Store.data.vehicles||[]).find(v=>v.VehicleID===Plan.sel.vehId); }
 function selCost(){
-  const m=Plan.result.metrics; const v=selVehicle();
-  return Plan.sel.type==='EXTERNAL'
-    ? (v?Planner.externalCost(m.distance,v):{fuel:0,toll:Planner.toll(),parking:Planner.parking(),external:0,total:Planner.toll()+Planner.parking()})
-    : Planner.companyCost(m.distance,v);
+  const m=Plan.result.metrics, v=selVehicle();
+  const isExt=Plan.sel.type==='EXTERNAL';
+  const fuel = isExt ? 0 : Planner.fuelCost(m.distance, v);
+  const external = isExt && v ? Planner.extAmount(v, m.distance) : 0;
+  const toll = Number(Plan.sel.toll)||0;
+  const parking = Number(Plan.sel.parking)||0;
+  return { fuel, toll, parking, external, total:+(fuel+toll+parking+external).toFixed(2) };
 }
 function selCostBox(){
   const m=Plan.result.metrics, c=selCost(), v=selVehicle();
   const cap=v?Number(v.CapacityBox):0;
   const warn = (cap && m.boxes>cap) ? `<div class="notice warn" style="margin-bottom:10px"><i data-lucide="alert-triangle"></i><div>ความจุรถ ${int(cap)} กล่อง &lt; งาน ${int(m.boxes)} กล่อง (เกิน ${int(m.boxes-cap)}) — ควรเพิ่มรถหรือแบ่งรอบ</div></div>` : '';
+  const mallN = (Plan.result.seq||[]).filter(s=>Planner.isMall(s)).length;
   const row=(l,x)=>`<div class="flex between" style="padding:5px 0;font-size:13px"><span class="muted">${l}</span><span class="tab">${money(x)}</span></div>`;
+  const editRow=(l,id,val,hint)=>`<div class="flex between aic" style="padding:4px 0"><span class="muted" style="font-size:13px">${l}${hint?` <span class="small" style="color:#9AA3B2">${hint}</span>`:''}</span>
+    <span class="flex aic" style="gap:4px"><input class="input" id="${id}" type="number" value="${val}" style="width:96px;height:32px;text-align:right;padding:0 8px"><span class="small muted">฿</span></span></div>`;
   return `${warn}<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-    <div class="strong mb14">สรุปต้นทุน Route</div>
-    ${row('ค่าน้ำมัน (Fuel)',c.fuel)}${row('ค่าทางด่วน (Toll)',c.toll)}${row('ค่าจอดรถ (Parking)',c.parking)}${c.external?row('ค่ารถภายนอก',c.external):''}
+    <div class="strong mb14">สรุปต้นทุน Route <span class="small muted">(แก้ทางด่วน/ค่าจอดได้)</span></div>
+    ${row('ค่าน้ำมัน (Fuel) · '+num1(m.distance)+' กม.', c.fuel)}
+    ${editRow('ค่าทางด่วน (Toll)','selToll',Number(Plan.sel.toll)||0,'ใส่ 0 ถ้าไม่ขึ้นทางด่วน')}
+    ${editRow('ค่าจอดรถ (Parking)','selPark',Number(Plan.sel.parking)||0, mallN?`ห้าง ${mallN} จุด`:'ร้านเดี่ยว')}
+    ${c.external?row('ค่ารถภายนอก',c.external):''}
     <div class="divider"></div>
-    <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวม</span><span class="strong tab" style="color:var(--brand-ink)">${money(c.total)} ฿</span></div>
+    <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวม</span><span class="strong tab" style="color:var(--brand-ink)" id="selTotal">${money(c.total)} ฿</span></div>
     <div class="flex gap12" style="margin-top:10px">
-      <div style="flex:1;text-align:center;background:var(--brand-soft);border-radius:9px;padding:9px"><div class="small muted">ต่อจุด</div><div class="strong tab">${money(c.total/m.stops)}</div></div>
-      <div style="flex:1;text-align:center;background:var(--brand-soft);border-radius:9px;padding:9px"><div class="small muted">ต่อกล่อง</div><div class="strong tab">${money(c.total/m.boxes)}</div></div>
+      <div style="flex:1;text-align:center;background:var(--brand-soft);border-radius:9px;padding:9px"><div class="small muted">ต่อจุด</div><div class="strong tab" id="selPerStop">${money(c.total/m.stops)}</div></div>
+      <div style="flex:1;text-align:center;background:var(--brand-soft);border-radius:9px;padding:9px"><div class="small muted">ต่อกล่อง</div><div class="strong tab" id="selPerBox">${money(c.total/m.boxes)}</div></div>
     </div></div>`;
 }
-function refreshCostBox(){ const cb=el('costBox'); if(cb){ cb.innerHTML=selCostBox(); icons(); } }
+function refreshCostBox(){ const cb=el('costBox'); if(cb){ cb.innerHTML=selCostBox(); icons(); bindCostInputs(); } }
+function bindCostInputs(){
+  if(!Plan.result) return;
+  const m=Plan.result.metrics;
+  const t=el('selToll'), p=el('selPark');
+  const upd=()=>{ Plan.sel.toll=+t.value||0; Plan.sel.parking=+p.value||0; const c=selCost();
+    if(el('selTotal'))el('selTotal').textContent=money(c.total)+' ฿';
+    if(el('selPerStop'))el('selPerStop').textContent=money(c.total/m.stops);
+    if(el('selPerBox'))el('selPerBox').textContent=money(c.total/m.boxes); };
+  if(t)t.oninput=upd; if(p)p.oninput=upd;
+}
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; render(); };
   // คลิก Option → เติมค่าในฟอร์มเลือกรถ
@@ -461,6 +494,7 @@ function bindDecisionEvents(){
   const sv=el('selVeh'); if(sv) sv.onchange=()=>{ Plan.sel.vehId=sv.value; const v=selVehicle(); if(v&&v.CurrentDriver){ Plan.sel.driver=v.CurrentDriver; el('selDriver').value=v.CurrentDriver; } refreshCostBox(); };
   const se=el('selExt'); if(se) se.onchange=()=>{ Plan.sel.extId=se.value; const v=selVehicle(); if(v&&v.DriverName){ Plan.sel.driver=v.DriverName; el('selDriver').value=v.DriverName; } refreshCostBox(); };
   const sd=el('selDriver'); if(sd) sd.oninput=()=>{ Plan.sel.driver=sd.value; };
+  bindCostInputs();
   const cr=el('confirmRoute'); if(cr) cr.onclick=confirmRoute;
 }
 async function confirmRoute(){

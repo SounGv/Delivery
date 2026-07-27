@@ -458,6 +458,13 @@ const Planner = {
   speed(){ return Number(setting('AVG_SPEED_KMH',30)); },
   toll(){ return Number(setting('DEFAULT_TOLL',300)); },
   parking(){ return Number(setting('DEFAULT_PARKING',130)); },
+  // ปลายทางเป็นห้าง/ศูนย์การค้า (มีค่าจอด) หรือไม่ — ตรวจจากชื่อ
+  MALL_KW:['ห้าง','เซ็นทรัล','central','เดอะมอลล์','the mall','themall','เมกา','mega bangna','ซีคอน','seacon','เทอร์มินอล','terminal 21','terminal21','พารากอน','paragon','ไอคอนสยาม','iconsiam','เอ็มควอเทียร์','emquartier','เอ็มโพเรียม','emporium','ฟิวเจอร์','future park','futurepark','โรบินสัน','robinson','เกตเวย์','gateway','เมญ่า','maya','สเปลล์','spell','โชว์ ดีซี','show dc','ยูเนี่ยน','union mall'],
+  isMall(s){ const t=((s.CustomerName||'')+' '+(s.BranchName||'')+' '+(s.Address||'')).toLowerCase(); return this.MALL_KW.some(k=>t.indexOf(k.toLowerCase())>-1); },
+  // ค่าจอดรวม = จำนวนจุดที่เป็นห้าง × ค่าจอดต่อจุด (ร้านเดี่ยว = 0)
+  autoParking(stops){ return (stops||[]).filter(s=>this.isMall(s)).length * this.parking(); },
+  fuelCost(distanceKm, vehicle){ const rate=vehicle&&vehicle.FuelCostPerKm?Number(vehicle.FuelCostPerKm):this.fuelPerKm(); return +(distanceKm*rate).toFixed(2); },
+  extAmount(v, distanceKm){ const rate=Number(v&&v.Rate)||0; return v&&v.RateType==='PER_KM' ? +(rate*distanceKm).toFixed(2) : +rate; },
 
   // nearest-neighbour with priority weighting, starting from warehouse
   order(stops, start){
