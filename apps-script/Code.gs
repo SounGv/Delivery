@@ -90,7 +90,33 @@ const SCHEMA = {
 /* ==================================================================
    2. SETUP — สร้างชีต + ข้อมูลทดสอบ (รันครั้งเดียว)
    ================================================================== */
+// setupDatabase() — ปลอดภัย: สร้างชีต/หัวคอลัมน์ที่ยังไม่มี และใส่ข้อมูลทดสอบ
+// "เฉพาะตอนฐานข้อมูลว่าง" เท่านั้น → รันซ้ำได้โดยไม่ล้างข้อมูลจริง
 function setupDatabase() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  Object.keys(SCHEMA).forEach(name => {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    // เขียนหัวคอลัมน์เฉพาะถ้ายังไม่มี (ไม่แตะข้อมูลเดิม)
+    const hasHeader = sh.getLastRow() >= 1 && sh.getRange(1, 1).getValue() !== '';
+    if (!hasHeader) {
+      const headers = SCHEMA[name];
+      sh.getRange(1, 1, 1, headers.length).setValues([headers])
+        .setFontWeight('bold').setBackground('#0B1220').setFontColor('#FFFFFF');
+      sh.setFrozenRows(1);
+    }
+  });
+  const def = ss.getSheetByName('Sheet1');
+  if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
+  // ใส่ข้อมูลทดสอบเฉพาะฐานข้อมูลว่างเปล่า (กันเขียนทับข้อมูลจริง)
+  const empty = readAll('Deliveries', true).length === 0 &&
+                readAll('Customers', true).length === 0;
+  if (empty) { seedTestData(); seedSettings(); try { ss.toast('สร้างฐานข้อมูล + ข้อมูลทดสอบเรียบร้อย'); } catch (e) {} }
+  else       { try { ss.toast('มีข้อมูลอยู่แล้ว — ตรวจ/สร้างชีตให้ครบ ไม่แตะข้อมูลเดิม'); } catch (e) {} }
+}
+
+// resetDatabase() — ล้างทุกชีตแล้วใส่ข้อมูลทดสอบใหม่ (ใช้เมื่อตั้งใจล้างจริง ๆ เท่านั้น!)
+function resetDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.keys(SCHEMA).forEach(name => {
     let sh = ss.getSheetByName(name);
@@ -101,11 +127,8 @@ function setupDatabase() {
       .setFontWeight('bold').setBackground('#0B1220').setFontColor('#FFFFFF');
     sh.setFrozenRows(1);
   });
-  const def = ss.getSheetByName('Sheet1');
-  if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
-  seedTestData();
-  seedSettings();
-  try { ss.toast('สร้างฐานข้อมูล + ข้อมูลทดสอบเรียบร้อย'); } catch (e) {}
+  seedTestData(); seedSettings();
+  try { ss.toast('ล้าง + สร้างฐานข้อมูลใหม่เรียบร้อย'); } catch (e) {}
 }
 
 function seedTestData() {

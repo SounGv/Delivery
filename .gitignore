@@ -7,3 +7,5 @@ Thumbs.db
 node_modules/
 deliveries_import.json
 import2022.json
+customers200.json
+drivers.json
