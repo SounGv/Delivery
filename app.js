@@ -6,7 +6,9 @@
 
 /* ---------------- CONSTANTS ---------------- */
 const LS_URL = 'ddc_api_url';
-const DATA_DATE = '2026-07-20';           // วันที่ของชุดข้อมูลทดลอง
+// URL เริ่มต้น — เชื่อม Google Sheet ของจริงอัตโนมัติ (เปิดเว็บก็ใช้ข้อมูลจริงเลย)
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwwUY8D8aKdoSJSZwBirfevlE4UoM9nj-JsyC_5eQo573qhpMDRlDN1pdsuHp4bDjIe/exec';
+const DATA_DATE = '2026-07-20';           // วันที่ของชุดข้อมูลทดลอง (ใช้เฉพาะโหมด Mock)
 
 const PRIORITY = {
   HIGH:   { label:'ด่วน',        cls:'b-red',   rank:0, w:0.62, color:'#EF4444' },
@@ -262,8 +264,9 @@ const Mock = (() => {
    API LAYER
    ================================================================ */
 const API = {
-  url(){ return localStorage.getItem(LS_URL) || ''; },
+  url(){ const v=localStorage.getItem(LS_URL); if(v==='MOCK') return ''; return v || DEFAULT_API_URL; },
   setUrl(u){ if(u) localStorage.setItem(LS_URL,u); else localStorage.removeItem(LS_URL); },
+  useMock(){ localStorage.setItem(LS_URL,'MOCK'); },
   configured(){ return !!this.url(); },
   async get(action, params={}){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, params)));

@@ -1184,7 +1184,7 @@ ROUTES.settings = async function(view){
   `);
   el('apiSave').onclick=async()=>{ API.setUrl(el('apiUrl').value.trim()); await loadBootstrap(); render(); toast(Store.live?'เชื่อมต่อ Apps Script สำเร็จ':'บันทึก URL แล้ว','ok'); };
   el('apiTest').onclick=async()=>{ const u=el('apiUrl').value.trim(); if(!u){toast('กรอก URL ก่อน','warn');return;} try{ const r=await fetch(u+'?action=ping'); const j=await r.json(); toast(j.ok?'เชื่อมต่อสำเร็จ ✓ server time '+(j.data&&j.data.time||''):'ตอบกลับผิดพลาด','ok'); }catch(e){ toast('เชื่อมต่อไม่ได้: '+e.message,'err'); } };
-  el('apiMock').onclick=async()=>{ API.setUrl(''); await loadBootstrap(); render(); toast('สลับเป็นข้อมูลทดลอง (Mock)','info'); };
+  el('apiMock').onclick=async()=>{ API.useMock(); await loadBootstrap(); render(); toast('สลับเป็นข้อมูลทดลอง (Mock)','info'); };
   el('setSave').onclick=async()=>{ const inputs=$$('[data-skey]',view); el('setSave').disabled=true; try{ for(const i of inputs){ await API.post('updateSetting',{key:i.dataset.skey,value:i.value}); } await loadBootstrap(); toast('บันทึกการตั้งค่าแล้ว','ok'); }catch(e){toast(e.message,'err');} el('setSave').disabled=false; };
 };
 
