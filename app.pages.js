@@ -261,7 +261,9 @@ function deliveryForm(d){
    ================================================================ */
 const Plan = { selected:new Set(), result:null, chosen:null, sel:{type:'COMPANY',vehId:'',extId:'',driver:''}, map:null, layer:null };
 ROUTES.planning = async function(view){
-  const drafts = (Store.data.deliveries||[]).filter(d=>['Draft','Planned'].includes(d.Status) && d.Latitude);
+  const pending = (Store.data.deliveries||[]).filter(d=>['Draft','Planned'].includes(d.Status));
+  const drafts = pending.filter(d=>d.Latitude && d.Longitude);   // มีพิกัด → จัด Route ได้
+  const noGeo  = pending.filter(d=>!(d.Latitude && d.Longitude)); // ยังไม่มีพิกัด → ต้องเพิ่มที่อยู่ก่อน
   // keep only valid selections
   Plan.selected = new Set([...Plan.selected].filter(id=>drafts.some(d=>d.DeliveryID===id)));
   const selCount = Plan.selected.size;
@@ -274,16 +276,22 @@ ROUTES.planning = async function(view){
 
       <!-- LEFT: deliveries -->
       <div class="card" style="padding:14px">
-        <div class="flex between aic mb14"><span class="h-card">งานรอจัด (${drafts.length})</span>
+        <div class="flex between aic mb14"><span class="h-card">งานรอจัด (${pending.length})</span>
           <button class="btn btn-sm" id="selAll">${selCount===drafts.length&&drafts.length?'ล้าง':'เลือกทั้งหมด'}</button></div>
         <div style="max-height:520px;overflow-y:auto" class="scrolly">
-        ${drafts.length? drafts.map(d=>`<div class="check-item ${Plan.selected.has(d.DeliveryID)?'on':''}" data-pick="${esc(d.DeliveryID)}">
+        ${pending.length? drafts.map(d=>`<div class="check-item ${Plan.selected.has(d.DeliveryID)?'on':''}" data-pick="${esc(d.DeliveryID)}">
           <div class="cbx"><i data-lucide="check"></i></div>
           <div style="flex:1;min-width:0"><div class="strong" style="font-size:13px">${esc(d.CustomerName)}</div>
-            <div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.BranchName)}</div></div>
+            <div class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.BranchName||d.InvoiceNo||'')}</div></div>
           <div style="text-align:right"><div class="tab strong" style="font-size:13px">${int(d.BoxQty)}</div>${priBadge(d.Priority)}</div>
+        </div>`).join('') + noGeo.map(d=>`<div class="check-item" style="border-color:#FCE9BD;background:var(--amber-soft)" data-fixgeo="${esc(d.DeliveryID)}">
+          <div class="cbx" style="border-color:#F59E0B;background:transparent"><i data-lucide="map-pin-off" style="width:13px;height:13px;color:#B45309;opacity:1"></i></div>
+          <div style="flex:1;min-width:0"><div class="strong" style="font-size:13px">${esc(d.CustomerName)}</div>
+            <div class="small" style="color:#B45309">ไม่มีพิกัด · แตะเพื่อเพิ่มที่อยู่</div></div>
+          <div class="tab strong" style="font-size:13px">${int(d.BoxQty)}</div>
         </div>`).join('') : emptyState('ไม่มีงานรอจัด','เพิ่มงานส่งก่อน')}
         </div>
+        ${noGeo.length?`<div class="small" style="color:#B45309;margin-top:10px"><i data-lucide="alert-triangle" style="width:13px;height:13px;vertical-align:-2px"></i> ${noGeo.length} งานยังไม่มีพิกัด — แตะเพื่อเพิ่มที่อยู่ (ระบบหาพิกัดให้อัตโนมัติ)</div>`:''}
       </div>
 
       <!-- CENTER: map -->
@@ -305,6 +313,7 @@ ROUTES.planning = async function(view){
 
   // events
   $$('[data-pick]',view).forEach(it=>it.onclick=()=>{ const id=it.dataset.pick; if(Plan.selected.has(id))Plan.selected.delete(id); else Plan.selected.add(id); Plan.result=null; render(); });
+  $$('[data-fixgeo]',view).forEach(it=>it.onclick=()=>deliveryForm((Store.data.deliveries||[]).find(x=>x.DeliveryID===it.dataset.fixgeo)));
   el('selAll').onclick=()=>{ if(Plan.selected.size===drafts.length){Plan.selected.clear();} else drafts.forEach(d=>Plan.selected.add(d.DeliveryID)); Plan.result=null; render(); };
   const auto=el('autoPlan'); if(auto) auto.onclick=runAutoPlan;
   bindDecisionEvents();
