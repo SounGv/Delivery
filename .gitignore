@@ -5,3 +5,4 @@ Thumbs.db
 # local
 .netlify/
 node_modules/
+deliveries_import.json
