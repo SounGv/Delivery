@@ -24,14 +24,14 @@
   .ug-hero .gv{font-size:30px; font-weight:800; color:var(--lime-bright); letter-spacing:.02em; line-height:1;}
   .ug-hero .gv small{display:block; font-size:11px; letter-spacing:.34em; color:#c7d3a6; font-weight:600; margin-top:4px;}
   .ug-hero h1{font-size:clamp(24px,4vw,36px); font-weight:800; margin-top:22px;}
-  .ug-hero p{color:#c9d4ac; margin-top:10px; max-width:60ch;}
+  .ug-hero p{color:#c9d4ac; margin-top:10px; max-width:62ch;}
   .ug-hero .meta{margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;}
   .ug-hero .meta span{font-size:12.5px; background:rgba(180,220,0,.14); color:#dCE98f; border:1px solid rgba(180,220,0,.3);
      padding:5px 11px; border-radius:20px;}
 
   /* layout */
-  .ug-wrap{max-width:1120px; margin:0 auto; padding:0 20px; display:grid; grid-template-columns:236px 1fr; gap:34px; align-items:start;}
-  .ug-toc{position:sticky; top:16px; padding:22px 0; font-size:14px;}
+  .ug-wrap{max-width:1120px; margin:0 auto; padding:0 20px; display:grid; grid-template-columns:250px 1fr; gap:34px; align-items:start;}
+  .ug-toc{position:sticky; top:16px; padding:22px 0; font-size:14px; max-height:calc(100vh - 24px); overflow:auto;}
   .ug-toc .lbl{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:14px 6px 8px;}
   .ug-toc a{display:block; color:var(--ink); text-decoration:none; padding:6px 10px; border-radius:8px; border-left:2px solid transparent;}
   .ug-toc a:hover{background:var(--card-2); border-left-color:var(--lime);}
@@ -44,15 +44,16 @@
   .sec .num{display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:9px;
      background:var(--lime-bright); color:#182200; font-weight:800; font-size:15px; flex-shrink:0;}
   .sec .lead{color:var(--muted); margin:2px 0 16px;}
-  .sec h3{font-size:15px; font-weight:700; margin:18px 0 8px;}
+  .sec h3{font-size:15.5px; font-weight:700; margin:20px 0 8px; padding-left:11px; border-left:3px solid var(--lime-bright);}
 
   ol.steps{margin:0; padding:0; list-style:none; counter-reset:s;}
-  ol.steps li{counter-increment:s; position:relative; padding:8px 0 8px 40px; border-bottom:1px dashed var(--line);}
+  ol.steps li{counter-increment:s; position:relative; padding:9px 0 9px 42px; border-bottom:1px dashed var(--line);}
   ol.steps li:last-child{border-bottom:none;}
-  ol.steps li::before{content:counter(s); position:absolute; left:0; top:8px; width:26px; height:26px; border-radius:50%;
+  ol.steps li::before{content:counter(s); position:absolute; left:0; top:8px; width:27px; height:27px; border-radius:50%;
      background:var(--card-2); border:1.5px solid var(--lime); color:var(--lime-deep); font-weight:700; font-size:13px;
      display:flex; align-items:center; justify-content:center;}
-  ul.plain{margin:6px 0; padding-left:20px;} ul.plain li{margin:4px 0;}
+  ol.steps li .sub{display:block; color:var(--muted); font-size:14px; margin-top:2px;}
+  ul.plain{margin:6px 0; padding-left:20px;} ul.plain li{margin:5px 0;}
 
   .btn{display:inline-block; background:var(--lime-bright); color:#182200; font-weight:700; font-size:13px;
      padding:2px 10px; border-radius:7px; white-space:nowrap;}
@@ -63,23 +64,40 @@
   .tip{display:flex; gap:11px; padding:12px 14px; border-radius:11px; margin:14px 0 2px; font-size:14.5px; line-height:1.55;}
   .tip.g{background:color-mix(in srgb,var(--ok) 12%,transparent); border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);}
   .tip.w{background:color-mix(in srgb,var(--warn) 13%,transparent); border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);}
+  .tip.c{background:color-mix(in srgb,var(--crit) 12%,transparent); border:1px solid color-mix(in srgb,var(--crit) 32%,transparent);}
   .tip.i{background:var(--card-2); border:1px solid var(--line);}
-  .tip .ic{font-weight:800;}
+  .tip .ic{font-weight:800; flex-shrink:0;}
 
   .role{display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:3px 10px; border-radius:20px; vertical-align:middle;}
   .role.mgr{background:color-mix(in srgb,var(--lime) 22%,transparent); color:var(--lime-deep);}
   .role.drv{background:color-mix(in srgb,var(--warn) 18%,transparent); color:var(--warn);}
 
   table.t{width:100%; border-collapse:collapse; margin:10px 0; font-size:14px;}
-  table.t th,table.t td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.t th,table.t td{text-align:left; padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top;}
   table.t th{color:var(--muted); font-weight:700; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em;}
+  table.t td .k{white-space:nowrap;}
   .t-wrap{overflow-x:auto;}
+  .badge{display:inline-block; font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px;}
+  .b-gray{background:#e7e9ee;color:#556}
+  .b-violet{background:#efe7ff;color:#6d28d9}
+  .b-blue{background:#e6efff;color:#1d4ed8}
+  .b-green{background:#e4f8ec;color:#12a150}
+  .b-red{background:#fdecec;color:#e23b3b}
+  .b-amber{background:#fff2df;color:#c77700}
+
+  .road{list-style:none; margin:6px 0 0; padding:0; counter-reset:r;}
+  .road li{counter-increment:r; position:relative; padding:12px 0 12px 46px; border-bottom:1px solid var(--line);}
+  .road li:last-child{border-bottom:none;}
+  .road li::before{content:counter(r); position:absolute; left:0; top:10px; width:30px; height:30px; border-radius:9px;
+     background:var(--lime-bright); color:#182200; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center;}
+  .road b{display:block; font-size:15px;}
+  .road span{color:var(--muted); font-size:14px;}
 
   .ug-foot{max-width:1120px; margin:0 auto; padding:24px 20px 48px; color:var(--muted); font-size:13px; border-top:1px solid var(--line);}
 
   @media (max-width:860px){
     .ug-wrap{grid-template-columns:1fr; gap:0;}
-    .ug-toc{position:static; border-bottom:1px solid var(--line); padding:16px 0;}
+    .ug-toc{position:static; border-bottom:1px solid var(--line); padding:16px 0; max-height:none;}
     .ug-toc .cols{display:grid; grid-template-columns:1fr 1fr; gap:0 12px;}
   }
   @media print{
@@ -94,8 +112,8 @@
   <header class="ug-hero">
     <div class="brand"><div class="gv">GV<small>GADGET&nbsp;VILLA</small></div></div>
     <h1>คู่มือใช้งานระบบจัดส่ง<br>Delivery Dispatch &amp; Route Control</h1>
-    <p>วิธีใช้งานแต่ละฟังก์ชันสำหรับพนักงาน — ตั้งแต่บันทึกงานส่ง จัดรถ วางแผนเส้นทาง ติดตามพัสดุ ไปจนถึงโหมดคนขับบนมือถือ</p>
-    <div class="meta"><span>สำหรับ ผู้จัดการ / แอดมิน + คนขับ</span><span>เปิดผ่านเบราว์เซอร์ได้ทุกอุปกรณ์</span><span>ฉบับใช้งานจริง</span></div>
+    <p>คู่มือฉบับละเอียด — ตั้งแต่ <b>ตั้งค่าระบบครั้งแรก</b> → สร้างงานส่งทีละขั้น → จัดรถ/มอบหมายงาน → ติดตามงาน → ดึงรายงาน พร้อมอธิบายการใช้งานของ <b>ทุกหน้า</b> สำหรับผู้ใช้งานจริง</p>
+    <div class="meta"><span>สำหรับ ผู้จัดการ / แอดมิน + คนขับ</span><span>เปิดผ่านเบราว์เซอร์ได้ทุกอุปกรณ์</span><span>ฉบับใช้งานจริง · อัปเดตล่าสุด</span></div>
   </header>
 
   <div class="ug-wrap">
@@ -103,225 +121,380 @@
       <div class="cols">
         <div class="lbl">เริ่มต้น</div>
         <a href="#start">การเข้าใช้งาน</a>
-        <a href="#dash">1 · แดชบอร์ด</a>
+        <a href="#roadmap">ลำดับเริ่มใช้ครั้งแรก</a>
+        <div class="lbl">ตั้งค่าก่อนใช้งาน</div>
+        <a href="#settings">A · ตั้งค่าระบบ</a>
+        <a href="#master">B · ลูกค้า / สาขา</a>
+        <a href="#emp">C · พนักงานส่งสินค้า</a>
+        <a href="#fleet">D · รถบริษัท / รถนอก</a>
         <div class="lbl">งานประจำวัน</div>
-        <a href="#del">2 · งานส่งสินค้า</a>
+        <a href="#dash">1 · แดชบอร์ด</a>
+        <a href="#del">2 · สร้างงานส่งสินค้า</a>
         <a href="#plan">3 · วางแผนเส้นทาง</a>
-        <a href="#round">4 · รอบส่งสินค้า</a>
-        <a href="#track">5 · ติดตามพัสดุ</a>
-        <a href="#map">6 · แผนที่ติดตาม</a>
-        <div class="lbl">ข้อมูลหลัก</div>
-        <a href="#fleet">7 · รถบริษัท / รถนอก</a>
-        <a href="#master">8 · ลูกค้า / พนักงาน</a>
+        <a href="#round">4 · มอบหมาย / รอบส่ง</a>
+        <a href="#driver">5 · โหมดคนขับ</a>
+        <a href="#track">6 · ติดตามพัสดุ</a>
+        <a href="#map">7 · แผนที่ติดตาม</a>
         <div class="lbl">การเงิน &amp; รายงาน</div>
-        <a href="#finance">9 · ค่าใช้จ่าย / เงินทดรอง</a>
-        <a href="#report">10 · รายงาน &amp; พิมพ์</a>
-        <div class="lbl">คนขับ</div>
-        <a href="#driver">11 · โหมดคนขับ</a>
+        <a href="#finance">8 · ค่าใช้จ่าย / เงินทดรอง</a>
+        <a href="#report">9 · รายงาน &amp; พิมพ์</a>
+        <div class="lbl">อ้างอิง</div>
+        <a href="#status">ตารางสถานะงาน</a>
         <a href="#faq">คำถามที่พบบ่อย</a>
       </div>
     </nav>
 
     <main class="ug-main">
 
+      <!-- ============ START ============ -->
       <section class="sec" id="start">
         <div class="eyebrow">เริ่มต้น</div>
         <h2>การเข้าใช้งานระบบ</h2>
         <p class="lead">เปิดเว็บได้จากคอมพิวเตอร์ แท็บเล็ต หรือมือถือ ผ่านลิงก์ของบริษัท</p>
         <ol class="steps">
-          <li>เปิดลิงก์ระบบที่บริษัทให้มา (บันทึกไว้เป็น Bookmark ได้)</li>
-          <li>มุมซ้ายล่างต้องขึ้นจุดสีเขียว <span class="chip">● เชื่อมต่อแล้ว</span> = ใช้ข้อมูลจริง ถ้าขึ้น <span class="chip">โหมดทดลอง</span> ให้แจ้งแอดมิน</li>
-          <li>เมนูทั้งหมดอยู่แถบซ้าย · บนมือถือแตะเมนูด้านล่างจอ</li>
+          <li>เปิดลิงก์ระบบที่บริษัทให้มา<span class="sub">แนะนำให้กด Bookmark / เพิ่มลงหน้าจอมือถือ ไว้เปิดได้เร็ว</span></li>
+          <li>มุมซ้ายล่างต้องขึ้นจุดสีเขียว <span class="chip">● เชื่อมต่อแล้ว</span><span class="sub">= กำลังใช้ข้อมูลจริงจาก Google Sheet ของบริษัท</span></li>
+          <li>เมนูทั้งหมดอยู่แถบซ้าย · บนมือถือใช้เมนูแถบล่างจอ</li>
         </ol>
-        <div class="tip w"><span class="ic">⚡</span><div><b>เปิดครั้งแรกแล้วข้อมูลไม่ขึ้น หรือขึ้น "โหมดทดลอง"?</b> กด <b>Ctrl + Shift + R</b> (ค้างปุ่มพร้อมกัน) เพื่อล้างแคชแล้วโหลดใหม่ — จะเชื่อมข้อมูลจริงทันที · บนมือถือ: ปิดแท็บแล้วเปิดใหม่ หรือล้างแคชเบราว์เซอร์</div></div>
+
+        <h3>ทำความเข้าใจสถานะการเชื่อมต่อ (มุมซ้ายล่าง)</h3>
+        <div class="t-wrap"><table class="t">
+          <tr><th>สัญญาณ</th><th>ความหมาย</th><th>ต้องทำอะไร</th></tr>
+          <tr><td><span class="chip">🟢 เชื่อมต่อแล้ว</span></td><td>ใช้ข้อมูลจริง บันทึกขึ้นเซิร์ฟเวอร์ปกติ</td><td>ใช้งานได้เลย</td></tr>
+          <tr><td><span class="chip">🟡 กำลังเชื่อมต่อ…</span></td><td>กำลังโหลดข้อมูลจากเซิร์ฟเวอร์ (ตอนเปิดครั้งแรก)</td><td>รอสักครู่ ระบบจะเชื่อมให้เอง</td></tr>
+          <tr><td><span class="chip">🟡 กำลังลองเชื่อมต่อใหม่…</span></td><td>เน็ตสะดุด/เซิร์ฟเวอร์ตอบช้าชั่วคราว</td><td>ไม่ต้องทำอะไร ระบบจะเชื่อมกลับให้อัตโนมัติ</td></tr>
+          <tr><td><span class="chip">🟡 โหมดทดลอง (Mock)</span></td><td>ยังไม่ได้ผูกลิงก์ข้อมูลจริง — ข้อมูลที่เห็นเป็นข้อมูลตัวอย่าง</td><td>เปิดด้วยลิงก์บริษัท หรือแจ้งแอดมิน แล้วกด Ctrl+Shift+R</td></tr>
+        </table></div>
+        <div class="tip g"><span class="ic">⚡</span><div><b>บันทึกไวขึ้นแล้ว</b> — เมื่อกดบันทึก/แก้ไข/ลบ ข้อมูลจะขึ้นทันที ไม่ต้องรอ ระบบซิงค์ขึ้นเซิร์ฟเวอร์ให้เบื้องหลังเอง และสถานะที่คนขับอัปเดตจากมือถือจะเด้งขึ้นหน้าออฟฟิศเองทุก ๆ ไม่กี่วินาที</div></div>
+        <div class="tip w"><span class="ic">🔄</span><div>เปิดครั้งแรกแล้วข้อมูลไม่ขึ้น หรือขึ้น “โหมดทดลอง”? กด <b>Ctrl + Shift + R</b> (ค้างพร้อมกัน) เพื่อล้างแคชแล้วโหลดใหม่ · บนมือถือ: ปิดแท็บแล้วเปิดใหม่</div></div>
+
         <h3>ปุ่มที่ใช้บ่อยด้านบน</h3>
         <ul class="plain">
-          <li><span class="k">ปฏิทิน (มุมบนซ้าย)</span> — เลือกวันที่ทำงาน ข้อมูลทั้งหน้าจะเปลี่ยนตามวันที่เลือก</li>
-          <li><span class="k">ช่องค้นหา</span> — พิมพ์ชื่อลูกค้า / เลขบิล เพื่อกรองงานในหน้ารายการ</li>
+          <li><span class="k">📅 ปฏิทิน (มุมบนซ้าย)</span> — เลือกวันที่ทำงาน ข้อมูลทั้งหน้าจะเปลี่ยนตามวันที่เลือก (มีปุ่มลัด “วันนี้”)</li>
+          <li><span class="k">🔍 ช่องค้นหา</span> — พิมพ์ชื่อลูกค้า / เลขบิล เพื่อกรองรายการในหน้าที่กำลังดู</li>
+          <li><span class="k">🔔 กระดิ่ง</span> — ตัวเลขคือจำนวนงานที่ยัง “รอจัด Route”</li>
         </ul>
-        <div class="tip i"><span class="ic">ℹ️</span><div>ฟังก์ชันแบ่งตามหน้าที่: <span class="role mgr">ผู้จัดการ/แอดมิน</span> ใช้จัดงาน–จัดรถ–ดูรายงาน · <span class="role drv">คนขับ</span> ใช้ “โหมดคนขับ” บนมือถือ</div></div>
+        <div class="tip i"><span class="ic">👥</span><div>ระบบแบ่งการใช้งานเป็น 2 บทบาท: <span class="role mgr">ผู้จัดการ/แอดมิน</span> ใช้ตั้งค่า–สร้างงาน–จัดรถ–ดูรายงาน (บนคอม) · <span class="role drv">คนขับ</span> ใช้ “โหมดคนขับ” บนมือถือระหว่างวิ่งงาน</div></div>
       </section>
 
+      <!-- ============ ROADMAP ============ -->
+      <section class="sec" id="roadmap">
+        <div class="eyebrow">แผนผังการใช้งาน</div>
+        <h2>ลำดับการเริ่มใช้งานครั้งแรก</h2>
+        <p class="lead">ทำตามลำดับนี้ครั้งเดียวตอนเริ่มระบบ หลังจากนั้นงานประจำวันจะเริ่มที่ข้อ 5 เป็นต้นไป</p>
+        <ol class="road">
+          <li><b>ตั้งค่าระบบ</b><span>ใส่ข้อมูลบริษัท พิกัดคลัง และพารามิเตอร์ต้นทุน (ค่าน้ำมัน/กม., ค่าทางด่วน, ค่าจอด) → ดูหัวข้อ A</span></li>
+          <li><b>เพิ่มลูกค้า / สาขา</b><span>ใส่ร้าน + สาขา + ที่อยู่ ระบบหาพิกัด GPS ให้อัตโนมัติ → หัวข้อ B</span></li>
+          <li><b>เพิ่มพนักงานส่งสินค้า (คนขับ)</b><span>ชื่อ เบอร์ ตำแหน่ง และรถประจำ → หัวข้อ C</span></li>
+          <li><b>เพิ่มรถบริษัท / รถจ้างภายนอก</b><span>ตั้งความจุกล่อง + ค่าน้ำมัน/เรตราคา เพื่อคำนวณต้นทุนแม่น → หัวข้อ D</span></li>
+          <li><b>สร้างงานส่งสินค้า</b><span>บันทึกออเดอร์ที่ต้องส่งของวันนั้น → หัวข้อ 2</span></li>
+          <li><b>วางแผนเส้นทาง (จัด Route)</b><span>รวมงานเป็นรอบ จัดลำดับจุด คิดต้นทุน → หัวข้อ 3</span></li>
+          <li><b>มอบหมายงานให้คนขับ</b><span>คนขับกด “รับงาน” บนมือถือ สถานะขึ้น “กำลังส่ง” อัตโนมัติ → หัวข้อ 4–5</span></li>
+          <li><b>ติดตามงาน</b><span>ดูความคืบหน้า/ตำแหน่งรถ + ตอบลูกค้าด้วยหน้าติดตามพัสดุ → หัวข้อ 6–7</span></li>
+          <li><b>ดึงรายงาน &amp; พิมพ์เอกสาร</b><span>สรุปงาน/ต้นทุน + พิมพ์ใบส่งของ/ใบเบิกค่าใช้จ่าย → หัวข้อ 9</span></li>
+        </ol>
+      </section>
+
+      <!-- ============ A · SETTINGS ============ -->
+      <section class="sec" id="settings">
+        <div class="eyebrow">ตั้งค่าก่อนใช้งาน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
+        <h2><span class="num">A</span> ตั้งค่าระบบ</h2>
+        <p class="lead">เมนู <span class="k">ตั้งค่าระบบ</span> (มุมซ้ายล่าง) — ตั้งค่าพวกนี้ให้ครบ “ก่อน” ใช้งานจริง เพราะค่าต้นทุนและพิกัดคลังคือฐานที่ระบบใช้คำนวณระยะทาง/ราคาทุก Route</p>
+
+        <h3>1) ข้อมูลบริษัท &amp; คลังสินค้า</h3>
+        <div class="t-wrap"><table class="t">
+          <tr><th>ช่อง</th><th>ใส่อะไร / มีผลอย่างไร</th></tr>
+          <tr><td><span class="k">ชื่อบริษัท</span> <code>COMPANY_NAME</code></td><td>ชื่อที่จะขึ้นหัวเอกสารทุกใบที่พิมพ์ (ใบส่งของ / ใบเบิก / รายงาน)</td></tr>
+          <tr><td><span class="k">ชื่อคลังสินค้า</span> <code>WAREHOUSE_NAME</code></td><td>ชื่อจุดตั้งต้น จะขึ้นบนแผนที่ที่หมุด 🏭</td></tr>
+          <tr><td><span class="k">ที่อยู่คลังสินค้า</span> <code>WAREHOUSE_ADDRESS</code></td><td>พิมพ์บนหัวเอกสาร</td></tr>
+          <tr><td><span class="k">พิกัดคลัง Lat/Lng</span> <code>WAREHOUSE_LAT / LNG</code></td><td><b>สำคัญมาก</b> — เป็นจุด <b>เริ่มต้นและสิ้นสุด</b> ของทุกเส้นทาง ระบบวัดระยะทาง/ค่าน้ำมันจากจุดนี้ ต้องใส่ให้ตรงคลังจริง</td></tr>
+        </table></div>
+        <div class="tip i"><span class="ic">📍</span><div>หาพิกัดคลังยังไง: เปิด Google Maps → คลิกขวาที่ตำแหน่งคลัง → ตัวเลขคู่แรกที่ขึ้นคือ Latitude, Longitude คัดลอกมาใส่ได้เลย</div></div>
+
+        <h3>2) พารามิเตอร์ต้นทุน</h3>
+        <div class="t-wrap"><table class="t">
+          <tr><th>ช่อง</th><th>ใส่อะไร / มีผลอย่างไร</th></tr>
+          <tr><td><span class="k">ค่าน้ำมันต่อกิโลเมตร</span> <code>FUEL_COST_PER_KM</code></td><td>บาท/กม. — ใช้เป็น <b>ค่ากลาง</b> คิดค่าน้ำมัน (ระยะทาง × ค่านี้) หากรถคันไหนตั้งค่าน้ำมันเฉพาะไว้ จะใช้ของคันนั้นแทน</td></tr>
+          <tr><td><span class="k">ความเร็วเฉลี่ย</span> <code>AVG_SPEED_KMH</code></td><td>กม./ชม. — ใช้ประเมิน <b>เวลาที่คาดว่าจะใช้</b> ของแต่ละรอบ (เมืองหนาแน่นตั้ง 25–30 ก็พอ)</td></tr>
+          <tr><td><span class="k">ค่าทางด่วนเริ่มต้น</span> <code>DEFAULT_TOLL</code></td><td>บาท — เติมให้เป็นค่าตั้งต้นตอนจัด Route (แก้รายรอบได้ ถ้าไม่ขึ้นทางด่วนใส่ 0)</td></tr>
+          <tr><td><span class="k">ค่าจอดรถเริ่มต้น</span> <code>DEFAULT_PARKING</code></td><td>บาท/จุด — ระบบคิด <b>เฉพาะปลายทางที่เป็นห้าง/ศูนย์การค้า</b> (ร้านเดี่ยว = 0) เป็นค่าตั้งต้น แก้ได้</td></tr>
+        </table></div>
+
+        <h3>3) การติดตาม (GPS Check-in)</h3>
+        <ul class="plain">
+          <li><span class="k">ระยะ Check-in สีเขียว</span> <code>PROXIMITY_GREEN_M</code> — คนขับต้องเข้าใกล้จุดส่งไม่เกินกี่เมตรถึงนับว่า “ถึงจุดแล้ว” (ค่าแนะนำ 100 ม.)</li>
+          <li><span class="k">ระยะ Check-in สีเหลือง</span> <code>PROXIMITY_YELLOW_M</code> — ระยะ “ใกล้จุดส่ง” (ค่าแนะนำ 500 ม.) เกินกว่านี้ = 🔴 ยังไม่ถึง</li>
+        </ul>
+
+        <h3>4) บันทึกการตั้งค่า</h3>
+        <ol class="steps">
+          <li>แก้ค่าในช่องต่าง ๆ ทางด้านซ้ายให้ครบ</li>
+          <li>กดปุ่ม <span class="btn">💾 บันทึกการตั้งค่าทั้งหมด</span> (การ์ดขวาล่าง)<span class="sub">ค่าจะถูกเขียนกลับไปเก็บใน Google Sheets (ชีต Settings) ทันที</span></li>
+        </ol>
+        <div class="tip w"><span class="ic">⚙️</span><div><span class="k">Cartrack Integration</span> (เมนูล่างสุด) ใช้ผูก GPS ติดตามรถแบบเรียลไทม์ — การตั้งค่ารหัสเชื่อมต่อเป็นหน้าที่ <b>แอดมิน/ผู้ดูแลระบบ</b> เท่านั้น (ตั้งในระบบหลังบ้าน ไม่กรอกในเว็บ) ผู้ใช้ทั่วไปแค่ดูสถานะว่าเชื่อมต่ออยู่หรือไม่</div></div>
+      </section>
+
+      <!-- ============ B · CUSTOMERS ============ -->
+      <section class="sec" id="master">
+        <div class="eyebrow">ตั้งค่าก่อนใช้งาน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
+        <h2><span class="num">B</span> ลูกค้า / สาขา</h2>
+        <p class="lead">เมนู <span class="k">ลูกค้า / สาขา</span> — ทะเบียนร้าน/สาขาปลายทาง เพิ่มไว้ล่วงหน้าเพื่อเลือกได้เร็วตอนสร้างงานส่ง</p>
+        <ol class="steps">
+          <li>กด <span class="btn">+ เพิ่มลูกค้า</span> มุมขวาบน</li>
+          <li>กรอก <span class="k">ชื่อร้าน · สาขา · ที่อยู่ · รหัสไปรษณีย์</span><span class="sub">ใส่ที่อยู่ให้ครบ ระบบจะหาพิกัดได้แม่นขึ้น</span></li>
+          <li>กด <span class="btn">ค้นหาพิกัด GPS จากที่อยู่</span> — ระบบหาพิกัดให้อัตโนมัติ<span class="sub">ไม่ต้องกรอก Lat/Lng เอง</span></li>
+          <li>กด <span class="btn">บันทึก</span></li>
+        </ol>
+        <ul class="plain">
+          <li>ไอคอน ✏️ = แก้ไข · 🗑️ = ลบ (ซ่อนออกจากรายการ ข้อมูลจริงกู้คืนได้)</li>
+          <li>ใช้ช่องค้นหาด้านบนเพื่อหาลูกค้าเร็ว ๆ</li>
+        </ul>
+        <div class="tip w"><span class="ic">🗺️</span><div>ลูกค้าที่ <b>ไม่มีพิกัด GPS</b> จะไม่ขึ้นบนแผนที่และจัด Route อัตโนมัติไม่ได้ — ควรกดหาพิกัดให้เรียบร้อยก่อนบันทึก</div></div>
+      </section>
+
+      <!-- ============ C · EMPLOYEES ============ -->
+      <section class="sec" id="emp">
+        <div class="eyebrow">ตั้งค่าก่อนใช้งาน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
+        <h2><span class="num">C</span> พนักงานส่งสินค้า</h2>
+        <p class="lead">เมนู <span class="k">พนักงานส่งสินค้า</span> — รายชื่อคนขับ/ผู้ช่วย ที่จะเลือกไปผูกกับรอบส่ง</p>
+        <ol class="steps">
+          <li>กด <span class="btn">+ เพิ่มพนักงาน</span></li>
+          <li>กรอก <span class="k">ชื่อ-นามสกุล · เบอร์โทร</span></li>
+          <li>เลือก <span class="k">ตำแหน่ง</span> — คนขับ / ผู้ช่วย / ธุรการ</li>
+          <li>เลือก <span class="k">รถประจำ</span> (ถ้ามี) แล้วกด <span class="btn">บันทึก</span><span class="sub">ชื่อคนขับจะถูกเติมให้อัตโนมัติเมื่อเลือกรถคันนั้นตอนจัด Route</span></li>
+        </ol>
+      </section>
+
+      <!-- ============ D · FLEET ============ -->
+      <section class="sec" id="fleet">
+        <div class="eyebrow">ตั้งค่าก่อนใช้งาน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
+        <h2><span class="num">D</span> รถบริษัท &amp; รถจ้างภายนอก</h2>
+
+        <h3>รถบริษัท</h3>
+        <ol class="steps">
+          <li>เมนู <span class="k">รถบริษัท</span> → กด <span class="btn">+ เพิ่มรถ</span></li>
+          <li>กรอก <span class="k">ชื่อรถ · ทะเบียน · ประเภท</span> (กระบะ/หกล้อ/ตู้)</li>
+          <li>ตั้ง <span class="k">ความจุ (กล่อง)</span> — ระบบใช้เช็กว่ารถรับงานไหวไหมตอนจัด Route</li>
+          <li>ตั้ง <span class="k">ค่าน้ำมัน/กม.</span> ของรถคันนั้น (ถ้าเว้นไว้ ใช้ค่ากลางจากหน้าตั้งค่า)</li>
+          <li>ช่อง <span class="k">Cartrack Registration</span> = ทะเบียนที่ผูกกับกล่อง GPS ต้องตรงจึงจะเห็นตำแหน่งสด</li>
+        </ol>
+        <div class="tip i"><span class="ic">🚦</span><div>สถานะรถขึ้น <b>อัตโนมัติจากความเร็ว GPS</b>: กำลังวิ่ง (มีความเร็ว) · จอดอยู่ (ความเร็ว 0) · ออฟไลน์ (ไม่มีสัญญาณ) — ไม่ต้องตั้งเอง</div></div>
+
+        <h3>รถจ้างภายนอก</h3>
+        <ul class="plain">
+          <li>เมนู <span class="k">รถจ้างภายนอก</span> — บันทึก ผู้ให้บริการ / คนขับ / เบอร์ / ทะเบียน / ความจุ</li>
+          <li>ตั้ง <span class="k">เรตราคา</span> และ <span class="k">รูปแบบ</span> — ต่อเที่ยว / ต่อกิโลเมตร / ต่อวัน<span class="sub">ระบบใช้เรตนี้คิดต้นทุนอัตโนมัติเมื่อเลือกรถภายนอกตอนจัด Route</span></li>
+        </ul>
+      </section>
+
+      <!-- ============ 1 · DASHBOARD ============ -->
       <section class="sec" id="dash">
-        <div class="eyebrow">ภาพรวม</div>
+        <div class="eyebrow">งานประจำวัน · ภาพรวม</div>
         <h2><span class="num">1</span> แดชบอร์ด (Dashboard)</h2>
         <p class="lead">หน้าแรก — ดูสรุปงานของวันได้ทันทีในหน้าเดียว</p>
         <ul class="plain">
-          <li><span class="k">การ์ด KPI ด้านบน</span> — งานทั้งหมด / รอจัด Route / วางแผนแล้ว / กำลังส่ง / สำเร็จ / ไม่สำเร็จ (พร้อมจำนวนกล่อง)</li>
-          <li><span class="k">สรุปต้นทุนวันนี้</span> — ต้นทุนรวม, รถบริษัท, รถนอก, เฉลี่ยต่อ Route / จุด / กล่อง</li>
-          <li><span class="k">แผนที่เส้นทางวันนี้</span> — เห็นคลัง 🏭 จุดส่ง และรถ</li>
-          <li><span class="k">งานที่ต้องจัด Route</span> — งานที่ยังไม่ได้จัดรถ กดปุ่ม <span class="btn">จัด Route</span> เพื่อไปวางแผน</li>
+          <li><span class="k">การ์ด KPI แถวบน</span> — งานทั้งหมด / รอจัด Route / วางแผนแล้ว / กำลังส่ง / สำเร็จ / ไม่สำเร็จ (พร้อมจำนวนกล่อง)</li>
+          <li><span class="k">สรุปต้นทุนวันนี้</span> — ต้นทุนรวม, รถบริษัท, รถนอก, เฉลี่ยต่อ Route / ต่อจุด / ต่อกล่อง</li>
+          <li><span class="k">แผนที่เส้นทางวันนี้</span> — เห็นคลัง 🏭 จุดส่ง และตำแหน่งรถ</li>
+          <li><span class="k">งานที่ต้องจัด Route</span> — งานที่ยังไม่ได้จัดรถ มีปุ่ม <span class="btn">จัด Route</span> พาไปวางแผน</li>
+          <li><span class="k">กิจกรรมล่าสุด</span> — ประวัติการสร้างงาน/จัดรถ/ส่งสำเร็จ ล่าสุด</li>
         </ul>
-        <div class="tip i"><span class="ic">🔄</span><div>ปุ่ม <span class="btn">รีเฟรช</span> ดึงข้อมูลล่าสุด · ตำแหน่งรถอัปเดตอัตโนมัติทุกไม่กี่วินาที</div></div>
+        <div class="tip i"><span class="ic">🔄</span><div>ปุ่ม <span class="btn">รีเฟรช</span> ดึงข้อมูลล่าสุดทั้งหมด · ตำแหน่งรถและตัวเลขสรุปอัปเดตอัตโนมัติทุกไม่กี่วินาที</div></div>
       </section>
 
+      <!-- ============ 2 · CREATE DELIVERY ============ -->
       <section class="sec" id="del">
         <div class="eyebrow">งานประจำวัน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">2</span> งานส่งสินค้า</h2>
-        <p class="lead">บันทึกออเดอร์ที่ต้องส่ง — 1 รายการ = 1 งาน/บิล</p>
-        <h3>เพิ่มงานส่งใหม่</h3>
+        <h2><span class="num">2</span> สร้างงานส่งสินค้า</h2>
+        <p class="lead">เมนู <span class="k">งานส่งสินค้า</span> — บันทึกออเดอร์ที่ต้องส่ง · <b>1 รายการ = 1 งาน / 1 บิล</b></p>
+
+        <h3>ขั้นตอนสร้างงาน (ทีละสเต็ป)</h3>
         <ol class="steps">
+          <li><span class="k">เลือกวันที่</span> ให้ตรงวันส่งก่อน (ปุ่มปฏิทินบนซ้าย)</li>
           <li>กดปุ่ม <span class="btn">+ เพิ่มงานส่ง</span> มุมขวาบน</li>
-          <li>เลือกลูกค้า/สาขา จากรายการ (ระบบเติมที่อยู่ให้อัตโนมัติ) หรือพิมพ์เอง</li>
-          <li>กรอก <span class="k">เลขบิล · จำนวนกล่อง · ที่อยู่ · รหัสไปรษณีย์</span></li>
-          <li>เลือก <span class="k">Priority</span> — ด่วน / ปกติ / ไม่เร่งด่วน</li>
-          <li>กด <span class="btn">บันทึก</span> — ระบบหาพิกัด GPS จากที่อยู่ให้เอง <span class="chip">ไม่ต้องกรอกพิกัดเอง</span></li>
+          <li><span class="k">เลือกลูกค้า / สาขา</span> จากรายการที่เตรียมไว้<span class="sub">ระบบเติมที่อยู่ + พิกัดให้อัตโนมัติทันที · หรือจะพิมพ์ชื่อ/ที่อยู่เองก็ได้</span></li>
+          <li>กรอก <span class="k">เลขบิล</span> และ <span class="k">จำนวนกล่อง</span></li>
+          <li>เลือก <span class="k">Priority</span> — <span class="badge b-red">ด่วน</span> / <span class="badge b-amber">ปกติ</span> / <span class="badge b-green">ไม่เร่งด่วน</span><span class="sub">มีผลกับการจัดลำดับจุดส่งตอนวางแผนเส้นทาง</span></li>
+          <li>ใส่ <span class="k">หมายเหตุ</span> ถ้ามี (เช่น โทรก่อนส่ง / ของแตกหักง่าย)</li>
+          <li>กด <span class="btn">บันทึก</span><span class="sub">งานขึ้นในรายการทันที · ถ้ากรอกที่อยู่เองโดยยังไม่มีพิกัด ระบบจะหาพิกัด GPS ให้อัตโนมัติ</span></li>
         </ol>
-        <h3>แก้ไข / ลบ</h3>
+
+        <h3>แก้ไข / ลบ / เปลี่ยนสถานะ</h3>
         <ul class="plain">
-          <li>ไอคอน ✏️ = แก้ไข · 🗑️ = ลบ (เป็นการซ่อน ข้อมูลจริงไม่หายถาวร)</li>
+          <li>ไอคอน ✏️ = แก้ไข — แก้ได้ทุกช่อง รวมถึง <span class="k">สถานะ</span> (ผู้จ่ายงานปรับสถานะเองได้ที่นี่)</li>
+          <li>ไอคอน 🗑️ = ลบ (ซ่อนออกจากรายการ ข้อมูลจริงกู้คืนได้)</li>
+          <li>ปุ่ม <span class="btn">CSV</span> = ดาวน์โหลดรายการงานของวันนั้น</li>
         </ul>
-        <div class="tip g"><span class="ic">⚡</span><div><span class="k">จัดรถด่วน</span> — งานสถานะ “ร่าง” มีปุ่ม <span class="btn">จัดรถด่วน</span> กดแล้วเลือกรถ+คนขับ ระบบคำนวณระยะ/ต้นทุนให้ ยืนยันจ่ายรถได้ในคลิกเดียว เหมาะกับส่งด่วนใบเดียว</div></div>
+        <div class="tip g"><span class="ic">⚡</span><div><span class="k">จัดรถด่วน</span> — งานสถานะ “ร่าง” จะมีปุ่ม <span class="btn">จัดรถด่วน</span> กดแล้วเลือกรถ+คนขับ ระบบคำนวณระยะ/ต้นทุนให้ทันที ยืนยันจ่ายรถได้ในคลิกเดียว เหมาะกับส่งด่วนใบเดียวไม่ต้องรวมรอบ</div></div>
       </section>
 
+      <!-- ============ 3 · PLAN ============ -->
       <section class="sec" id="plan">
         <div class="eyebrow">งานประจำวัน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
         <h2><span class="num">3</span> วางแผนเส้นทาง (จัด Route)</h2>
-        <p class="lead">รวมหลายงานเป็น 1 รอบส่ง — ระบบจัดลำดับจุด คำนวณระยะทางถนนจริง และต้นทุนให้</p>
+        <p class="lead">เมนู <span class="k">วางแผนเส้นทาง</span> — รวมหลายงานเป็น 1 รอบส่ง ระบบจัดลำดับจุด คำนวณระยะทางถนนจริง และต้นทุนให้</p>
         <ol class="steps">
           <li>เลือกวันที่ที่ต้องการจัด (ปุ่มปฏิทินด้านบน)</li>
           <li>ฝั่งซ้าย — <span class="k">ติ๊กเลือกงาน</span> ที่จะส่งในรอบเดียวกัน</li>
-          <li>กดปุ่ม <span class="btn">วางแผน Route อัตโนมัติ</span></li>
-          <li>ระบบจะ: จัดลำดับจุดส่ง (ลดการย้อนทาง) · วาดเส้นทางตามถนนจริงบนแผนที่ · คำนวณระยะ/เวลา/ต้นทุน</li>
-          <li>ในกล่อง <span class="k">รถ &amp; คนขับที่จะใช้</span> — เลือก <span class="chip">รถบริษัท</span> หรือ <span class="chip">รถภายนอก</span> → เลือกคันที่ใช้ → ใส่ชื่อคนขับ</li>
-          <li>ตรวจ/แก้ <span class="k">ค่าทางด่วน</span> และ <span class="k">ค่าจอดรถ</span> ในกล่องต้นทุนให้ตรงจริง (ยอดรวมอัปเดตทันที)</li>
-          <li>กด <span class="btn">ยืนยัน Route นี้</span> — งานจะกลายเป็น “วางแผนแล้ว” และเข้าไปอยู่ในรอบส่งสินค้า</li>
+          <li>กดปุ่ม <span class="btn">วางแผน Route อัตโนมัติ</span><span class="sub">ระบบจะจัดลำดับจุด (ลดการย้อนทาง) · วาดเส้นทางตามถนนจริงบนแผนที่ · คำนวณระยะ/เวลา/ต้นทุน</span></li>
+          <li>ในกล่อง <span class="k">รถ &amp; คนขับที่จะใช้</span> — เลือก <span class="chip">รถบริษัท</span> หรือ <span class="chip">รถภายนอก</span> → เลือกคัน → ใส่/ยืนยันชื่อคนขับ</li>
+          <li>ตรวจ/แก้ <span class="k">ค่าทางด่วน</span> และ <span class="k">ค่าจอดรถ</span> ให้ตรงจริง (ยอดรวมอัปเดตทันที)</li>
+          <li>กด <span class="btn">ยืนยัน Route นี้</span><span class="sub">งานทุกใบในรอบจะกลายเป็น “วางแผนแล้ว” และเข้าไปอยู่ในหน้า “รอบส่งสินค้า” ทันที</span></li>
         </ol>
         <div class="t-wrap"><table class="t">
           <tr><th>ระบบคิดต้นทุนอย่างไร</th><th>วิธีคิด</th></tr>
           <tr><td>ค่าน้ำมัน</td><td>ระยะทางถนนจริง × เรตค่าน้ำมันของรถ (อัตโนมัติ)</td></tr>
           <tr><td>ค่าจอดรถ</td><td>คิดเฉพาะปลายทางที่เป็นห้าง/ศูนย์การค้า · ร้านเดี่ยว = 0 (แก้เองได้)</td></tr>
-          <tr><td>ค่าทางด่วน</td><td>ใส่ตามจริง — ถ้าไม่ขึ้นทางด่วนให้ใส่ 0</td></tr>
+          <tr><td>ค่าทางด่วน</td><td>ใส่ตามจริง — ถ้าไม่ขึ้นทางด่วนใส่ 0</td></tr>
         </table></div>
         <div class="tip i"><span class="ic">🅰️</span><div>มี <span class="k">ทางเลือก A/B/C</span> ให้เปรียบเทียบ (รถบริษัทล้วน / รถบริษัท+รถนอก / แบ่ง 2 รอบ) แตะแล้วเติมค่าในฟอร์มให้อัตโนมัติ ถ้ารถบริษัทจุไม่พอ ระบบจะเตือน</div></div>
       </section>
 
+      <!-- ============ 4 · ROUNDS / ASSIGN ============ -->
       <section class="sec" id="round">
         <div class="eyebrow">งานประจำวัน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">4</span> รอบส่งสินค้า</h2>
-        <p class="lead">รายการ Route ที่จัดแล้วของวันนั้น</p>
+        <h2><span class="num">4</span> มอบหมายงาน &amp; รอบส่งสินค้า</h2>
+        <p class="lead">เมนู <span class="k">รอบส่งสินค้า</span> — รายการ Route ที่จัดแล้วของวันนั้น จุดที่ผู้จ่ายงานควบคุมสถานะ</p>
+        <h3>สิ่งที่ทำได้ในแต่ละ Route</h3>
         <ul class="plain">
           <li><span class="btn">เริ่มรอบ</span> — เปลี่ยนสถานะเป็น “กำลังส่ง” (ใช้เมื่อรถออกจริง)</li>
-          <li><span class="btn">แก้ไข</span> — เปลี่ยนรถ / คนขับ / สถานะ / ค่าใช้จ่าย (ยอดคำนวณใหม่ให้)</li>
+          <li><span class="btn">แก้ไข</span> — เปลี่ยนรถ / คนขับ / <span class="k">สถานะ</span> / ค่าใช้จ่าย (ยอดคำนวณใหม่ให้ทันที)</li>
           <li><span class="btn">รายละเอียด</span> — ดูลำดับจุดส่ง + เส้นทางบนแผนที่</li>
-          <li>ปุ่ม CSV — ดาวน์โหลดรายการ Route</li>
+          <li>ปุ่ม <span class="btn">CSV</span> — ดาวน์โหลดรายการ Route</li>
         </ul>
-      </section>
-
-      <section class="sec" id="track">
-        <div class="eyebrow">งานประจำวัน</div>
-        <h2><span class="num">5</span> ติดตามพัสดุ</h2>
-        <p class="lead">เช็คสถานะพัสดุรายชิ้น — ใช้ตอบลูกค้าได้ทันที</p>
-        <ol class="steps">
-          <li>พิมพ์ <span class="k">เลขบิล / เลขที่ PO / ชื่อลูกค้า</span> ในช่องค้นหา แล้วกด <span class="btn">ค้นหา</span></li>
-          <li>ดูไทม์ไลน์: สร้างงาน → วางแผน → กำลังส่ง → เช็คอินถึงจุด (GPS) → ส่งสำเร็จ/ไม่สำเร็จ</li>
-          <li>กดปุ่ม 🖨️ เพื่อพิมพ์ใบติดตามพัสดุ</li>
-        </ol>
-      </section>
-
-      <section class="sec" id="map">
-        <div class="eyebrow">งานประจำวัน</div>
-        <h2><span class="num">6</span> แผนที่ติดตาม (Live Map)</h2>
-        <p class="lead">ดูตำแหน่งรถสด ๆ ทุกคันบนแผนที่</p>
+        <h3>การมอบหมายให้คนขับ</h3>
+        <p style="color:var(--muted);margin:2px 0 6px">การมอบหมายทำได้ 2 ทาง:</p>
         <ul class="plain">
-          <li>หมุดสีเขียวมีป้าย <span class="chip">🏭 คลัง</span> = จุดคลังบริษัท · หมุดรถ = ตำแหน่ง GPS สดจาก Cartrack</li>
-          <li>ตัวกรองด้านบน: ทั้งหมด / รถบริษัท / รถภายนอก / กำลังวิ่ง / จอดอยู่</li>
-          <li>แผงขวาแสดงสถานะรถแต่ละคัน <b>อัตโนมัติจากความเร็ว GPS</b> — กำลังวิ่ง (มีความเร็ว) / จอดอยู่ (ความเร็ว 0) / ออฟไลน์ (ไม่มีสัญญาณ)</li>
+          <li><b>ให้คนขับกดรับเอง</b> — คนขับเปิดมือถือ เข้า “โหมดคนขับ” แล้วกด <span class="btn">รับงานนี้</span> ที่รอบของตัวเอง · สถานะจะขึ้น “กำลังส่ง” อัตโนมัติ ผู้จ่ายงานเห็นทันที</li>
+          <li><b>ผู้จ่ายงานปรับให้</b> — กด <span class="btn">แก้ไข</span> ที่ Route แล้วเปลี่ยนคนขับ/สถานะเอง</li>
         </ul>
+        <div class="tip g"><span class="ic">🔁</span><div>สถานะ “ซิงค์อัตโนมัติ” — เมื่อคนขับเช็คอิน/ส่งสำเร็จบนมือถือ สถานะจะเด้งขึ้นหน้าออฟฟิศเองภายในไม่กี่วินาที ไม่ต้องกดรีเฟรช</div></div>
       </section>
 
-      <section class="sec" id="fleet">
-        <div class="eyebrow">ข้อมูลหลัก · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">7</span> รถบริษัท &amp; รถจ้างภายนอก</h2>
-        <h3>รถบริษัท</h3>
-        <ul class="plain">
-          <li>เพิ่ม/แก้/ลบรถ · ตั้ง <span class="k">ความจุ (กล่อง)</span> และ <span class="k">ค่าน้ำมัน/กม.</span> เพื่อให้คำนวณต้นทุนแม่น</li>
-          <li>ช่อง <span class="k">Cartrack Registration</span> = ทะเบียนที่ผูกกับ GPS (ต้องตรงจึงจะเห็นตำแหน่งสด)</li>
-        </ul>
-        <h3>รถจ้างภายนอก</h3>
-        <ul class="plain">
-          <li>บันทึกผู้ให้บริการ / คนขับ / ทะเบียน / ความจุ / <span class="k">เรตราคา</span> (ต่อเที่ยว / ต่อกม. / ต่อวัน) — ระบบใช้คิดต้นทุนตอนจัด Route</li>
-        </ul>
-      </section>
-
-      <section class="sec" id="master">
-        <div class="eyebrow">ข้อมูลหลัก · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">8</span> ลูกค้า / สาขา &amp; พนักงาน</h2>
-        <h3>ลูกค้า / สาขา</h3>
-        <ol class="steps">
-          <li>กด <span class="btn">+ เพิ่มลูกค้า</span> → กรอกชื่อร้าน · สาขา · ที่อยู่ · รหัสไปรษณีย์</li>
-          <li>กด <span class="btn">ค้นหาพิกัด GPS จากที่อยู่</span> — ระบบหาพิกัดให้อัตโนมัติ (ไม่ต้องกรอกเอง)</li>
-          <li>กดบันทึก · ลูกค้าที่มีพิกัดจะขึ้นหมุดบนแผนที่และใช้จัด Route ได้</li>
-        </ol>
-        <h3>พนักงานส่งสินค้า</h3>
-        <ul class="plain"><li>เพิ่ม/แก้/ลบ ชื่อคนขับ เบอร์โทร ตำแหน่ง และรถประจำ — ชื่อจะขึ้นให้เลือกตอนจัด Route</li></ul>
-      </section>
-
-      <section class="sec" id="finance">
-        <div class="eyebrow">การเงิน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">9</span> ค่าใช้จ่าย &amp; เงินทดรองจ่าย</h2>
-        <h3>ค่าใช้จ่าย</h3>
-        <ul class="plain"><li>บันทึกค่าน้ำมัน / ทางด่วน / จอดรถ / อื่น ๆ ผูกกับ Route ได้</li></ul>
-        <h3>เงินทดรองจ่าย (เคลียร์เงินคนขับ)</h3>
-        <ol class="steps">
-          <li>กด <span class="btn">เคลียร์เงินทดรอง</span> → เลือก Route + คนขับ</li>
-          <li>ใส่ <span class="k">เบิกเงินทดรอง</span> และ <span class="k">ใช้จริง</span></li>
-          <li>ระบบคำนวณ <span class="k">เงินทอน</span> (เบิก&gt;ใช้จริง) หรือ <span class="k">เบิกเพิ่ม</span> (ใช้จริง&gt;เบิก) ให้อัตโนมัติ</li>
-        </ol>
-        <h3>ต้นทุนต่อ Route</h3>
-        <ul class="plain"><li>ตารางแยกค่าน้ำมัน/ทางด่วน/จอด/รถนอก + ต่อจุด + ต่อกล่อง · Export Excel ได้</li></ul>
-      </section>
-
-      <section class="sec" id="report">
-        <div class="eyebrow">รายงาน</div>
-        <h2><span class="num">10</span> รายงาน &amp; การพิมพ์</h2>
-        <ol class="steps">
-          <li>เลือก <span class="k">ช่วงวันที่</span> (หรือปุ่มลัด วันนี้ / 7 วัน / เดือนนี้) แล้วกด <span class="btn">สร้างรายงาน</span></li>
-          <li>ดูสรุป จำนวนงาน · Route · จุดส่ง · กล่อง · ระยะทาง · ต้นทุน + กราฟ</li>
-          <li>เลือกขนาดกระดาษ <span class="chip">A4</span> / <span class="chip">A5</span></li>
-          <li>กด <span class="btn">พิมพ์รายงาน</span> (ทั้งชุด) หรือปุ่ม 🖨️ ท้ายแต่ละ Route เพื่อพิมพ์ <span class="k">ใบส่งสินค้า</span> รายคัน (มีหัวโลโก้ + ช่องเซ็นรับ)</li>
-          <li>ต้องการไฟล์: กด <span class="btn">CSV</span> หรือ <span class="btn">Excel</span></li>
-        </ol>
-        <div class="tip i"><span class="ic">🖨️</span><div>เมื่อกดพิมพ์ ระบบเปิดหน้าเอกสารพร้อมหัวบิล Gadget Villa — กดปุ่ม “พิมพ์” ในหน้านั้นเพื่อสั่งเครื่องพิมพ์ หรือบันทึกเป็น PDF ได้</div></div>
-      </section>
-
+      <!-- ============ 5 · DRIVER ============ -->
       <section class="sec" id="driver">
-        <div class="eyebrow">สำหรับคนขับ · <span class="role drv">คนขับ</span></div>
-        <h2><span class="num">11</span> โหมดคนขับ (บนมือถือ)</h2>
+        <div class="eyebrow">งานประจำวัน · <span class="role drv">คนขับ</span></div>
+        <h2><span class="num">5</span> โหมดคนขับ (บนมือถือ)</h2>
         <p class="lead">ใช้ระหว่างวิ่งงาน — ปุ่มใหญ่ กดง่ายด้วยมือเดียว</p>
         <ol class="steps">
           <li>เปิดเว็บบนมือถือ → แตะเมนูล่าง <span class="btn">คนขับ</span></li>
-          <li>ดูรอบส่งของตัวเอง: จำนวนจุด · กล่อง · ความคืบหน้า</li>
-          <li>แตะ <span class="btn">เริ่มรอบส่ง</span> เมื่อออกรถ</li>
-          <li>ที่จุดปัจจุบัน: <span class="btn">เปิดแผนที่</span> นำทาง · <span class="btn">Check-in</span> เมื่อถึงจุด (ระบบเช็ก GPS ว่าใกล้จุดไหม)</li>
-          <li>ส่งเสร็จ → แตะ <span class="btn">ส่งเสร็จ</span> · ส่งไม่ได้ → <span class="btn">ส่งไม่สำเร็จ</span> แล้วใส่เหตุผล</li>
+          <li>กด <span class="btn">รับงานนี้</span> ที่รอบของตัวเอง<span class="sub">สถานะขึ้น “กำลังส่ง” อัตโนมัติ · ผู้จ่ายงานเห็นทันที</span></li>
+          <li>ดูรอบส่ง: จำนวนจุด · กล่อง · ความคืบหน้า (กี่จุดจากทั้งหมด)</li>
+          <li>ที่จุดปัจจุบัน กด <span class="btn">เปิดแผนที่</span> เพื่อนำทาง</li>
+          <li>ถึงจุดแล้วกด <span class="btn">Check-in</span> — ระบบเช็ก GPS ว่าอยู่ใกล้จุดหรือยัง</li>
+          <li>ส่งเสร็จ → กด <span class="btn">ส่งเสร็จ</span> แล้ว <span class="k">ถ่ายรูปหลักฐาน</span> (หน้าร้าน/ลายเซ็น/พัสดุ) → ยืนยัน<span class="sub">สถานะจุดนั้นขึ้น “ส่งสำเร็จ” พร้อมแนบรูปทันที</span></li>
+          <li>ส่งไม่ได้ → กด <span class="btn">ส่งไม่สำเร็จ</span> แล้วใส่เหตุผล (เช่น ร้านปิด / ลูกค้าไม่รับ)</li>
         </ol>
         <div class="t-wrap"><table class="t">
           <tr><th>สัญญาณ Check-in</th><th>ความหมาย</th></tr>
-          <tr><td>🟢 ถึงจุดส่ง</td><td>อยู่ห่างจุดส่ง ไม่เกิน 100 เมตร</td></tr>
-          <tr><td>🟡 ใกล้จุดส่ง</td><td>ห่าง 100–500 เมตร</td></tr>
-          <tr><td>🔴 ยังไม่ถึง</td><td>ห่างเกิน 500 เมตร</td></tr>
+          <tr><td>🟢 ถึงจุดส่ง</td><td>อยู่ห่างจุดส่งไม่เกินระยะสีเขียว (ค่าเริ่มต้น 100 ม.)</td></tr>
+          <tr><td>🟡 ใกล้จุดส่ง</td><td>ห่างระหว่างระยะเขียว–เหลือง (100–500 ม.)</td></tr>
+          <tr><td>🔴 ยังไม่ถึง</td><td>ห่างเกินระยะสีเหลือง</td></tr>
         </table></div>
         <div class="tip w"><span class="ic">📍</span><div>ครั้งแรกมือถือจะขออนุญาตเข้าถึงตำแหน่ง — ต้องกด “อนุญาต” ไม่งั้น Check-in ด้วย GPS จะใช้ไม่ได้</div></div>
       </section>
 
+      <!-- ============ 6 · TRACK ============ -->
+      <section class="sec" id="track">
+        <div class="eyebrow">งานประจำวัน · ติดตามงาน</div>
+        <h2><span class="num">6</span> ติดตามพัสดุ</h2>
+        <p class="lead">เมนู <span class="k">ติดตามพัสดุ</span> — เช็คสถานะพัสดุรายชิ้น ใช้ตอบลูกค้าได้ทันที</p>
+        <ol class="steps">
+          <li>พิมพ์ <span class="k">เลขบิล / เลขที่ PO / ชื่อลูกค้า</span> แล้วกด <span class="btn">ค้นหา</span></li>
+          <li>ดูไทม์ไลน์: สร้างงาน → วางแผน → กำลังส่ง → เช็คอินถึงจุด (GPS) → ส่งสำเร็จ/ไม่สำเร็จ (พร้อมรูปหลักฐาน)</li>
+          <li>กดปุ่ม 🖨️ เพื่อพิมพ์ <span class="k">ใบติดตามพัสดุ</span> (A5)</li>
+        </ol>
+      </section>
+
+      <!-- ============ 7 · MAP ============ -->
+      <section class="sec" id="map">
+        <div class="eyebrow">งานประจำวัน · ติดตามงาน</div>
+        <h2><span class="num">7</span> แผนที่ติดตาม (Live Map)</h2>
+        <p class="lead">เมนู <span class="k">แผนที่ติดตาม</span> — ดูตำแหน่งรถสด ๆ ทุกคันบนแผนที่</p>
+        <ul class="plain">
+          <li>หมุด <span class="chip">🏭 คลัง</span> = จุดคลังบริษัท · หมุดรถ = ตำแหน่ง GPS สดจาก Cartrack</li>
+          <li>ตัวกรองด้านบน: ทั้งหมด / รถบริษัท / รถภายนอก / กำลังวิ่ง / จอดอยู่</li>
+          <li>แผงขวาแสดงสถานะรถแต่ละคัน <b>อัตโนมัติจากความเร็ว GPS</b> — กำลังวิ่ง / จอดอยู่ / ออฟไลน์</li>
+        </ul>
+        <div class="tip i"><span class="ic">🛰️</span><div>ถ้าตำแหน่งไม่ขยับหรือขึ้น “ข้อมูลอาจไม่ใหม่” = GPS Cartrack ยังไม่อัปเดต รอสักครู่ หรือแจ้งแอดมินให้ตรวจการเชื่อมต่อ</div></div>
+      </section>
+
+      <!-- ============ 8 · FINANCE ============ -->
+      <section class="sec" id="finance">
+        <div class="eyebrow">การเงิน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
+        <h2><span class="num">8</span> ค่าใช้จ่าย &amp; เงินทดรองจ่าย</h2>
+        <h3>ค่าใช้จ่าย</h3>
+        <ul class="plain"><li>เมนู <span class="k">ค่าใช้จ่าย</span> — บันทึกค่าน้ำมัน / ทางด่วน / จอดรถ / อื่น ๆ ผูกกับ Route ได้ · ดาวน์โหลด CSV ได้</li></ul>
+        <h3>เงินทดรองจ่าย (เคลียร์เงินคนขับ)</h3>
+        <ol class="steps">
+          <li>เมนู <span class="k">เงินทดรองจ่าย</span> → กด <span class="btn">เคลียร์เงินทดรอง</span></li>
+          <li>เลือก Route + ใส่ชื่อคนขับ</li>
+          <li>ใส่ <span class="k">เบิกเงินทดรอง</span> และ <span class="k">ใช้จริง</span></li>
+          <li>ระบบคำนวณ <span class="k">เงินทอน</span> (เบิก&gt;ใช้จริง) หรือ <span class="k">เบิกเพิ่ม</span> (ใช้จริง&gt;เบิก) ให้อัตโนมัติ</li>
+        </ol>
+        <h3>ต้นทุนต่อ Route</h3>
+        <ul class="plain"><li>เมนู <span class="k">ต้นทุนต่อ Route</span> — ตารางแยกค่าน้ำมัน/ทางด่วน/จอด/รถนอก + ต่อจุด + ต่อกล่อง · Export Excel ได้</li></ul>
+      </section>
+
+      <!-- ============ 9 · REPORT ============ -->
+      <section class="sec" id="report">
+        <div class="eyebrow">รายงาน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
+        <h2><span class="num">9</span> รายงาน &amp; การพิมพ์</h2>
+        <ol class="steps">
+          <li>เมนู <span class="k">รายงาน</span> → เลือก <span class="k">ช่วงวันที่</span> (หรือปุ่มลัด วันนี้ / 7 วัน / เดือนนี้) แล้วกด <span class="btn">สร้างรายงาน</span></li>
+          <li>ดูสรุป: จำนวนงาน · Route · จุดส่ง · กล่อง · ระยะทาง · ต้นทุน + กราฟ</li>
+          <li>เลือกขนาดกระดาษ <span class="chip">A4</span> / <span class="chip">A5</span></li>
+          <li>กด <span class="btn">พิมพ์รายงาน</span> (ทั้งชุด) หรือปุ่ม 🖨️ ท้ายแต่ละ Route เพื่อพิมพ์ <span class="k">ใบส่งสินค้า / ใบเบิกค่าใช้จ่าย</span> รายคัน (มีหัวโลโก้ + ช่องเซ็น)</li>
+          <li>ต้องการไฟล์ตาราง: กด <span class="btn">CSV</span> หรือ <span class="btn">Excel</span></li>
+        </ol>
+        <div class="tip i"><span class="ic">🖨️</span><div>เมื่อกดพิมพ์ ระบบเปิดหน้าเอกสารพร้อมหัวบิล Gadget Villa — กดปุ่ม “พิมพ์” ในหน้านั้นเพื่อสั่งเครื่องพิมพ์ หรือ “บันทึกเป็น PDF” ก็ได้</div></div>
+      </section>
+
+      <!-- ============ STATUS REFERENCE ============ -->
+      <section class="sec" id="status">
+        <div class="eyebrow">อ้างอิง</div>
+        <h2>ตารางสถานะงาน</h2>
+        <p class="lead">ความหมายของสถานะที่เห็นในระบบ เรียงตามลำดับการทำงานจริง</p>
+        <div class="t-wrap"><table class="t">
+          <tr><th>สถานะ</th><th>หมายถึง</th><th>เกิดตอนไหน</th></tr>
+          <tr><td><span class="badge b-gray">ร่าง</span></td><td>เพิ่งบันทึกงาน ยังไม่จัดรถ</td><td>สร้างงานส่งใหม่</td></tr>
+          <tr><td><span class="badge b-violet">วางแผนแล้ว</span></td><td>เข้าไปอยู่ใน Route แล้ว แต่ยังไม่ออกรถ</td><td>ยืนยัน Route</td></tr>
+          <tr><td><span class="badge b-blue">มอบหมายแล้ว</span></td><td>ระบุคนขับ/รถแล้ว</td><td>ผู้จ่ายงานกำหนดคนขับ</td></tr>
+          <tr><td><span class="badge b-blue">กำลังส่ง</span></td><td>รถออกวิ่งแล้ว</td><td>คนขับกดรับงาน/เริ่มรอบ</td></tr>
+          <tr><td><span class="badge b-green">ส่งสำเร็จ</span></td><td>ส่งถึงมือลูกค้าแล้ว (มีรูปหลักฐาน)</td><td>คนขับกดส่งเสร็จ + แนบรูป</td></tr>
+          <tr><td><span class="badge b-red">ไม่สำเร็จ</span></td><td>ส่งไม่ได้ (มีเหตุผลกำกับ)</td><td>คนขับกดส่งไม่สำเร็จ</td></tr>
+          <tr><td><span class="badge b-gray">ยกเลิก</span></td><td>ยกเลิกงาน</td><td>ผู้จ่ายงานปรับสถานะ</td></tr>
+        </table></div>
+      </section>
+
+      <!-- ============ FAQ ============ -->
       <section class="sec" id="faq">
         <div class="eyebrow">ช่วยเหลือ</div>
         <h2>คำถามที่พบบ่อย</h2>
+
+        <h3>บันทึกแล้วต้องรอนานไหม?</h3>
+        <p class="lead" style="margin-bottom:8px">ไม่ต้องรอ — ข้อมูลขึ้นทันทีที่กดบันทึก ระบบซิงค์ขึ้นเซิร์ฟเวอร์ให้เบื้องหลังเอง หากมีปัญหาเชื่อมต่อ ระบบจะแจ้งเตือนและย้อนข้อมูลกลับให้</p>
+
         <h3>เปิดมาไม่เห็นข้อมูล / ขึ้น “โหมดทดลอง”</h3>
-        <p class="lead" style="margin-bottom:8px">เบราว์เซอร์ยังไม่เชื่อมระบบ — เปิดด้วยลิงก์ที่บริษัทให้ (ที่มี <code>?api=</code>) หรือให้แอดมินตั้งค่าที่หน้า “ตั้งค่าระบบ” แล้วรีเฟรชด้วย <code>Ctrl+Shift+R</code></p>
+        <p class="lead" style="margin-bottom:8px">เปิดด้วยลิงก์บริษัท (ที่มี <code>?api=</code>) หรือให้แอดมินตั้งค่าที่หน้า “ตั้งค่าระบบ” แล้วรีเฟรชด้วย <code>Ctrl+Shift+R</code></p>
+
+        <h3>ขึ้น “กำลังลองเชื่อมต่อใหม่…” นานผิดปกติ</h3>
+        <p class="lead" style="margin-bottom:8px">เน็ต/เซิร์ฟเวอร์สะดุดชั่วคราว ระบบจะเชื่อมกลับให้เองเมื่อเน็ตกลับมา ไม่ต้องปิดเว็บ — ถ้านานเกิน 1–2 นาที ลองกด <code>Ctrl+Shift+R</code></p>
+
         <h3>เห็นข้อมูลไม่ครบ / วันที่ไม่ตรง</h3>
         <p class="lead" style="margin-bottom:8px">ตรวจว่าเลือก <span class="k">วันที่</span> ถูก (ปุ่มปฏิทินบนซ้าย) — ข้อมูลแสดงตามวันที่เลือก</p>
-        <h3>ตำแหน่งรถไม่ขยับ / ขึ้นสีเหลือง “ข้อมูลอาจไม่ใหม่”</h3>
-        <p class="lead" style="margin-bottom:8px">GPS Cartrack ยังไม่อัปเดต — รอสักครู่ หรือแจ้งแอดมินให้ตรวจการเชื่อมต่อ Cartrack</p>
-        <div class="tip w"><span class="ic">⚠️</span><div><span class="k">แอดมินเท่านั้น:</span> ห้ามกดปุ่ม/รันคำสั่งรีเซ็ตฐานข้อมูล (<code>resetDatabase</code>) เพราะจะลบข้อมูลจริงทั้งหมด</div></div>
+
+        <h3>คนขับส่งเสร็จแล้ว แต่หน้าออฟฟิศยังไม่เปลี่ยน</h3>
+        <p class="lead" style="margin-bottom:8px">รอไม่กี่วินาที ระบบซิงค์สถานะให้อัตโนมัติ — หรือกดปุ่ม “รีเฟรช” ที่แดชบอร์ดเพื่อดึงทันที</p>
+
+        <div class="tip c"><span class="ic">⛔</span><div><span class="k">แอดมิน/ผู้ดูแลระบบเท่านั้น:</span> ห้ามรันคำสั่งรีเซ็ตฐานข้อมูล (<code>resetDatabase</code>) เพราะจะลบข้อมูลจริงทั้งหมด · รหัสเชื่อมต่อ Cartrack ต้องตั้งในระบบหลังบ้านเท่านั้น ห้ามพิมพ์/แปะในเว็บหรือแชท</div></div>
       </section>
 
     </main>
   </div>
 
   <footer class="ug-foot">
-    Gadget Villa · Delivery Dispatch &amp; Route Control Center — คู่มือใช้งานสำหรับพนักงาน ·
+    Gadget Villa · Delivery Dispatch &amp; Route Control Center — คู่มือใช้งานฉบับละเอียดสำหรับพนักงาน ·
     สงสัยการใช้งาน ติดต่อผู้ดูแลระบบ
   </footer>
 </div>
