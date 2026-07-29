@@ -241,7 +241,9 @@ function doPost(e) {
       logGPS, checkIn, startRoute, completeDelivery, failDelivery, uploadPOD
     };
     if (!map[action]) return json({ ok:false, error:'unknown action: '+action });
-    return json({ ok:true, data: map[action](body) });
+    const out = map[action](body);
+    bumpVersion();   // ข้อมูลเปลี่ยน → ล้างแคช getBootstrap ให้ดึงของใหม่รอบถัดไป
+    return json({ ok:true, data: out });
   } catch (err) {
     return json({ ok:false, error:String(err) });
   }
@@ -252,6 +254,41 @@ function json(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 function ping(){ return { pong:true, time:new Date().toISOString() }; }
+
+/* ==================================================================
+   CACHE — เร่งความเร็ว getBootstrap (เดิมอ่าน 9 ชีต ~14 วิ)
+   เก็บผลลัพธ์ไว้ใน ScriptCache (บีบอัด gzip กันเกินลิมิต 100KB)
+   คีย์ผูกกับ "เวอร์ชันข้อมูล" — เมื่อมีการเขียนข้อมูล (doPost) จะ bump
+   เวอร์ชัน ทำให้แคชเก่าใช้ไม่ได้ → เครื่องอื่นเห็นของใหม่รอบถัดไปทันที
+   ================================================================== */
+var CACHE_TTL = 120; // วินาที
+function cacheVersion(){
+  try{
+    var c = CacheService.getScriptCache();
+    var v = c.get('dataVersion');
+    if(!v){ v = String(Date.now()); c.put('dataVersion', v, 21600); }
+    return v;
+  }catch(e){ return '0'; }
+}
+function bumpVersion(){
+  try{ CacheService.getScriptCache().put('dataVersion', Date.now() + '-' + Math.floor(Math.random()*1e6), 21600); }catch(e){}
+}
+function cacheGetJSON(key){
+  try{
+    var s = CacheService.getScriptCache().get(key);
+    if(!s) return null;
+    var blob = Utilities.newBlob(Utilities.base64Decode(s), 'application/x-gzip');
+    return JSON.parse(Utilities.ungzip(blob).getDataAsString('UTF-8'));
+  }catch(e){ return null; }
+}
+function cachePutJSON(key, obj, ttl){
+  try{
+    var json = JSON.stringify(obj);
+    var gz = Utilities.gzip(Utilities.newBlob(json, 'application/json'));
+    var b64 = Utilities.base64Encode(gz.getBytes());
+    if(b64.length < 99000) CacheService.getScriptCache().put(key, b64, ttl || CACHE_TTL);
+  }catch(e){}
+}
 
 /* GEOCODE — แปลงที่อยู่ → พิกัด ด้วย Google Geocoder (built-in Maps service, ไม่ต้องมี API key)
    frontend เรียก ?action=geocode&q=<ที่อยู่> */
@@ -361,7 +398,10 @@ function num(x){ const n = Number(x); return isNaN(n) ? '' : n; }
 // โหลดทุก master data ในครั้งเดียว (frontend เรียกตอนเปิดแอป)
 function getBootstrap(p){
   const date = (p && p.date) || todayStr();
-  return {
+  const key = 'bs:' + date + ':' + cacheVersion();
+  const hit = cacheGetJSON(key);          // แคชอยู่ → คืนทันที (~1-2 วิ)
+  if (hit) { hit.cached = true; return hit; }
+  const data = {
     serverTime: new Date().toISOString(),
     date: date,
     settings: readAll('Settings'),
@@ -375,6 +415,8 @@ function getBootstrap(p){
     routes: readAll('Routes').filter(r => String(r.DeliveryDate) === date),
     cartrack: getCartrackStatus()
   };
+  cachePutJSON(key, data, CACHE_TTL);
+  return data;
 }
 
 function getDeliveries(p){
