@@ -277,27 +277,29 @@ const API = {
   useMock(){ localStorage.setItem(LS_URL,'MOCK'); },
   configured(){ return !!this.url(); },
   // GET เป็น idempotent → retry ได้ปลอดภัย (ช่วยตอน Apps Script cold-start / เน็ตสะดุด)
-  async get(action, params={}, tries){
+  // หมายเหตุ: getBootstrap อ่านหลายชีต ใช้เวลา ~13 วิเป็นปกติ → ตั้ง timeout เผื่อไว้เยอะ
+  async get(action, params={}, tries, timeoutMs){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, params)));
     const q = new URLSearchParams(Object.assign({action}, params)).toString();
     const n = tries!=null ? tries : 2;
+    const ms = timeoutMs || 45000;
     let lastErr;
     for(let i=0;i<=n;i++){
       try{
-        const res = await fetchWithTimeout(this.url()+'?'+q, { method:'GET', redirect:'follow' }, 15000);
+        const res = await fetchWithTimeout(this.url()+'?'+q, { method:'GET', redirect:'follow' }, ms);
         const j = await res.json();
         if(!j.ok) throw new Error(j.error||'API error');
         return j.data;
-      }catch(e){ lastErr=e; if(i<n) await new Promise(r=>setTimeout(r, 700*(i+1))); }
+      }catch(e){ lastErr=e; if(i<n) await new Promise(r=>setTimeout(r, 800*(i+1))); }
     }
     throw lastErr;
   },
-  // POST เป็น write → ไม่ retry อัตโนมัติ (กันเขียนซ้ำ) แต่ให้ timeout ยาวขึ้น
+  // POST เป็น write → ไม่ retry อัตโนมัติ (กันเขียนซ้ำ) แต่ให้ timeout ยาวพอ
   async post(action, body={}){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, body)));
     const res = await fetchWithTimeout(this.url(), { method:'POST', redirect:'follow',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(Object.assign({action}, body)) }, 20000);
+      body: JSON.stringify(Object.assign({action}, body)) }, 45000);
     const j = await res.json();
     if(!j.ok) throw new Error(j.error||'API error');
     return j.data;
@@ -306,7 +308,7 @@ const API = {
 function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 60)); }
 function fetchWithTimeout(url, opts, ms){
   const ctrl = new AbortController();
-  const t = setTimeout(()=>ctrl.abort(), ms||15000);
+  const t = setTimeout(()=>ctrl.abort(), ms||45000);
   return fetch(url, Object.assign({ signal:ctrl.signal }, opts)).finally(()=>clearTimeout(t));
 }
 
@@ -381,7 +383,7 @@ const SYNC_PAGES = ['dashboard','deliveries','rounds','vehicles','external','cus
 async function silentSync(){
   if(!API.configured() || Store.pending || (typeof document!=='undefined' && document.hidden)) return;
   try{
-    const data = await API.get('getBootstrap', { date: Store.date }, 1);
+    const data = await API.get('getBootstrap', { date: Store.date }, 0, 45000);
     if(Store.pending) return; // มีการแก้ไขแทรกระหว่างดึงข้อมูล → ทิ้งชุดนี้
     const sig = dataSignature(data);
     Store.data = data; Store.live = true; Store.lastSync = new Date().toISOString(); updateSync();
@@ -551,7 +553,7 @@ async function loadBootstrap(){
   }
   Store.loading = true; Store.connecting = true; updateSync();
   try{
-    const data = await API.get('getBootstrap', { date: Store.date }, 3); // ลองได้ถึง 4 ครั้ง กัน cold-start
+    const data = await API.get('getBootstrap', { date: Store.date }, 2, 45000); // ลองได้ถึง 3 ครั้ง · timeout 45 วิ (bootstrap ~13 วิ)
     Store.data = data;
     Store.live = true;
     Store.lastSync = new Date().toISOString();
@@ -982,7 +984,8 @@ async function init(){
       }
     }catch(e){}
   }, 10000);
-  // ซิงก์ข้อมูลทั้งหมดเบื้องหลังทุก 20 วิ — สถานะที่คนขับ/เครื่องอื่นอัปเดต จะขึ้นเองอัตโนมัติ
-  Store.syncTimer = setInterval(silentSync, 20000);
+  // ซิงก์ข้อมูลทั้งหมดเบื้องหลังทุก 60 วิ — สถานะที่คนขับ/เครื่องอื่นอัปเดต จะขึ้นเองอัตโนมัติ
+  // (getBootstrap ~13 วิ จึงไม่ถี่กว่านี้ เพื่อไม่ให้เซิร์ฟเวอร์ทำงานหนักเกินไป)
+  Store.syncTimer = setInterval(silentSync, 60000);
 }
 document.addEventListener('DOMContentLoaded', init);
