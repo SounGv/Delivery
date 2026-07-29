@@ -79,6 +79,7 @@ const Store = {
   loading: false,
   error: null,
   live: false,          // connected to Apps Script?
+  connecting: false,    // กำลังเชื่อมต่อครั้งแรก / ลองใหม่
   lastSync: null,
   data: {},             // bootstrap payload
   search: '',
@@ -275,25 +276,144 @@ const API = {
   setUrl(u){ if(u) localStorage.setItem(LS_URL,u); else localStorage.removeItem(LS_URL); },
   useMock(){ localStorage.setItem(LS_URL,'MOCK'); },
   configured(){ return !!this.url(); },
-  async get(action, params={}){
+  // GET เป็น idempotent → retry ได้ปลอดภัย (ช่วยตอน Apps Script cold-start / เน็ตสะดุด)
+  async get(action, params={}, tries){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, params)));
     const q = new URLSearchParams(Object.assign({action}, params)).toString();
-    const res = await fetch(this.url()+'?'+q, { method:'GET', redirect:'follow' });
-    const j = await res.json();
-    if(!j.ok) throw new Error(j.error||'API error');
-    return j.data;
+    const n = tries!=null ? tries : 2;
+    let lastErr;
+    for(let i=0;i<=n;i++){
+      try{
+        const res = await fetchWithTimeout(this.url()+'?'+q, { method:'GET', redirect:'follow' }, 15000);
+        const j = await res.json();
+        if(!j.ok) throw new Error(j.error||'API error');
+        return j.data;
+      }catch(e){ lastErr=e; if(i<n) await new Promise(r=>setTimeout(r, 700*(i+1))); }
+    }
+    throw lastErr;
   },
+  // POST เป็น write → ไม่ retry อัตโนมัติ (กันเขียนซ้ำ) แต่ให้ timeout ยาวขึ้น
   async post(action, body={}){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, body)));
-    const res = await fetch(this.url(), { method:'POST', redirect:'follow',
+    const res = await fetchWithTimeout(this.url(), { method:'POST', redirect:'follow',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(Object.assign({action}, body)) });
+      body: JSON.stringify(Object.assign({action}, body)) }, 20000);
     const j = await res.json();
     if(!j.ok) throw new Error(j.error||'API error');
     return j.data;
   }
 };
-function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 180)); }
+function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 60)); }
+function fetchWithTimeout(url, opts, ms){
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), ms||15000);
+  return fetch(url, Object.assign({ signal:ctrl.signal }, opts)).finally(()=>clearTimeout(t));
+}
+
+/* ================================================================
+   LOCAL CACHE + OPTIMISTIC WRITES
+   บันทึกแล้ว "สำเร็จทันที" — อัปเดตข้อมูลในเครื่องก่อน render เลย
+   แล้วค่อยซิงก์ขึ้นเซิร์ฟเวอร์เบื้องหลัง (ถ้าพลาดจะย้อนกลับ + แจ้งเตือน)
+   ================================================================ */
+const KEY = { deliveries:'DeliveryID', customers:'CustomerID', employees:'EmployeeID',
+  vehicles:'VehicleID', externalVehicles:'ExternalVehicleID', routes:'RouteID' };
+function coll(name){ Store.data[name] = Store.data[name] || []; return Store.data[name]; }
+let _tmpSeq = 0;
+function tmpId(){ return 'TMP-' + (++_tmpSeq); }
+
+// คำนวณตัวเลขสรุป (KPI/ต้นทุน/รถ) ใหม่จากข้อมูลในเครื่อง — ให้ Dashboard อัปเดตทันทีโดยไม่ต้องเรียกเซิร์ฟเวอร์
+function recomputeDashboard(){
+  const d = Store.data; if(!d) return;
+  const dels = (d.deliveries||[]).filter(x=>!x.IsDeleted);
+  const routes = (d.routes||[]).filter(x=>!x.IsDeleted);
+  const boxes = l => l.reduce((n,x)=>n+(Number(x.BoxQty)||0),0);
+  const by = s => dels.filter(x=>x.Status===s);
+  const st = s => ({ count:by(s).length, boxes:boxes(by(s)) });
+  const kpi = { total:{count:dels.length,boxes:boxes(dels)}, draft:st('Draft'), planned:st('Planned'),
+    assigned:st('Assigned'), inProgress:st('In Progress'), completed:st('Completed'), failed:st('Failed'),
+    stops: routes.reduce((n,r)=>n+(Number(r.TotalStops)||0),0) };
+  const est = routes.reduce((n,r)=>n+(Number(r.EstimatedTotalCost)||0),0);
+  const company = routes.filter(r=>r.RouteType==='COMPANY_VEHICLE').reduce((n,r)=>n+(Number(r.EstimatedTotalCost)||0),0);
+  const external = routes.filter(r=>r.RouteType==='EXTERNAL_VEHICLE').reduce((n,r)=>n+(Number(r.EstimatedTotalCost)||0),0);
+  const other = routes.reduce((n,r)=>n+(Number(r.EstimatedOtherCost)||0),0);
+  const tStops = kpi.stops, tBoxes = routes.reduce((n,r)=>n+(Number(r.TotalBoxes)||0),0);
+  const cost = { total:est, company, external, other, avgPerRoute: routes.length?est/routes.length:0,
+    avgPerStop: tStops?est/tStops:0, avgPerBox: tBoxes?est/tBoxes:0 };
+  const vs = s => (d.vehicles||[]).filter(v=>v.VehicleStatus===s).length;
+  const fleet = { available:vs('Available'), inUse:vs('In Use'),
+    offline:(d.vehicles||[]).filter(v=>['Offline','Stopped'].includes(v.VehicleStatus)).length, total:(d.vehicles||[]).length };
+  d.dashboard = Object.assign({}, d.dashboard, { kpi, cost, fleet, routes });
+}
+
+// แกนกลาง optimistic: apply() แก้ข้อมูลในเครื่อง + คืน undo() · render ทันที · POST เบื้องหลัง
+async function optimistic(apply, action, body, opts){
+  opts = opts || {};
+  Store.pending = (Store.pending||0) + 1;   // กัน background sync มาทับระหว่างรอเซิร์ฟเวอร์
+  const undo = apply();
+  recomputeDashboard();
+  render();
+  try{
+    const r = await API.post(action, body);
+    if(opts.reconcile) opts.reconcile(r);
+    recomputeDashboard();
+    Store.lastSync = new Date().toISOString(); Store._sig = dataSignature(Store.data); updateSync();
+    render();
+    return r;
+  }catch(e){
+    if(typeof undo==='function') undo();
+    recomputeDashboard(); render();
+    toast('บันทึกไม่สำเร็จ: '+(e&&e.message||e)+' — ย้อนข้อมูลกลับแล้ว','err');
+    throw e;
+  }finally{
+    Store.pending = Math.max(0, (Store.pending||1) - 1);
+  }
+}
+// ลายเซ็นข้อมูล — ใช้ตรวจว่ามีการเปลี่ยนแปลงจริงไหม ก่อน re-render (กันจอกระพริบ)
+function dataSignature(d){
+  if(!d) return '';
+  const dels = (d.deliveries||[]).map(x=>x.DeliveryID+':'+x.Status+':'+x.RouteID).join('|');
+  const rts  = (d.routes||[]).map(x=>x.RouteID+':'+x.Status).join('|');
+  const veh  = (d.vehicles||[]).map(x=>x.VehicleID+':'+x.VehicleStatus).join('|');
+  return dels+'#'+rts+'#'+veh;
+}
+// ซิงก์ข้อมูลเบื้องหลังอัตโนมัติ — ให้ผู้จ่ายงานเห็นสถานะที่คนขับอัปเดต โดยไม่ต้องรีเฟรชเอง
+const SYNC_PAGES = ['dashboard','deliveries','rounds','vehicles','external','customers','employees','livemap'];
+async function silentSync(){
+  if(!API.configured() || Store.pending || (typeof document!=='undefined' && document.hidden)) return;
+  try{
+    const data = await API.get('getBootstrap', { date: Store.date }, 1);
+    if(Store.pending) return; // มีการแก้ไขแทรกระหว่างดึงข้อมูล → ทิ้งชุดนี้
+    const sig = dataSignature(data);
+    Store.data = data; Store.live = true; Store.lastSync = new Date().toISOString(); updateSync();
+    if(sig !== Store._sig){ Store._sig = sig; if(SYNC_PAGES.includes(Store.page)) render(); }
+  }catch(e){ Store.live = false; updateSync(); scheduleReconnect(); }
+}
+function createLocal(name, action, data, extra){
+  const key = KEY[name], id = tmpId();
+  const rec = Object.assign({ [key]:id, IsDeleted:false }, extra||{}, data, { __pending:true });
+  return optimistic(()=>{ coll(name).unshift(rec); return ()=>{ const a=coll(name), i=a.indexOf(rec); if(i>=0)a.splice(i,1); }; },
+    action, { data }, { reconcile:r=>{ const a=coll(name), i=a.indexOf(rec); if(i>=0){ if(r) a[i]=r; else { delete rec.__pending; } } } });
+}
+function updateLocal(name, action, id, data, bodyOverride){
+  const key = KEY[name], a = coll(name);
+  const rec = a.find(x=>String(x[key])===String(id));
+  const prev = rec ? Object.assign({}, rec) : null;
+  return optimistic(()=>{ if(rec) Object.assign(rec, data); return ()=>{ if(rec&&prev){ for(const k in rec) if(!(k in prev)) delete rec[k]; Object.assign(rec, prev); } }; },
+    action, bodyOverride || { id, data }, { reconcile:r=>{ if(rec&&r) Object.assign(rec, r); } });
+}
+function deleteLocal(name, action, id, body){
+  const key = KEY[name], a = coll(name);
+  const i = a.findIndex(x=>String(x[key])===String(id)); const rec = a[i];
+  return optimistic(()=>{ if(i>=0) a.splice(i,1); return ()=>{ if(rec) a.splice(Math.max(0,i),0,rec); }; },
+    action, body || { id });
+}
+// เพิ่ม Route ที่เพิ่งสร้าง (จากผลลัพธ์ POST) เข้าแคชในเครื่อง + ตั้งงานที่เกี่ยวข้องเป็น "วางแผนแล้ว"
+function localAddRoute(r, stops){
+  if(!r) return;
+  coll('routes').unshift(r);
+  (stops||[]).forEach(s=>{ if(s.DeliveryID){ const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID)); if(d){ d.Status='Planned'; d.RouteID=r.RouteID; } } });
+  recomputeDashboard();
+}
 
 /* ================================================================
    GEOCODING — แปลงที่อยู่ (ข้อความ) → พิกัด GPS อัตโนมัติ
@@ -410,8 +530,9 @@ function navLink(it){ return `<a href="#/${it.id}" class="nav-item ${Store.page=
 
 function updateSync(){
   const live = API.configured() && Store.live;
-  const dot = live ? '#10B981' : (API.configured()? '#EF4444':'#F59E0B');
-  const txt = live ? 'เชื่อมต่อแล้ว' : (API.configured()? 'เชื่อมต่อไม่ได้' : 'โหมดทดลอง (Mock)');
+  const connecting = API.configured() && !Store.live && Store.connecting;
+  const dot = live ? '#10B981' : (connecting ? '#F59E0B' : (API.configured()? '#F59E0B':'#F59E0B'));
+  const txt = live ? 'เชื่อมต่อแล้ว' : (connecting ? 'กำลังเชื่อมต่อ…' : (API.configured()? 'กำลังลองเชื่อมต่อใหม่…' : 'โหมดทดลอง (Mock)'));
   ['syncDot','syncDot2'].forEach(id=>{ if(el(id)) el(id).style.background=dot; });
   ['syncText','syncText2'].forEach(id=>{ if(el(id)) el(id).textContent=txt; });
   if(el('syncSub')) el('syncSub').textContent = Store.lastSync ? ('อัพเดท '+ago(Store.lastSync)) : '—';
@@ -423,19 +544,48 @@ function setDateLabel(){ if(el('dateLabel')) el('dateLabel').textContent = thDat
    BOOTSTRAP / REFRESH
    ================================================================ */
 async function loadBootstrap(){
+  if(!API.configured()){
+    Store.data = Mock.handle('getBootstrap', { date: Store.date });
+    Store.live = false; Store.connecting = false; Store.error = null;
+    Store.lastSync = new Date().toISOString(); updateSync(); return;
+  }
+  Store.loading = true; Store.connecting = true; updateSync();
   try{
-    Store.loading = true;
-    const data = await API.get('getBootstrap', { date: Store.date });
+    const data = await API.get('getBootstrap', { date: Store.date }, 3); // ลองได้ถึง 4 ครั้ง กัน cold-start
     Store.data = data;
-    Store.live = API.configured();
+    Store.live = true;
     Store.lastSync = new Date().toISOString();
+    Store._sig = dataSignature(data);
     Store.error = null;
   }catch(e){
     Store.live = false; Store.error = e.message;
-    // fallback to mock so app still works
-    Store.data = Mock.handle('getBootstrap', { date: Store.date });
-    toast('เชื่อมต่อ Apps Script ไม่ได้ — ใช้ข้อมูลทดลองแทน ('+e.message+')','warn');
-  }finally{ Store.loading=false; updateSync(); }
+    // ยังไม่มีข้อมูลเลย → ใช้ข้อมูลทดลองไปก่อนให้แอปใช้งานได้ แล้วลองเชื่อมใหม่อัตโนมัติ
+    if(!Store.data || !Store.data.deliveries) Store.data = Mock.handle('getBootstrap', { date: Store.date });
+    toast('เซิร์ฟเวอร์ตอบช้า — กำลังลองเชื่อมต่อใหม่อัตโนมัติ…','warn');
+    scheduleReconnect();
+  }finally{ Store.loading=false; Store.connecting=false; updateSync(); }
+}
+// พยายามเชื่อมต่อใหม่เบื้องหลังจนสำเร็จ (self-heal) — ผู้ใช้ไม่ต้องรีเฟรชเอง
+let _reconnecting = false;
+function scheduleReconnect(){
+  if(_reconnecting || !API.configured()) return;
+  _reconnecting = true;
+  let attempt = 0;
+  const tick = async ()=>{
+    if(!API.configured()){ _reconnecting=false; return; }
+    attempt++;
+    try{
+      const data = await API.get('getBootstrap', { date: Store.date }, 0);
+      Store.data = data; Store.live = true; Store.error = null; Store.lastSync = new Date().toISOString();
+      _reconnecting = false; updateSync(); render();
+      toast('เชื่อมต่อเซิร์ฟเวอร์แล้ว ข้อมูลเป็นปัจจุบัน','ok');
+    }catch(e){
+      Store.live = false; updateSync();
+      if(attempt < 30) setTimeout(tick, Math.min(15000, 2000*attempt));
+      else _reconnecting = false;
+    }
+  };
+  setTimeout(tick, 2500);
 }
 
 /* ================================================================
@@ -806,10 +956,13 @@ async function init(){
   // รองรับ ?api=<AppsScriptURL> เพื่อ auto-connect (สะดวกตอน deploy/แชร์ให้ทีม)
   try{ const qp=new URLSearchParams(location.search).get('api'); if(qp){ API.setUrl(qp); history.replaceState(null,'',location.pathname+location.hash); } }catch(e){}
   Store.date = API.configured() ? new Date().toISOString().slice(0,10) : DATA_DATE;
+  Store.data = Store.data || {};
+  recomputeDashboard();   // เตรียมโครงสร้าง dashboard (ค่าเป็น 0) กันหน้าพังตอนยังไม่มีข้อมูล
   buildNav(); bindShell(); setDateLabel(); updateSync();
-  await loadBootstrap();
   if(!location.hash) location.hash = '#/dashboard';
-  render();
+  render();               // แสดงโครงหน้าทันที (ไม่ต้องรอเซิร์ฟเวอร์) ระหว่างกำลังเชื่อมต่อ
+  await loadBootstrap();
+  render();               // เติมข้อมูลจริงเมื่อเชื่อมต่อสำเร็จ
   // realtime polling ทุก 10 วิ — หน้าแผนที่/Cartrack ดึงพิกัดสดจาก Cartrack (light) · หน้าอื่นอ่านสรุป
   Store.pollTimer = setInterval(async ()=>{
     const p = Store.page;
@@ -829,5 +982,7 @@ async function init(){
       }
     }catch(e){}
   }, 10000);
+  // ซิงก์ข้อมูลทั้งหมดเบื้องหลังทุก 20 วิ — สถานะที่คนขับ/เครื่องอื่นอัปเดต จะขึ้นเองอัตโนมัติ
+  Store.syncTimer = setInterval(silentSync, 20000);
 }
 document.addEventListener('DOMContentLoaded', init);

@@ -138,7 +138,7 @@ ROUTES.deliveries = async function(view){
   const n2=view.querySelector('[data-act="new2"]'); if(n2) n2.onclick=()=>openForm(null);
   view.querySelector('[data-act="csv"]').onclick = ()=>Exporter.csv(rows,'deliveries_'+Store.date);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>openForm((Store.data.deliveries||[]).find(x=>x.DeliveryID===b.dataset.edit)));
-  $$('[data-del]',view).forEach(b=>b.onclick=()=>confirmDialog('ลบงานส่งนี้? (ระบบใช้ soft-delete ข้อมูลจริงไม่ถูกลบ)',async()=>{ await API.post('deleteDelivery',{id:b.dataset.del}); await refresh(); toast('ลบงานส่งแล้ว','ok'); },{danger:true,yes:'ลบ'}));
+  $$('[data-del]',view).forEach(b=>b.onclick=()=>confirmDialog('ลบงานส่งนี้? (ระบบใช้ soft-delete ข้อมูลจริงไม่ถูกลบ)',()=>{ deleteLocal('deliveries','deleteDelivery',b.dataset.del).then(()=>toast('ลบงานส่งแล้ว','ok')).catch(()=>{}); },{danger:true,yes:'ลบ'}));
   $$('[data-dispatch]',view).forEach(b=>b.onclick=()=>quickDispatch((Store.data.deliveries||[]).find(x=>x.DeliveryID===b.dataset.dispatch)));
 };
 
@@ -214,7 +214,7 @@ async function qdConfirm(){
     EstimatedFuelCost:c.fuel, EstimatedTollCost:c.toll, EstimatedParkingCost:c.parking, EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
   const stops=[{ DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName, Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty, DistanceFromPrevious:m.distance }];
   const btn=el('qdSave'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังจ่ายรถ…'; icons();
-  try{ const r=await API.post('confirmRoute',{data,stops}); QD.modal.close(); await refresh(); toast('จ่ายรถแล้ว · '+r.RouteID+' · '+money(c.total)+' ฿','ok','จัดรถด่วนสำเร็จ'); }
+  try{ const r=await API.post('confirmRoute',{data,stops}); localAddRoute(r,stops); QD.modal.close(); render(); toast('จ่ายรถแล้ว · '+r.RouteID+' · '+money(c.total)+' ฿','ok','จัดรถด่วนสำเร็จ'); }
   catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check-circle-2"></i>ยืนยัน & จ่ายรถ'; icons(); }
 }
 function deliveryForm(d){
@@ -251,8 +251,9 @@ function deliveryForm(d){
     const data = { CustomerName:el('fName').value.trim(), BranchName:el('fBranch').value.trim(), InvoiceNo:el('fInv').value.trim(),
       Address:el('fAddr').value.trim(), Latitude:+el('fLat').value||'', Longitude:+el('fLng').value||'', BoxQty:+el('fBox').value||0,
       Priority:el('fPri').value, Status:el('fStatus').value, Note:el('fNote').value.trim(), DeliveryDate:Store.date };
-    try{ if(isEdit) await API.post('updateDelivery',{id:d.DeliveryID,data}); else await API.post('createDelivery',{data}); m.close(); await refresh(); toast(isEdit?'แก้ไขงานส่งแล้ว':'เพิ่มงานส่งแล้ว','ok'); }
-    catch(e){ toast(e.message,'err'); el('fSave').disabled=false; }
+    m.close();
+    if(isEdit) updateLocal('deliveries','updateDelivery',d.DeliveryID,data).then(()=>toast('แก้ไขงานส่งแล้ว','ok')).catch(()=>{});
+    else       createLocal('deliveries','createDelivery',data).then(()=>toast('เพิ่มงานส่งแล้ว','ok')).catch(()=>{});
   };
 }
 
@@ -526,9 +527,10 @@ async function confirmRoute(){
   const btn=el('confirmRoute'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังบันทึก…'; icons();
   try{
     const r=await API.post('confirmRoute',{data,stops});
+    localAddRoute(r,stops);
     toast('สร้าง Route '+r.RouteID+' สำเร็จ · '+m.stops+' จุด','ok','ยืนยัน Route แล้ว');
     Plan.selected.clear(); Plan.result=null;
-    await loadBootstrap(); location.hash='#/rounds';
+    location.hash='#/rounds';
   }catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check-circle-2"></i>ยืนยัน Route นี้'; icons(); }
 }
 
@@ -536,7 +538,7 @@ async function confirmRoute(){
    ROUNDS (routes + stops)
    ================================================================ */
 ROUTES.rounds = async function(view){
-  const routes = await API.get('getRoutes',{date:Store.date});
+  const routes = (Store.data.routes||[]).filter(x=>!x.IsDeleted);
   page(view, `
     ${head('รอบส่งสินค้า', `${thDate(Store.date)} · ${int(routes.length)} Route`,
       `<button class="btn btn-sm" data-act="csv"><i data-lucide="download"></i>CSV</button>`)}
@@ -545,7 +547,7 @@ ROUTES.rounds = async function(view){
   `);
   const csv=view.querySelector('[data-act="csv"]'); if(csv) csv.onclick=()=>Exporter.csv(routes,'routes_'+Store.date);
   $$('[data-route]',view).forEach(b=>b.onclick=()=>openRouteDetail(b.dataset.route));
-  $$('[data-start]',view).forEach(b=>b.onclick=async()=>{ await API.post('startRoute',{routeId:b.dataset.start}); await refresh(); toast('เริ่มรอบส่งแล้ว','ok'); });
+  $$('[data-start]',view).forEach(b=>b.onclick=()=>{ updateLocal('routes','startRoute',b.dataset.start,{Status:'In Progress'},{routeId:b.dataset.start}).then(()=>toast('เริ่มรอบส่งแล้ว','ok')).catch(()=>{}); });
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>routeEditForm(routes.find(x=>x.RouteID===b.dataset.edit)));
 };
 function routeEditForm(r){
@@ -578,9 +580,8 @@ function routeEditForm(r){
       EstimatedFuelCost:+el('edFuel').value||0, EstimatedTollCost:+el('edToll').value||0,
       EstimatedParkingCost:+el('edPark').value||0, EstimatedExternalCost:+el('edExt').value||0,
       EstimatedOtherCost:+el('edOther').value||0, TotalStops:r.TotalStops, TotalBoxes:r.TotalBoxes, recompute:true };
-    el('edSave').disabled=true;
-    try{ await API.post('updateRoute',{id:r.RouteID,data}); m.close(); await refresh(); toast('แก้ไข Route แล้ว','ok'); }
-    catch(e){ toast(e.message,'err'); el('edSave').disabled=false; }
+    m.close();
+    updateLocal('routes','updateRoute',r.RouteID,data).then(()=>toast('แก้ไข Route แล้ว','ok')).catch(()=>{});
   };
 }
 function routeCard(r){
@@ -605,7 +606,7 @@ function routeCard(r){
 function rItem(l,v){ return `<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px"><div class="small muted">${l}</div><div class="strong" style="font-size:13.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</div></div>`; }
 async function openRouteDetail(id){
   const stops = await API.get('getRouteStops',{routeId:id});
-  const r = (await API.get('getRoutes',{date:Store.date})).find(x=>x.RouteID===id)||{};
+  const r = (Store.data.routes||[]).find(x=>x.RouteID===id)||{};
   const m = modal({ wide:true, title:'รายละเอียด '+id, body:`
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
       <div><div id="rdMap" class="map" style="height:340px"></div></div>
@@ -756,7 +757,7 @@ function ctStatusLine(ct){ if(!ct) return ''; if(ct.connected) return `🟢 Cart
    COMPANY VEHICLES
    ================================================================ */
 ROUTES.vehicles = async function(view){
-  const rows = await API.get('getVehicles');
+  const rows = (Store.data.vehicles||[]).filter(x=>!x.IsDeleted);
   page(view, `
     ${head('รถบริษัท', `${int(rows.length)} คัน`, `<button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เพิ่มรถ</button>`)}
     <div class="card" style="padding:0"><div class="tbl-wrap">
@@ -773,7 +774,7 @@ ROUTES.vehicles = async function(view){
   view.querySelector('[data-act="new"]').onclick=()=>vehicleForm(null);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>vehicleForm(rows.find(x=>x.VehicleID===b.dataset.edit)));
   $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const v=rows.find(x=>x.VehicleID===b.dataset.del);
-    confirmDialog(`ลบรถ "${v?v.VehicleName:''}" ? (ใช้ soft-delete — ข้อมูลจริงไม่ถูกลบถาวร กู้คืนได้)`, async()=>{ await API.post('updateVehicle',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบรถแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
+    confirmDialog(`ลบรถ "${v?v.VehicleName:''}" ? (ใช้ soft-delete — ข้อมูลจริงไม่ถูกลบถาวร กู้คืนได้)`, ()=>{ deleteLocal('vehicles','updateVehicle',b.dataset.del,{id:b.dataset.del,data:{IsDeleted:true}}).then(()=>toast('ลบรถแล้ว','ok')).catch(()=>{}); }, {danger:true,yes:'ลบ'}); });
 };
 function vehicleForm(v){
   const isEdit=!!v; v=v||{};
@@ -789,16 +790,18 @@ function vehicleForm(v){
   `, foot:`<button class="btn" id="vCancel">ยกเลิก</button><button class="btn btn-primary" id="vSave"><i data-lucide="check"></i>บันทึก</button>` });
   el('vCancel').onclick=m.close;
   el('vSave').onclick=async()=>{ const data={ VehicleName:el('vName').value.trim(), LicensePlate:el('vPlate').value.trim(), VehicleType:el('vType').value, CapacityBox:+el('vCap').value||0, FuelCostPerKm:+el('vFuel').value||0, VehicleStatus:el('vStatus').value, CurrentDriver:el('vDrv').value.trim(), CartrackRegistration:el('vCt').value.trim() };
-    if(!data.VehicleName){toast('กรุณากรอกชื่อรถ','warn');return;} el('vSave').disabled=true;
-    try{ if(isEdit)await API.post('updateVehicle',{id:v.VehicleID,data}); else await API.post('createVehicle',{data}); m.close(); await refresh(); toast('บันทึกรถแล้ว','ok'); }catch(e){toast(e.message,'err');el('vSave').disabled=false;} };
+    if(!data.VehicleName){toast('กรุณากรอกชื่อรถ','warn');return;}
+    m.close();
+    if(isEdit) updateLocal('vehicles','updateVehicle',v.VehicleID,data).then(()=>toast('บันทึกรถแล้ว','ok')).catch(()=>{});
+    else       createLocal('vehicles','createVehicle',data,{VehicleStatus:'Available'}).then(()=>toast('เพิ่มรถแล้ว','ok')).catch(()=>{}); };
 }
 
 /* ================================================================
    EXTERNAL VEHICLES
    ================================================================ */
 ROUTES.external = async function(view){
-  const provs = await API.get('getExternalProviders');
-  const rows = await API.get('getExternalVehicles');
+  const provs = (Store.data.externalProviders||[]).filter(x=>!x.IsDeleted);
+  const rows = (Store.data.externalVehicles||[]).filter(x=>!x.IsDeleted);
   page(view, `
     ${head('รถจ้างภายนอก', `${int(rows.length)} คัน · ${int(provs.length)} ผู้ให้บริการ`, `<button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เพิ่มรถภายนอก</button>`)}
     <div class="card" style="padding:0"><div class="tbl-wrap">
@@ -815,7 +818,7 @@ ROUTES.external = async function(view){
   view.querySelector('[data-act="new"]').onclick=()=>extForm(null,provs);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>extForm(rows.find(x=>x.ExternalVehicleID===b.dataset.edit),provs));
   $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const v=rows.find(x=>x.ExternalVehicleID===b.dataset.del);
-    confirmDialog(`ลบรถภายนอก "${v?v.ProviderName:''}" ? (soft-delete กู้คืนได้)`, async()=>{ await API.post('updateExternalVehicle',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบรถภายนอกแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
+    confirmDialog(`ลบรถภายนอก "${v?v.ProviderName:''}" ? (soft-delete กู้คืนได้)`, ()=>{ deleteLocal('externalVehicles','updateExternalVehicle',b.dataset.del,{id:b.dataset.del,data:{IsDeleted:true}}).then(()=>toast('ลบรถภายนอกแล้ว','ok')).catch(()=>{}); }, {danger:true,yes:'ลบ'}); });
 };
 function extForm(v,provs){
   const isEdit=!!v; v=v||{};
@@ -833,8 +836,10 @@ function extForm(v,provs){
   `, foot:`<button class="btn" id="eCancel">ยกเลิก</button><button class="btn btn-primary" id="eSave"><i data-lucide="check"></i>บันทึก</button>` });
   el('eCancel').onclick=m.close;
   el('eSave').onclick=async()=>{ const data={ ProviderName:el('eProv').value.trim(), DriverName:el('eDrv').value.trim(), DriverPhone:el('ePhone').value.trim(), VehicleType:el('eType').value.trim(), LicensePlate:el('ePlate').value.trim(), CapacityBox:+el('eCap').value||0, Rate:+el('eRate').value||0, RateType:el('eRt').value, Status:el('eStatus').value };
-    if(!data.ProviderName){toast('กรุณากรอกผู้ให้บริการ','warn');return;} el('eSave').disabled=true;
-    try{ if(isEdit)await API.post('updateExternalVehicle',{id:v.ExternalVehicleID,data}); else await API.post('createExternalVehicle',{data}); m.close(); await refresh(); toast('บันทึกรถภายนอกแล้ว','ok'); }catch(e){toast(e.message,'err');el('eSave').disabled=false;} };
+    if(!data.ProviderName){toast('กรุณากรอกผู้ให้บริการ','warn');return;}
+    m.close();
+    if(isEdit) updateLocal('externalVehicles','updateExternalVehicle',v.ExternalVehicleID,data).then(()=>toast('บันทึกรถภายนอกแล้ว','ok')).catch(()=>{});
+    else       createLocal('externalVehicles','createExternalVehicle',data,{Status:'Available'}).then(()=>toast('เพิ่มรถภายนอกแล้ว','ok')).catch(()=>{}); };
 }
 
 /* ================================================================
@@ -842,7 +847,7 @@ function extForm(v,provs){
    ================================================================ */
 ROUTES.expenses = async function(view){
   const rows = await API.get('getExpenses',{date:Store.date});
-  const routes = await API.get('getRoutes',{date:Store.date});
+  const routes = (Store.data.routes||[]).filter(x=>!x.IsDeleted);
   const total = rows.reduce((n,e)=>n+(+e.Amount||0),0);
   const EXTYPE={FUEL:'ค่าน้ำมัน',TOLL:'ค่าทางด่วน',PARKING:'ค่าจอดรถ',EXTERNAL:'ค่ารถภายนอก',OTHER:'อื่นๆ'};
   page(view, `
@@ -862,7 +867,7 @@ ROUTES.expenses = async function(view){
       <div class="field"><label class="label">รายละเอียด</label><input class="input" id="xD"></div>
     `,foot:`<button class="btn" id="xC">ยกเลิก</button><button class="btn btn-primary" id="xS"><i data-lucide="check"></i>บันทึก</button>`});
     el('xC').onclick=m.close;
-    el('xS').onclick=async()=>{ const data={RouteID:el('xR').value,ExpenseType:el('xT').value,Amount:+el('xA').value||0,Description:el('xD').value.trim(),ExpenseDate:Store.date}; if(!data.Amount){toast('กรอกจำนวนเงิน','warn');return;} el('xS').disabled=true; try{await API.post('createExpense',{data});m.close();await refresh();toast('บันทึกค่าใช้จ่ายแล้ว','ok');}catch(e){toast(e.message,'err');el('xS').disabled=false;} };
+    el('xS').onclick=async()=>{ const data={RouteID:el('xR').value,ExpenseType:el('xT').value,Amount:+el('xA').value||0,Description:el('xD').value.trim(),ExpenseDate:Store.date}; if(!data.Amount){toast('กรอกจำนวนเงิน','warn');return;} el('xS').disabled=true; try{await API.post('createExpense',{data});m.close();render();toast('บันทึกค่าใช้จ่ายแล้ว','ok');}catch(e){toast(e.message,'err');el('xS').disabled=false;} };
   };
 };
 
@@ -871,7 +876,7 @@ ROUTES.expenses = async function(view){
    ================================================================ */
 ROUTES.advance = async function(view){
   const rows = await API.get('getClaims');
-  const routes = await API.get('getRoutes',{date:Store.date});
+  const routes = (Store.data.routes||[]).filter(x=>!x.IsDeleted);
   page(view, `
     ${head('เงินทดรองจ่าย & เคลียร์เงิน', `${int(rows.length)} รายการ`, `<button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เคลียร์เงินทดรอง</button>`)}
     <div class="card" style="padding:0"><div class="tbl-wrap">
@@ -896,7 +901,7 @@ ROUTES.advance = async function(view){
     const calc=()=>{ const adv=+el('aAdv').value||0,act=+el('aAct').value||0; if(!adv&&!act){el('aCalc').style.display='none';return;} el('aCalc').style.display='flex'; const ref=adv>act?adv-act:0,add=act>adv?act-adv:0; el('aCalcTxt').innerHTML= ref?`เงินทอน <b>${money(ref)}</b> บาท (คนขับคืนเงิน)`:(add?`เบิกเพิ่ม <b>${money(add)}</b> บาท`:'พอดี ไม่มีเงินทอน'); };
     el('aAdv').oninput=calc; el('aAct').oninput=calc;
     el('aC').onclick=m.close;
-    el('aS').onclick=async()=>{ const data={RouteID:el('aR').value,DriverName:el('aDrv').value.trim(),AdvanceAmount:+el('aAdv').value||0,ActualExpense:+el('aAct').value||0}; el('aS').disabled=true; try{await API.post('createClaim',{data});m.close();await refresh();toast('บันทึกการเคลียร์เงินแล้ว','ok');}catch(e){toast(e.message,'err');el('aS').disabled=false;} };
+    el('aS').onclick=async()=>{ const data={RouteID:el('aR').value,DriverName:el('aDrv').value.trim(),AdvanceAmount:+el('aAdv').value||0,ActualExpense:+el('aAct').value||0}; el('aS').disabled=true; try{await API.post('createClaim',{data});m.close();render();toast('บันทึกการเคลียร์เงินแล้ว','ok');}catch(e){toast(e.message,'err');el('aS').disabled=false;} };
   };
 };
 
@@ -924,7 +929,7 @@ ROUTES.routecost = async function(view){
    CUSTOMERS
    ================================================================ */
 ROUTES.customers = async function(view){
-  const rows = (await API.get('getCustomers')).filter(c=>matchSearch(c,['CustomerName','BranchName','Address']));
+  const rows = (Store.data.customers||[]).filter(x=>!x.IsDeleted).filter(c=>matchSearch(c,['CustomerName','BranchName','Address']));
   page(view, `
     ${head('ลูกค้า / สาขา', `${int(rows.length)} รายการ`, `<button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เพิ่มลูกค้า</button>`)}
     <div class="card" style="padding:0"><div class="tbl-wrap">
@@ -940,7 +945,7 @@ ROUTES.customers = async function(view){
   view.querySelector('[data-act="new"]').onclick=()=>openC(null);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>openC(rows.find(x=>x.CustomerID===b.dataset.edit)));
   $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const c=rows.find(x=>x.CustomerID===b.dataset.del);
-    confirmDialog(`ลบลูกค้า "${c?c.CustomerName:''}" ? (soft-delete กู้คืนได้)`, async()=>{ await API.post('updateCustomer',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบลูกค้าแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
+    confirmDialog(`ลบลูกค้า "${c?c.CustomerName:''}" ? (soft-delete กู้คืนได้)`, ()=>{ deleteLocal('customers','updateCustomer',b.dataset.del,{id:b.dataset.del,data:{IsDeleted:true}}).then(()=>toast('ลบลูกค้าแล้ว','ok')).catch(()=>{}); }, {danger:true,yes:'ลบ'}); });
 };
 
 function customerForm(c){
@@ -991,9 +996,10 @@ function customerForm(c){
       confirmDialog('ยังไม่มีพิกัด GPS ของที่อยู่นี้ (แผนที่/การจัด Route จะไม่แสดงจุดนี้จนกว่าจะมีพิกัด) ต้องการบันทึกต่อไหม?', ()=>saveC(data), {yes:'บันทึกต่อ'}); return; }
     saveC(data);
   };
-  async function saveC(data){
-    try{ if(isEdit) await API.post('updateCustomer',{id:c.CustomerID,data}); else await API.post('createCustomer',{data}); m.close(); await refresh(); toast('บันทึกลูกค้าแล้ว','ok'); }
-    catch(e){ toast(e.message,'err'); const b=el('cSave'); if(b){b.disabled=false; b.innerHTML='<i data-lucide="check"></i>บันทึก'; icons();} }
+  function saveC(data){
+    m.close();
+    if(isEdit) updateLocal('customers','updateCustomer',c.CustomerID,data).then(()=>toast('บันทึกลูกค้าแล้ว','ok')).catch(()=>{});
+    else       createLocal('customers','createCustomer',data,{Status:'Active'}).then(()=>toast('เพิ่มลูกค้าแล้ว','ok')).catch(()=>{});
   }
 }
 
@@ -1001,8 +1007,8 @@ function customerForm(c){
    EMPLOYEES
    ================================================================ */
 ROUTES.employees = async function(view){
-  const rows = await API.get('getEmployees');
-  const veh = await API.get('getVehicles');
+  const rows = (Store.data.employees||[]).filter(x=>!x.IsDeleted);
+  const veh = (Store.data.vehicles||[]).filter(x=>!x.IsDeleted);
   page(view, `
     ${head('พนักงานส่งสินค้า', `${int(rows.length)} คน`, `<button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เพิ่มพนักงาน</button>`)}
     <div class="card" style="padding:0"><div class="tbl-wrap">
@@ -1020,7 +1026,7 @@ ROUTES.employees = async function(view){
   view.querySelector('[data-act="new"]').onclick=()=>employeeForm(null,veh);
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>employeeForm(rows.find(x=>x.EmployeeID===b.dataset.edit),veh));
   $$('[data-del]',view).forEach(b=>b.onclick=()=>{ const e=rows.find(x=>x.EmployeeID===b.dataset.del);
-    confirmDialog(`ลบพนักงาน "${e?e.EmployeeName:''}" ? (soft-delete กู้คืนได้)`, async()=>{ await API.post('updateEmployee',{id:b.dataset.del,data:{IsDeleted:true}}); await refresh(); toast('ลบพนักงานแล้ว','ok'); }, {danger:true,yes:'ลบ'}); });
+    confirmDialog(`ลบพนักงาน "${e?e.EmployeeName:''}" ? (soft-delete กู้คืนได้)`, ()=>{ deleteLocal('employees','updateEmployee',b.dataset.del,{id:b.dataset.del,data:{IsDeleted:true}}).then(()=>toast('ลบพนักงานแล้ว','ok')).catch(()=>{}); }, {danger:true,yes:'ลบ'}); });
 };
 function employeeForm(e, veh){
   const isEdit=!!e; e=e||{};
@@ -1038,8 +1044,10 @@ function employeeForm(e, veh){
   `, foot:`<button class="btn" id="mpCancel">ยกเลิก</button><button class="btn btn-primary" id="mpSave"><i data-lucide="check"></i>บันทึก</button>`});
   el('mpCancel').onclick=m.close;
   el('mpSave').onclick=async()=>{ const data={ EmployeeName:el('mpName').value.trim(), Phone:el('mpPhone').value.trim(), Role:el('mpRole').value, Status:el('mpStatus').value, VehicleID:el('mpVeh').value };
-    if(!data.EmployeeName){ toast('กรอกชื่อพนักงาน','warn'); return; } el('mpSave').disabled=true;
-    try{ if(isEdit) await API.post('updateEmployee',{id:e.EmployeeID,data}); else await API.post('createEmployee',{data}); m.close(); await refresh(); toast('บันทึกพนักงานแล้ว','ok'); }catch(err){ toast(err.message,'err'); el('mpSave').disabled=false; } };
+    if(!data.EmployeeName){ toast('กรอกชื่อพนักงาน','warn'); return; }
+    m.close();
+    if(isEdit) updateLocal('employees','updateEmployee',e.EmployeeID,data).then(()=>toast('บันทึกพนักงานแล้ว','ok')).catch(()=>{});
+    else       createLocal('employees','createEmployee',data,{Status:'Active'}).then(()=>toast('เพิ่มพนักงานแล้ว','ok')).catch(()=>{}); };
 }
 
 /* ================================================================
@@ -1269,7 +1277,11 @@ ROUTES.driver = async function(view){
         ? `<div class="notice info mb14"><i data-lucide="hand"></i><div>เลือกงานของคุณแล้วกด <b>รับงานนี้</b> เพื่อเริ่มส่ง</div></div>` + routes.map(driverJobCard).join('')
         : emptyState('ยังไม่มีรอบส่งวันนี้','ติดต่อผู้จัดการเพื่อรับงาน หรือให้แอดมินจัด Route ก่อน')}
     </div>`);
-    $$('[data-accept]',view).forEach(b=>b.onclick=()=>{ Driver.routeId=b.dataset.accept; render(); toast('รับงาน '+b.dataset.accept+' แล้ว','ok'); });
+    $$('[data-accept]',view).forEach(b=>b.onclick=async()=>{ const rid=b.dataset.accept; Driver.routeId=rid;
+      const rt=routes.find(x=>x.RouteID===rid);
+      // รับงาน = เริ่มรอบทันที → อัปเดตสถานะขึ้นเซิร์ฟเวอร์ ให้ผู้จ่ายงานเห็นว่า "กำลังส่ง"
+      if(rt && rt.Status==='Planned'){ try{ await API.post('startRoute',{routeId:rid}); }catch(e){} }
+      render(); toast('รับงาน '+rid+' แล้ว เริ่มส่งได้เลย','ok'); });
     return;
   }
   const stops = await API.get('getRouteStops',{routeId:active.RouteID});
@@ -1303,7 +1315,7 @@ ROUTES.driver = async function(view){
     </div></div>
   `);
   const dch=el('dChange'); if(dch)dch.onclick=()=>{ Driver.routeId=null; render(); };
-  const ds=el('dStart'); if(ds)ds.onclick=async()=>{ await API.post('startRoute',{routeId:active.RouteID}); await refresh(); toast('เริ่มรอบส่งแล้ว','ok'); };
+  const ds=el('dStart'); if(ds)ds.onclick=async()=>{ ds.disabled=true; try{ await API.post('startRoute',{routeId:active.RouteID}); }catch(e){} render(); toast('เริ่มรอบส่งแล้ว','ok'); };
   const dm=el('dMap'); if(dm)dm.onclick=()=>{ if(cur&&cur.Latitude) window.open(`https://www.google.com/maps/dir/?api=1&destination=${cur.Latitude},${cur.Longitude}`,'_blank'); };
   const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur);
   const dd=el('dDone'); if(dd)dd.onclick=()=>podModal('complete',active,cur);
@@ -1342,7 +1354,7 @@ function podModal(type, active, cur){
     try{
       if(isFail) await API.post('failDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,reason,photoUrl});
       else       await API.post('completeDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,photoUrl});
-      m.close(); await refresh(); toast((isFail?'บันทึกส่งไม่สำเร็จ':'บันทึกส่งสำเร็จ')+(photoUrl?' + แนบรูป':''), isFail?'warn':'ok');
+      m.close(); render(); toast((isFail?'บันทึกส่งไม่สำเร็จ':'บันทึกส่งสำเร็จ')+(photoUrl?' + แนบรูป':''), isFail?'warn':'ok');
     }catch(err){ toast(err.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check"></i>'+(isFail?'บันทึก':'ยืนยันส่งเสร็จ'); icons(); }
   };
 }
