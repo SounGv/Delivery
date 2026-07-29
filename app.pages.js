@@ -1066,6 +1066,10 @@ ROUTES.reports = async function(view){
           <button class="btn btn-sm" data-preset="today">วันนี้</button>
           <button class="btn btn-sm" data-preset="7">7 วัน</button>
           <button class="btn btn-sm" data-preset="month">เดือนนี้</button></div>
+        <div style="align-self:flex-end"><label class="label">ประเภทรายงาน</label><select class="select" id="rType" style="width:210px">
+          <option value="routes">สรุป Route</option>
+          <option value="deliveries">รายการจัดส่ง (รายร้าน)</option>
+          <option value="expenses">ค่าใช้จ่ายแยกประเภท</option></select></div>
         <div style="flex:1"></div>
         <div style="align-self:flex-end"><label class="label">กระดาษ</label><select class="select" id="rSize" style="width:90px"><option>A4</option><option>A5</option></select></div>
         <div style="align-self:flex-end" class="flex gap8">
@@ -1111,29 +1115,70 @@ ROUTES.reports = async function(view){
           {l:'รถภายนอก',v:sum(routes,'EstimatedExternalCost'),color:'#F59E0B'},
           {l:'อื่นๆ',v:sum(routes,'EstimatedOtherCost'),color:'#94A3B8'}])}</div>
       </div>
-      <div class="card mt16"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">ต้นทุน</th><th>สถานะ</th><th class="r">พิมพ์</th></tr></thead>
-        <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td><td class="r tab">${num1(r.TotalDistance)}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td><td class="r"><button class="btn btn-sm" data-note="${esc(r.RouteID)}"><i data-lucide="printer"></i></button></td></tr>`).join('')||`<tr><td colspan="10">${emptyState('ไม่มี Route ในช่วงนี้')}</td></tr>`}</tbody></table></div></div>
+      <div id="rDetail"></div>
     `;
     icons();
+    renderDetail();
+  }
+  function renderDetail(){
+    if(!el('rDetail')) return;
+    const type=(el('rType')&&el('rType').value)||'routes';
+    el('rDetail').innerHTML = reportDetail(type, last).html; icons();
     $$('[data-note]',view).forEach(b=>b.onclick=()=>printRouteNote((last.routes||[]).find(x=>x.RouteID===b.dataset.note)));
   }
   el('rGo').onclick=build;
+  el('rType').onchange=renderDetail;
   $$('[data-preset]',view).forEach(b=>b.onclick=()=>{ const t=new Date(Store.date); const iso=d=>d.toISOString().slice(0,10);
     if(b.dataset.preset==='today'){ el('rFrom').value=iso(t); el('rTo').value=iso(t); }
     else if(b.dataset.preset==='7'){ const f=new Date(t.getTime()-6*864e5); el('rFrom').value=iso(f); el('rTo').value=iso(t); }
     else { el('rFrom').value=iso(new Date(t.getFullYear(),t.getMonth(),1)); el('rTo').value=iso(new Date(t.getFullYear(),t.getMonth()+1,0)); }
     build(); });
-  el('rPrint').onclick=()=>printReport(el('rFrom').value, el('rTo').value, last);
-  el('rCsv').onclick=()=>Exporter.csv(last.routes||[],'report_routes');
-  el('rXls').onclick=()=>Exporter.excel((last.routes||[]).map(r=>({Route:r.RouteID,วันที่:r.DeliveryDate,ประเภท:r.RouteType,คนขับ:r.DriverName,จุด:r.TotalStops,กล่อง:r.TotalBoxes,ระยะทาง:r.TotalDistance,ต้นทุน:r.EstimatedTotalCost,สถานะ:r.Status})),'report_routes','รายงาน Route');
+  const curType=()=>(el('rType')&&el('rType').value)||'routes';
+  el('rPrint').onclick=()=>printReport(el('rFrom').value, el('rTo').value, last, curType());
+  el('rCsv').onclick=()=>{ const d=reportDetail(curType(), last); Exporter.csv(d.rows, d.filename); };
+  el('rXls').onclick=()=>{ const d=reportDetail(curType(), last); Exporter.excel(d.rows, d.filename, d.title); };
   build();
 };
+/* สร้างตาราง + ข้อมูล export ตามประเภทรายงานที่เลือก */
+function reportDetail(type, rep){
+  rep = rep||{};
+  const routes = rep.routes||[], dels = rep.deliveries||[];
+  const rmap={}; routes.forEach(r=>{ rmap[r.RouteID]=r; });
+  if(type==='deliveries'){
+    const totBox = dels.reduce((n,d)=>n+(+d.BoxQty||0),0);
+    const rows = dels.map(d=>({
+      'วันที่':d.DeliveryDate, 'ลูกค้า':d.CustomerName, 'สาขา':d.BranchName||'', 'ที่อยู่':d.Address||'',
+      'เลขบิล':d.InvoiceNo||'', 'กล่อง':Number(d.BoxQty)||0, 'Priority':(PRIORITY[d.Priority]||{}).label||d.Priority||'',
+      'Route':d.RouteID||'', 'คนขับ':(rmap[d.RouteID]||{}).DriverName||'', 'สถานะ':(DSTATUS[d.Status]||{}).label||d.Status||'' }));
+    const html=`<div class="card mt16"><div class="h-card mb14">รายการจัดส่งรายร้าน · ${int(dels.length)} รายการ · ${int(totBox)} กล่อง</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>วันที่</th><th>ลูกค้า</th><th>สาขา</th><th>ที่อยู่</th><th>เลขบิล</th><th class="r">กล่อง</th><th>Priority</th><th>Route</th><th>คนขับ</th><th>สถานะ</th></tr></thead>
+      <tbody>${dels.map(d=>`<tr><td class="small">${thDate(d.DeliveryDate)}</td><td class="strong">${esc(d.CustomerName)}</td><td class="muted">${esc(d.BranchName||'')}</td><td class="small muted">${esc(d.Address||'')}</td><td class="mono small">${esc(d.InvoiceNo||'—')}</td><td class="r tab">${int(d.BoxQty)}</td><td>${priBadge(d.Priority)}</td><td class="mono small">${esc(d.RouteID||'—')}</td><td>${esc((rmap[d.RouteID]||{}).DriverName||'')}</td><td>${dstatusBadge(d.Status)}</td></tr>`).join('')||`<tr><td colspan="10">${emptyState('ไม่มีงานส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
+    return { html, rows, filename:'report_deliveries', title:'รายงานการจัดส่งรายร้าน' };
+  }
+  if(type==='expenses'){
+    const sum=f=>routes.reduce((n,r)=>n+(+r[f]||0),0);
+    const rows = routes.map(r=>({
+      'Route':r.RouteID, 'วันที่':r.DeliveryDate, 'คนขับ':r.DriverName||'',
+      'ค่าน้ำมัน':Number(r.EstimatedFuelCost)||0, 'ค่าทางด่วน':Number(r.EstimatedTollCost)||0, 'ค่าจอดรถ':Number(r.EstimatedParkingCost)||0,
+      'ค่ารถภายนอก':Number(r.EstimatedExternalCost)||0, 'ค่าอื่นๆ':Number(r.EstimatedOtherCost)||0, 'รวม':Number(r.EstimatedTotalCost)||0 }));
+    const html=`<div class="card mt16"><div class="h-card mb14">ค่าใช้จ่ายแยกประเภท · รวม ${money(sum('EstimatedTotalCost'))} บาท</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Route</th><th>วันที่</th><th>คนขับ</th><th class="r">น้ำมัน</th><th class="r">ทางด่วน</th><th class="r">จอดรถ</th><th class="r">รถภายนอก</th><th class="r">อื่นๆ</th><th class="r">รวม</th></tr></thead>
+      <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${money(r.EstimatedFuelCost)}</td><td class="r tab">${money(r.EstimatedTollCost)}</td><td class="r tab">${money(r.EstimatedParkingCost)}</td><td class="r tab">${money(r.EstimatedExternalCost)}</td><td class="r tab">${money(r.EstimatedOtherCost)}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td></tr>`).join('')||`<tr><td colspan="9">${emptyState('ไม่มีข้อมูล')}</td></tr>`}</tbody>
+      <tfoot><tr><th colspan="3" class="r">รวมทั้งสิ้น</th><th class="r tab">${money(sum('EstimatedFuelCost'))}</th><th class="r tab">${money(sum('EstimatedTollCost'))}</th><th class="r tab">${money(sum('EstimatedParkingCost'))}</th><th class="r tab">${money(sum('EstimatedExternalCost'))}</th><th class="r tab">${money(sum('EstimatedOtherCost'))}</th><th class="r tab">${money(sum('EstimatedTotalCost'))}</th></tr></tfoot></table></div></div>`;
+    return { html, rows, filename:'report_expenses', title:'รายงานค่าใช้จ่ายแยกประเภท' };
+  }
+  const rows = routes.map(r=>({ Route:r.RouteID, 'วันที่':r.DeliveryDate, 'ประเภท':r.RouteType==='EXTERNAL_VEHICLE'?'รถภายนอก':'รถบริษัท', 'คนขับ':r.DriverName||'', 'จุด':Number(r.TotalStops)||0, 'กล่อง':Number(r.TotalBoxes)||0, 'ระยะทาง':Number(r.TotalDistance)||0, 'ต้นทุน':Number(r.EstimatedTotalCost)||0, 'สถานะ':(DSTATUS[r.Status]||{}).label||r.Status }));
+  const html=`<div class="card mt16"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">ต้นทุน</th><th>สถานะ</th><th class="r">พิมพ์</th></tr></thead>
+    <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td><td class="r tab">${num1(r.TotalDistance)}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td><td class="r"><button class="btn btn-sm" data-note="${esc(r.RouteID)}"><i data-lucide="printer"></i></button></td></tr>`).join('')||`<tr><td colspan="10">${emptyState('ไม่มี Route ในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
+  return { html, rows, filename:'report_routes', title:'รายงาน Route' };
+}
 function rSize(){ return (el('rSize')&&el('rSize').value)||'A4'; }
-function printReport(from,to,rep){
-  rep=rep||{}; const routes=rep.routes||[], dels=rep.deliveries||[];
+function printReport(from,to,rep,type){
+  rep=rep||{}; type=type||'routes';
+  const routes=rep.routes||[], dels=rep.deliveries||[];
   const sum=(a,f)=>a.reduce((n,x)=>n+(+x[f]||0),0);
   const total=sum(routes,'EstimatedTotalCost');
-  const body=`
+  const head=`
     <div class="kv">
       <div><span>ช่วงวันที่:</span> <b>${thDate(from)} – ${thDate(to)}</b></div>
       <div><span>จำนวนงาน:</span> <b>${int(dels.length)}</b></div>
@@ -1142,12 +1187,29 @@ function printReport(from,to,rep){
       <div><span>กล่องรวม:</span> <b>${int(sum(routes,'TotalBoxes'))}</b></div>
       <div><span>ระยะทางรวม:</span> <b>${num1(sum(routes,'TotalDistance'))} กม.</b></div>
       <div><span>ต้นทุนรวม:</span> <b>${money(total)} บาท</b></div>
-    </div>
-    <div class="sec-title">รายการ Route</div>
-    <table><thead><tr><th>Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th>จุด</th><th>กล่อง</th><th>ระยะทาง</th><th>ต้นทุน</th><th>สถานะ</th></tr></thead>
+    </div>`;
+  let title='รายงานการจัดส่ง / DELIVERY REPORT', tbl='';
+  if(type==='deliveries'){
+    title='รายงานการจัดส่งรายร้าน / DELIVERY DETAIL';
+    const totBox=sum(dels,'BoxQty');
+    tbl=`<div class="sec-title">รายการจัดส่งรายร้าน</div>
+    <table><colgroup><col style="width:13%"><col style="width:22%"><col><col style="width:13%"><col style="width:9%"><col style="width:13%"></colgroup>
+    <thead><tr><th>วันที่</th><th>ลูกค้า</th><th>สาขา / ที่อยู่</th><th>เลขบิล</th><th>กล่อง</th><th>สถานะ</th></tr></thead>
+    <tbody>${dels.map(d=>`<tr><td>${thDate(d.DeliveryDate)}</td><td>${esc(d.CustomerName)}</td><td class="addr">${esc([d.BranchName,d.Address].filter(Boolean).join(' · '))}</td><td>${esc(d.InvoiceNo||'-')}</td><td class="r">${int(d.BoxQty)}</td><td>${(DSTATUS[d.Status]||{}).label||d.Status}</td></tr>`).join('')||'<tr><td colspan="6" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
+    <tfoot><tr><th colspan="4" class="r">รวมกล่อง</th><th class="r" colspan="2">${int(totBox)} กล่อง</th></tr></tfoot></table>`;
+  } else if(type==='expenses'){
+    title='รายงานค่าใช้จ่าย / EXPENSE REPORT';
+    tbl=`<div class="sec-title">ค่าใช้จ่ายแยกประเภท (ราย Route)</div>
+    <table><thead><tr><th class="tl">Route</th><th>วันที่</th><th>ค่าน้ำมัน</th><th>ทางด่วน</th><th>จอดรถ</th><th>รถภายนอก</th><th>อื่นๆ</th><th>รวม</th></tr></thead>
+    <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td class="r">${money(r.EstimatedFuelCost)}</td><td class="r">${money(r.EstimatedTollCost)}</td><td class="r">${money(r.EstimatedParkingCost)}</td><td class="r">${money(r.EstimatedExternalCost)}</td><td class="r">${money(r.EstimatedOtherCost)}</td><td class="r">${money(r.EstimatedTotalCost)}</td></tr>`).join('')||'<tr><td colspan="8" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
+    <tfoot><tr><th colspan="2" class="r">รวมทั้งสิ้น</th><th class="r">${money(sum(routes,'EstimatedFuelCost'))}</th><th class="r">${money(sum(routes,'EstimatedTollCost'))}</th><th class="r">${money(sum(routes,'EstimatedParkingCost'))}</th><th class="r">${money(sum(routes,'EstimatedExternalCost'))}</th><th class="r">${money(sum(routes,'EstimatedOtherCost'))}</th><th class="r">${money(total)}</th></tr></tfoot></table>`;
+  } else {
+    tbl=`<div class="sec-title">รายการ Route</div>
+    <table><thead><tr><th class="tl">Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th>จุด</th><th>กล่อง</th><th>ระยะทาง</th><th>ต้นทุน</th><th>สถานะ</th></tr></thead>
     <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'-')}</td><td class="r">${int(r.TotalStops)}</td><td class="r">${int(r.TotalBoxes)}</td><td class="r">${num1(r.TotalDistance)}</td><td class="r">${money(r.EstimatedTotalCost)}</td><td>${(DSTATUS[r.Status]||{}).label||r.Status}</td></tr>`).join('')||'<tr><td colspan="9" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
     <tfoot><tr><th colspan="7" class="r">รวมต้นทุน</th><th class="r" colspan="2">${money(total)} บาท</th></tr></tfoot></table>`;
-  Printer.open('รายงานการจัดส่ง', rSize(), body);
+  }
+  Printer.open(title, rSize(), head + tbl);
 }
 async function printRouteNote(r){
   if(!r) return;
