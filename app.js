@@ -40,7 +40,7 @@ function deriveVehStatus(v){
 }
 const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อกิโลเมตร', PER_DAY:'ต่อวัน', CUSTOM:'กำหนดเอง' };
 
-// MVP — 5 เมนูหลัก (workflow-first) · เมนูขั้นสูงอื่น ๆ ย้ายไปหน้า "ตั้งค่า"
+// MVP — 5 เมนูหลัก (workflow-first) + กลุ่มติดตามที่ใช้บ่อย · เมนูขั้นสูงอื่น ๆ อยู่ในหน้า "ตั้งค่า"
 const NAV = [
   { group:'', items:[
     { id:'dashboard',  label:'หน้าหลัก',      icon:'home' },
@@ -48,6 +48,11 @@ const NAV = [
     { id:'planning',   label:'วางแผนส่ง',     icon:'route' },
     { id:'expenses',   label:'ค่าใช้จ่าย',     icon:'wallet' },
     { id:'reports',    label:'รายงาน',        icon:'bar-chart-3' },
+  ]},
+  { group:'ติดตาม', items:[
+    { id:'tracking', label:'ติดตามพัสดุ',    icon:'package-search' },
+    { id:'livemap',  label:'แผนที่ติดตามรถ', icon:'map-pin' },
+    { id:'driver',   label:'โหมดคนขับ',      icon:'smartphone' },
   ]},
 ];
 const NAV_FOOT = [

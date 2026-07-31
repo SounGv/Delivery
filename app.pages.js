@@ -1167,12 +1167,8 @@ ROUTES.settings = async function(view){
       item('#/vehicles','truck','รถบริษัท','ทะเบียน · ความจุ · ค่าน้ำมัน'),
       item('#/external','truck-electric','รถจ้างภายนอก','ผู้ให้บริการ + เรตราคา'),
       item('#/employees','users','พนักงานส่งสินค้า','คนขับ + รถประจำ')])}
-    ${grp('การจัดส่ง & ติดตาม',[
+    ${grp('รอบส่ง & การเงินเพิ่มเติม',[
       item('#/rounds','list-checks','รอบส่งสินค้า','Route ที่จัดแล้ว'),
-      item('#/tracking','package-search','ติดตามพัสดุ','ค้นเลขบิล / สถานะ'),
-      item('#/livemap','map-pin','แผนที่ติดตามรถ','ตำแหน่งรถสดจาก GPS'),
-      item('#/driver','smartphone','โหมดคนขับ','สำหรับมือถือคนขับ')])}
-    ${grp('การเงินเพิ่มเติม',[
       item('#/advance','hand-coins','เงินทดรองจ่าย','เบิก / เคลียร์เงินคนขับ'),
       item('#/routecost','calculator','ต้นทุนต่อ Route','แยกค่าใช้จ่ายราย Route')])}
     ${grp('ระบบ & การเชื่อมต่อ',[
