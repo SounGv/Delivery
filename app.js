@@ -40,36 +40,18 @@ function deriveVehStatus(v){
 }
 const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อกิโลเมตร', PER_DAY:'ต่อวัน', CUSTOM:'กำหนดเอง' };
 
+// MVP — 5 เมนูหลัก (workflow-first) · เมนูขั้นสูงอื่น ๆ ย้ายไปหน้า "ตั้งค่า"
 const NAV = [
-  { group:'OPERATIONS', items:[
-    { id:'dashboard', label:'Dashboard', icon:'layout-dashboard' },
-    { id:'deliveries', label:'งานส่งสินค้า', icon:'package' },
-    { id:'planning', label:'วางแผนเส้นทาง', icon:'route' },
-    { id:'rounds', label:'รอบส่งสินค้า', icon:'list-checks' },
-    { id:'tracking', label:'ติดตามพัสดุ', icon:'package-search' },
-    { id:'livemap', label:'แผนที่ติดตาม', icon:'map-pin' },
-    { id:'driver', label:'โหมดคนขับ', icon:'smartphone' },
-  ]},
-  { group:'FLEET', items:[
-    { id:'vehicles', label:'รถบริษัท', icon:'truck' },
-    { id:'external', label:'รถจ้างภายนอก', icon:'truck-electric' },
-  ]},
-  { group:'FINANCE', items:[
-    { id:'expenses', label:'ค่าใช้จ่าย', icon:'receipt' },
-    { id:'advance', label:'เงินทดรองจ่าย', icon:'hand-coins' },
-    { id:'routecost', label:'ต้นทุนต่อ Route', icon:'calculator' },
-  ]},
-  { group:'MASTER DATA', items:[
-    { id:'customers', label:'ลูกค้า / สาขา', icon:'store' },
-    { id:'employees', label:'พนักงานส่งสินค้า', icon:'users' },
-  ]},
-  { group:'REPORTS', items:[
-    { id:'reports', label:'รายงาน', icon:'bar-chart-3' },
+  { group:'', items:[
+    { id:'dashboard',  label:'หน้าหลัก',      icon:'home' },
+    { id:'deliveries', label:'งานส่งสินค้า',  icon:'package' },
+    { id:'planning',   label:'วางแผนส่ง',     icon:'route' },
+    { id:'expenses',   label:'ค่าใช้จ่าย',     icon:'wallet' },
+    { id:'reports',    label:'รายงาน',        icon:'bar-chart-3' },
   ]},
 ];
 const NAV_FOOT = [
-  { id:'settings', label:'ตั้งค่าระบบ', icon:'settings' },
-  { id:'cartrack', label:'Cartrack Integration', icon:'satellite-dish' },
+  { id:'settings', label:'ตั้งค่า', icon:'settings' },
 ];
 
 /* ---------------- STATE ---------------- */
@@ -510,7 +492,7 @@ function buildNav(){
   const nav = el('nav');
   let html='';
   NAV.forEach(g=>{
-    html += `<div class="nav-group">${g.group}</div>`;
+    if(g.group) html += `<div class="nav-group">${g.group}</div>`;
     g.items.forEach(it=>{ html += navLink(it); });
   });
   nav.innerHTML = html;
@@ -523,12 +505,12 @@ function buildNav(){
   } else { $('#footLinks').innerHTML = NAV_FOOT.map(navLink).join(''); }
   // mobile bottom nav
   const m = el('mnav');
-  const mItems = [ {id:'dashboard',icon:'layout-dashboard',label:'หน้าหลัก'},{id:'deliveries',icon:'package',label:'งานส่ง'},
-    {id:'planning',icon:'route',label:'จัด Route'},{id:'livemap',icon:'map-pin',label:'แผนที่'},{id:'driver',icon:'smartphone',label:'คนขับ'} ];
+  const mItems = [ {id:'dashboard',icon:'home',label:'หน้าหลัก'},{id:'deliveries',icon:'package',label:'งานส่ง'},
+    {id:'planning',icon:'route',label:'วางแผน'},{id:'expenses',icon:'wallet',label:'ค่าใช้จ่าย'},{id:'reports',icon:'bar-chart-3',label:'รายงาน'} ];
   m.innerHTML = mItems.map(it=>`<a href="#/${it.id}" class="${Store.page===it.id?'active':''}"><i data-lucide="${it.icon}"></i>${it.label}</a>`).join('');
   icons();
 }
-function navLink(it){ return `<a href="#/${it.id}" class="nav-item ${Store.page===it.id?'active':''}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span>${it.id==='dashboard'?'<i data-lucide="chevron-right" class="chev"></i>':''}</a>`; }
+function navLink(it){ return `<a href="#/${it.id}" class="nav-item ${Store.page===it.id?'active':''}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`; }
 
 function updateSync(){
   const live = API.configured() && Store.live;

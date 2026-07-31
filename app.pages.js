@@ -13,98 +13,36 @@ function matchSearch(obj, fields){ if(!Store.search) return true; return fields.
    ================================================================ */
 ROUTES.dashboard = async function(view){
   const dash = Store.data.dashboard || {};
-  const k = dash.kpi || {total:{count:0,boxes:0}}; const c = dash.cost||{}; const f = dash.fleet||{};
+  const k = dash.kpi || {}; const c = dash.cost || {};
+  const g = s => (k[s] && k[s].count) || 0;
+  const tot = g('total'), done = g('completed'), failed = g('failed');
+  const pending = Math.max(0, tot - done - failed);
   const dels = Store.data.deliveries || [];
-  const drafts = dels.filter(d=>d.Status==='Draft');
-  const routes = dash.routes || [];
-  const kpiCard = (icon, bg, col, lbl, val, unit, footN) => `
-    <div class="kpi"><div class="top"><div class="ic" style="background:${bg};color:${col}"><i data-lucide="${icon}"></i></div>
-      <div><div class="lbl">${lbl}</div><div class="val"><span class="num tab">${int(val)}</span><span class="unit">${unit}</span></div></div></div>
-      <div class="foot">จำนวนกล่อง <b>${int(footN)}</b> กล่อง</div></div>`;
-  const costCard = (icon,bg,col,lbl,val)=>`<div class="cost"><div class="lbl">${lbl}</div><div class="val tab">${money(val)}</div><div class="unit">บาท</div><div class="ic" style="background:${bg};color:${col}"><i data-lucide="${icon}"></i></div></div>`;
-
+  const todo = dels.filter(d=>['Draft','Planned','Assigned','In Progress'].includes(d.Status));
+  const stat = (label,val,unit,color,icon,sub)=>`<div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:7px">
+      <div class="flex aic gap8"><span style="width:38px;height:38px;border-radius:11px;background:${color}1a;color:${color};display:flex;align-items:center;justify-content:center"><i data-lucide="${icon}"></i></span>
+        <span class="small muted">${label}</span></div>
+      <div style="font-size:30px;font-weight:800;line-height:1.05" class="tab">${val}<span style="font-size:14px;font-weight:600;color:#9AA3B2;margin-left:5px">${unit||''}</span></div>
+      ${sub?`<div class="small muted">${sub}</div>`:'<div class="small muted">&nbsp;</div>'}</div>`;
   page(view, `
-    ${head('Dashboard', `ศูนย์ควบคุมการจัดส่ง · ${thDate(Store.date)} · ${int(k.total.count)} งาน · ${int(k.total.boxes)} กล่อง`,
-      `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>
-       <a class="btn btn-primary btn-sm" href="#/planning"><i data-lucide="route"></i>ไปหน้าจัด Route</a>`)}
-
-    <div class="kpi-row">
-      ${kpiCard('clipboard-list','#EFF4FF','#2563EB','งานส่งทั้งหมด',k.total.count,'รายการ',k.total.boxes)}
-      ${kpiCard('clock','#FFFBEB','#F59E0B','รอจัด Route',k.draft.count,'รายการ',k.draft.boxes)}
-      ${kpiCard('git-fork','#F3EEFF','#7C3AED','วางแผนแล้ว',k.planned.count,'รายการ',k.planned.boxes)}
-      ${kpiCard('truck','#EFF4FF','#2563EB','กำลังส่ง',k.inProgress.count,'รายการ',k.inProgress.boxes)}
-      ${kpiCard('check-circle-2','#ECFDF5','#10B981','ส่งสำเร็จ',k.completed.count,'รายการ',k.completed.boxes)}
-      ${kpiCard('x-circle','#FEF2F2','#EF4444','ส่งไม่สำเร็จ',k.failed.count,'รายการ',k.failed.boxes)}
+    ${head('หน้าหลัก', thDate(Store.date), '<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:14px;margin-bottom:18px">
+      ${stat('งานวันนี้', int(tot), 'งาน', '#2563EB','package', int((k.total&&k.total.boxes)||0)+' กล่อง')}
+      ${stat('ส่งแล้ว', int(done), 'งาน', '#10B981','check-circle-2')}
+      ${stat('ค้างส่ง', int(pending), 'งาน', '#F59E0B','clock')}
+      ${stat('ค่าใช้จ่ายวันนี้', money(c.total||0), 'บาท', '#7C3AED','wallet')}
     </div>
-
-    <div class="card mt16">
-      <div class="flex between aic mb14"><span class="h-card">สรุปต้นทุนการจัดส่งวันนี้</span>
-        <span class="small muted">พร้อมใช้ ${int(f.available)} · ใช้งาน ${int(f.inUse)} · ออฟไลน์ ${int(f.offline)} คัน</span></div>
-      <div class="cost-row">
-        ${costCard('wallet','#ECFDF5','#10B981','ต้นทุนรวมวันนี้',c.total)}
-        ${costCard('truck','#EFF4FF','#2563EB','ต้นทุนรถบริษัท',c.company)}
-        ${costCard('truck-electric','#FFF4E5','#F59E0B','ต้นทุนรถภายนอก',c.external)}
-        ${costCard('receipt','#F3EEFF','#7C3AED','ค่าใช้จ่ายอื่นๆ',c.other)}
-        ${costCard('pie-chart','#EAF6FA','#0891B2','เฉลี่ยต่อ Route',c.avgPerRoute)}
-        ${costCard('map-pin','#FFFBEB','#D97706','เฉลี่ยต่อจุดส่ง',c.avgPerStop)}
-        ${costCard('box','#FEF2F2','#EF4444','เฉลี่ยต่อกล่อง',c.avgPerBox)}
-      </div>
-    </div>
-
-    <div class="grid grid-2 mt16" style="grid-template-columns:1.55fr 1fr">
-      <div class="card">
-        <div class="flex between aic mb14"><span class="h-card">แผนที่เส้นทางวันนี้</span>
-          <span class="pill-live"><span class="dot" style="background:#10B981"></span>${int(f.available+f.inUse)} คัน · ${Store.live?'สด':'ทดลอง'}</span></div>
-        <div id="dashMap" class="map" style="height:320px"></div>
-      </div>
-      <div class="card" style="display:flex;flex-direction:column">
-        <div class="flex between aic mb14"><span class="h-card">งานที่ต้องจัด Route</span><a href="#/deliveries">ดูทั้งหมด</a></div>
-        <div class="tbl-wrap" style="flex:1">
-        ${drafts.length? `<table class="tbl"><thead><tr><th>ลูกค้า</th><th>สาขา</th><th class="r">กล่อง</th><th>Priority</th><th class="r"></th></tr></thead>
-          <tbody>${drafts.slice(0,6).map(d=>`<tr><td class="strong">${esc(d.CustomerName)}</td><td class="muted">${esc(d.BranchName)}</td><td class="r tab">${int(d.BoxQty)}</td><td>${priBadge(d.Priority)}</td><td class="r"><a class="btn btn-ghost btn-sm" href="#/planning">จัด Route</a></td></tr>`).join('')}</tbody></table>`
-          : emptyState('ไม่มีงานรอจัด Route','ทุกงานถูกวางแผนแล้ว')}
-        </div>
-        <a class="btn btn-primary btn-block mt16" href="#/planning"><i data-lucide="brain-circuit"></i>จัดลำดับเส้นทางอัตโนมัติ</a>
-      </div>
-    </div>
-
-    <div class="grid mt16" style="grid-template-columns:1.5fr 1fr">
-      <div class="card">
-        <div class="h-card mb14">Route วันนี้</div>
-        <div class="tbl-wrap">
-        ${routes.length? `<table class="tbl"><thead><tr><th>Route ID</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">ต้นทุน</th><th>สถานะ</th></tr></thead>
-          <tbody>${routes.map(r=>`<tr><td><a href="#/rounds" class="mono strong">${esc(r.RouteID)}</a></td>
-            <td>${r.RouteType==='EXTERNAL_VEHICLE'?'<span class="badge b-amber">รถภายนอก</span>':'<span class="badge b-blue">รถบริษัท</span>'}</td>
-            <td>${esc(r.DriverName||'—')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td>
-            <td class="r tab">${num1(r.TotalDistance)} กม.</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td></tr>`).join('')}</tbody></table>`
-          : emptyState('ยังไม่มี Route วันนี้','เริ่มจัด Route จากหน้าวางแผนเส้นทาง')}
-        </div>
-      </div>
-      <div class="card">
-        <div class="h-card mb14">กิจกรรมล่าสุด</div>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          ${(dash.activities||[]).slice(0,7).map(a=>`<div class="flex gap12" style="align-items:flex-start">
-            <div style="width:32px;height:32px;border-radius:9px;background:#EFF4FF;color:#2563EB;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="${actIcon(a.Action)}" style="width:16px;height:16px"></i></div>
-            <div style="flex:1"><div style="font-size:13px;color:#1F2533">${esc(a.Description)}</div><div class="small muted">${esc(a.User||'')} · ${ago(a.Timestamp)}</div></div></div>`).join('') || emptyState('ยังไม่มีกิจกรรม')}
-        </div>
+    <div class="card">
+      <div class="flex between aic wrap gap8 mb14"><span class="h-card">งานที่ต้องส่งวันนี้ (${todo.length})</span>
+        <a class="btn btn-primary" href="#/planning"><i data-lucide="route"></i>วางแผนส่ง</a></div>
+      <div class="tbl-wrap">
+      ${todo.length? `<table class="tbl"><thead><tr><th>ลูกค้า</th><th>สาขา / ที่อยู่</th><th class="r">กล่อง</th><th>Priority</th><th>สถานะ</th></tr></thead>
+        <tbody>${todo.map(d=>`<tr><td class="strong">${esc(d.CustomerName)}</td><td class="muted small">${esc(d.BranchName||d.Address||'')}</td><td class="r tab">${int(d.BoxQty)}</td><td>${priBadge(d.Priority)}</td><td>${dstatusBadge(d.Status)}</td></tr>`).join('')}</tbody></table>`
+        : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="plus"></i>เพิ่มงานส่ง</a>')}
       </div>
     </div>
   `);
-
-  // map
-  setTimeout(()=>{
-    if(!el('dashMap')) return;
-    const wh = warehouse();
-    const map = MapUtil.make('dashMap', wh);
-    MapUtil.whMarker(map, wh);
-    const pts=[[wh.lat,wh.lng]];
-    dels.forEach((d,i)=>{ if(d.Latitude&&d.Longitude){ MapUtil.stopMarker(map,d,i+1,(PRIORITY[d.Priority]||PRIORITY.NORMAL).color); pts.push([+d.Latitude,+d.Longitude]); } });
-    (Store._live?Store._live.vehicles:(Store.data.vehicles||[]).map(v=>({...v,lat:v.CurrentLatitude,lng:v.CurrentLongitude,speed:v.CurrentSpeed}))).forEach(v=>{ if(v.lat&&v.lng){ MapUtil.vehMarker(map,v); pts.push([+v.lat,+v.lng]); } });
-    if(pts.length>1) map.fitBounds(pts,{padding:[30,30]});
-    icons();
-  },60);
-
-  view.querySelector('[data-act="sync"]').onclick = async e=>{ e.target.closest('button').disabled=true; await loadBootstrap(); render(); toast('รีเฟรชข้อมูลแล้ว','ok'); };
+  const sy=view.querySelector('[data-act="sync"]'); if(sy) sy.onclick = async e=>{ e.target.closest('button').disabled=true; await loadBootstrap(); render(); toast('รีเฟรชข้อมูลแล้ว','ok'); };
 };
 function actIcon(a){ return {CREATE_DELIVERY:'package-plus',CREATE_ROUTE:'route',CREATE_CUSTOMER:'store',SYNC_CARTRACK:'satellite-dish',COMPLETE_DELIVERY:'check-circle-2',FAILED_DELIVERY:'x-circle',START_ROUTE:'play',CREATE_EXPENSE:'receipt',CREATE_CLAIM:'hand-coins',SEED:'database'}[a]||'activity'; }
 
@@ -272,7 +210,7 @@ ROUTES.planning = async function(view){
   const selBoxes = selDels.reduce((n,d)=>n+(+d.BoxQty||0),0);
 
   page(view, `
-    ${head('วางแผนเส้นทาง', `Route Decision Center · ${thDate(Store.date)} · เลือก ${selCount} จุด · ${int(selBoxes)} กล่อง`)}
+    ${head('วางแผนส่ง', `${thDate(Store.date)} · เลือก ${selCount} จุด · ${int(selBoxes)} กล่อง`)}
     <div class="grid plan-3" style="grid-template-columns:320px 1fr 380px;gap:16px;align-items:start">
 
       <!-- LEFT: deliveries -->
@@ -323,14 +261,14 @@ function decisionInitial(count, boxes){
   const avail=(Store.data.vehicles||[]).filter(v=>v.VehicleStatus==='Available');
   const cap=avail.reduce((n,v)=>n+(+v.CapacityBox||0),0);
   return `
-    <div class="h-card mb14">Route Decision Center</div>
-    <div class="notice info mb14"><i data-lucide="info"></i><div>เลือกงานส่งทางซ้าย แล้วกด <b>วางแผน Route อัตโนมัติ</b> ระบบจะจัดลำดับจุดส่ง ตรวจความจุ แนะนำรถ และคำนวณต้นทุนให้</div></div>
+    <div class="h-card mb14">วางแผนส่ง</div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div>เลือกงานส่งทางซ้าย แล้วกด <b>จัดเส้นทางอัตโนมัติ</b> ระบบจะเรียงลำดับจุดส่ง คำนวณระยะทาง เวลา และแนะนำรถให้</div></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${miniStat('จุดส่งที่เลือก', count+' จุด','map-pin')}
       ${miniStat('จำนวนกล่อง', int(boxes)+' กล่อง','box')}
       ${miniStat('รถบริษัทพร้อมใช้', avail.length+' คัน · '+int(cap)+' กล่อง','truck')}
     </div>
-    <button class="btn btn-primary btn-block btn-lg mt16" id="autoPlan" ${count?'':'disabled'}><i data-lucide="brain-circuit"></i>วางแผน Route อัตโนมัติ</button>`;
+    <button class="btn btn-primary btn-block btn-lg mt16" id="autoPlan" ${count?'':'disabled'}><i data-lucide="brain-circuit"></i>จัดเส้นทางอัตโนมัติ</button>`;
 }
 function miniStat(l,v,ic){ return `<div class="flex between aic" style="padding:11px 13px;border:1px solid var(--border);border-radius:10px">
   <span class="flex aic gap8"><i data-lucide="${ic}" style="width:18px;height:18px;color:#6B7383"></i><span class="small muted">${l}</span></span>
@@ -398,10 +336,8 @@ function renderDecision(){
         <div style="text-align:right"><div>${vstatusBadge(rec.VehicleStatus)}</div><div class="small muted mt16" style="margin-top:4px">ห่างคลัง ${num1(rec._distWh||0)} กม. · จุ ${int(rec.CapacityBox)} กล่อง</div></div></div>
     </div>`:`<div class="notice warn mb14"><i data-lucide="alert-triangle"></i><div>ไม่มีรถบริษัทคันเดียวที่รับงานทั้งหมดได้ — พิจารณา Option ด้านล่าง</div></div>`}
 
-    <div class="strong small muted" style="margin-bottom:8px">ทางเลือก Route</div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
-      ${options.map(o=>optionCard(o)).join('')}
-    </div>
+    ${options.length>1?`<details style="margin-bottom:14px"><summary style="cursor:pointer;font-size:13px;font-weight:600;color:#5f7a00;padding:7px 0;list-style:none">⚙️ ตัวเลือกเส้นทางเพิ่มเติม (${options.length}) — แตะเพื่อเปรียบเทียบ</summary>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${options.map(o=>optionCard(o)).join('')}</div></details>`:''}
 
     <div class="strong small muted" style="margin-bottom:8px">ลำดับจุดส่งที่แนะนำ</div>
     <div style="max-height:170px;overflow-y:auto;margin-bottom:12px" class="scrolly">${seqHtml}</div>
@@ -409,7 +345,7 @@ function renderDecision(){
     <div id="selFormBox">${selForm()}</div>
     <div id="costBox">${selCostBox()}</div>
 
-    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>ยืนยัน Route นี้</button>
+    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>ยืนยันการส่ง</button>
   `;
   icons();
   bindDecisionEvents();
@@ -1090,30 +1026,14 @@ ROUTES.reports = async function(view){
     const totalCost=sum(routes,'EstimatedTotalCost');
     const company=routes.filter(r=>r.RouteType==='COMPANY_VEHICLE');
     const external=routes.filter(r=>r.RouteType==='EXTERNAL_VEHICLE');
-    const dist=sum(routes,'TotalDistance'); const stops=sum(routes,'TotalStops'); const boxes=sum(routes,'TotalBoxes');
-    // group by date
-    const byDate={}; routes.forEach(r=>{ byDate[r.DeliveryDate]=(byDate[r.DeliveryDate]||0)+(+r.EstimatedTotalCost||0); });
-    const days=Object.keys(byDate).sort();
-    const barData=days.map(d=>({l:thDate(d).replace(/ \d{4}$/,''),v:byDate[d]}));
+    const dist=sum(routes,'TotalDistance'); const boxes=sum(routes,'TotalBoxes');
     const kpi=(l,v,u)=>`<div class="cost"><div class="lbl">${l}</div><div class="val tab">${v}</div><div class="unit">${u||''}</div></div>`;
     el('rBody').innerHTML=`
-      <div class="cost-row mb14">
-        ${kpi('จำนวนงาน',int(dels.length),'งาน')}${kpi('จำนวน Route',int(routes.length),'route')}${kpi('จุดส่ง',int(stops),'จุด')}
-        ${kpi('กล่อง',int(boxes),'กล่อง')}${kpi('ระยะทางรวม',num1(dist),'กม.')}${kpi('ต้นทุนรวม',money(totalCost),'บาท')}
-        ${kpi('เฉลี่ย/Route',money(routes.length?totalCost/routes.length:0),'บาท')}
-      </div>
-      <div class="grid" style="grid-template-columns:1.4fr 1fr;gap:16px">
-        <div class="card"><div class="h-card mb14">ต้นทุนรายวัน</div>${Chart.bars(barData,{money:true})}</div>
-        <div class="card"><div class="h-card mb14">รถบริษัท vs รถภายนอก</div>${Chart.donut([{l:'รถบริษัท',v:sum(company,'EstimatedTotalCost'),color:'#2563EB'},{l:'รถภายนอก',v:sum(external,'EstimatedTotalCost'),color:'#F59E0B'}])}</div>
-      </div>
-      <div class="grid mt16" style="grid-template-columns:1fr 1fr;gap:16px">
-        <div class="card"><div class="h-card mb14">จำนวน Route / งาน ต่อวัน</div>${Chart.bars(days.map(d=>({l:thDate(d).replace(/ \d{4}$/,''),v:routes.filter(r=>r.DeliveryDate===d).length})),{color:'#7C3AED'})}</div>
-        <div class="card"><div class="h-card mb14">ต้นทุนแยกประเภท</div>${Chart.donut([
-          {l:'น้ำมัน',v:sum(routes,'EstimatedFuelCost'),color:'#2563EB'},
-          {l:'ทางด่วน',v:sum(routes,'EstimatedTollCost'),color:'#0891B2'},
-          {l:'จอดรถ',v:sum(routes,'EstimatedParkingCost'),color:'#7C3AED'},
-          {l:'รถภายนอก',v:sum(routes,'EstimatedExternalCost'),color:'#F59E0B'},
-          {l:'อื่นๆ',v:sum(routes,'EstimatedOtherCost'),color:'#94A3B8'}])}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:6px">
+        ${kpi('จำนวนงาน',int(dels.length),'งาน')}
+        ${kpi('จำนวนกล่อง',int(boxes),'กล่อง')}
+        ${kpi('ค่าใช้จ่ายรวม',money(totalCost),'บาท')}
+        ${kpi('ระยะทางรวม',num1(dist),'กม.')}
       </div>
       <div id="rDetail"></div>
     `;
@@ -1232,15 +1152,46 @@ async function printRouteNote(r){
 }
 
 /* ================================================================
-   SETTINGS
+   SETTINGS HUB (MVP) — รวมทุกเมนูขั้นสูงไว้ที่เดียว
    ================================================================ */
 ROUTES.settings = async function(view){
+  const item=(href,icon,title,sub,ext)=>`<a href="${href}"${ext?' target="_blank"':''} style="display:flex;align-items:center;gap:13px;padding:15px 16px;background:var(--card,#fff);border:1px solid var(--border);border-radius:14px;text-decoration:none;color:inherit">
+    <span style="width:42px;height:42px;border-radius:11px;background:#eef6cf;color:#5f7a00;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="${icon}"></i></span>
+    <span style="flex:1;min-width:0"><span style="display:block;font-weight:600;font-size:14.5px">${esc(title)}</span><span style="display:block;font-size:12.5px;color:#6B7383;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(sub)}</span></span>
+    <i data-lucide="chevron-right" style="color:#9AA3B2;width:18px;height:18px;flex-shrink:0"></i></a>`;
+  const grp=(t,items)=>`<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9AA3B2;font-weight:700;margin:22px 4px 10px">${esc(t)}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px">${items.join('')}</div>`;
+  page(view, `
+    ${head('ตั้งค่า', 'ข้อมูลหลัก การเชื่อมต่อ และเมนูขั้นสูง — จัดการที่นี่ที่เดียว')}
+    ${grp('ข้อมูลหลัก',[
+      item('#/customers','store','ลูกค้า / สาขา','ร้านค้าปลายทาง + พิกัด GPS'),
+      item('#/vehicles','truck','รถบริษัท','ทะเบียน · ความจุ · ค่าน้ำมัน'),
+      item('#/external','truck-electric','รถจ้างภายนอก','ผู้ให้บริการ + เรตราคา'),
+      item('#/employees','users','พนักงานส่งสินค้า','คนขับ + รถประจำ')])}
+    ${grp('การจัดส่ง & ติดตาม',[
+      item('#/rounds','list-checks','รอบส่งสินค้า','Route ที่จัดแล้ว'),
+      item('#/tracking','package-search','ติดตามพัสดุ','ค้นเลขบิล / สถานะ'),
+      item('#/livemap','map-pin','แผนที่ติดตามรถ','ตำแหน่งรถสดจาก GPS'),
+      item('#/driver','smartphone','โหมดคนขับ','สำหรับมือถือคนขับ')])}
+    ${grp('การเงินเพิ่มเติม',[
+      item('#/advance','hand-coins','เงินทดรองจ่าย','เบิก / เคลียร์เงินคนขับ'),
+      item('#/routecost','calculator','ต้นทุนต่อ Route','แยกค่าใช้จ่ายราย Route')])}
+    ${grp('ระบบ & การเชื่อมต่อ',[
+      item('#/config','sliders-horizontal','ตั้งค่าระบบ · คลัง · ต้นทุน','บริษัท พิกัดคลัง ค่าน้ำมัน + เชื่อม Google'),
+      item('#/cartrack','satellite-dish','Cartrack GPS','เชื่อมต่อ GPS ติดตามรถ'),
+      item('user-guide.html','book-open','คู่มือใช้งาน','วิธีใช้แต่ละหน้าแบบละเอียด',true)])}
+  `);
+};
+
+/* ================================================================
+   SYSTEM CONFIG — คลัง · ต้นทุน · เชื่อมต่อ Google (เข้าจากหน้าตั้งค่า)
+   ================================================================ */
+ROUTES.config = async function(view){
   const settings = await API.get('getSettings');
   const url = API.url();
   const group=(g)=>settings.filter(s=>s.Group===g);
   const fieldFor=(s)=>`<div class="field"><label class="label">${esc(s.Label||s.Key)} <span class="mono small muted">(${esc(s.Key)})</span></label><input class="input" data-skey="${esc(s.Key)}" value="${esc(s.Value)}"></div>`;
   page(view, `
-    ${head('ตั้งค่าระบบ', 'เชื่อมต่อ Google Apps Script + พารามิเตอร์ระบบ')}
+    ${head('ตั้งค่าระบบ', 'คลัง · ต้นทุน · เชื่อมต่อ Google Apps Script', '<a class="btn btn-sm" href="#/settings"><i data-lucide="arrow-left"></i>กลับหน้าตั้งค่า</a>')}
     <div class="card mb14">
       <div class="flex aic gap12 mb14"><div style="width:40px;height:40px;border-radius:11px;background:#EFF4FF;color:#2563EB;display:flex;align-items:center;justify-content:center"><i data-lucide="database"></i></div>
         <div><div class="h-card">แหล่งข้อมูล — Google Apps Script Web App URL</div><div class="small muted">Frontend เรียก API ผ่าน URL นี้เท่านั้น (Sheets ไม่ถูกเรียกตรง)</div></div></div>
