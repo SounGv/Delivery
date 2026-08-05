@@ -1,6 +1,7 @@
 /** Which crew a person belongs to. "online" = the parcel/item production line;
- * "offline" = the attendance/task-based crew (no parcel counts). */
-export type TeamId = "online" | "offline"
+ * "offline" = the attendance/task-based crew (no parcel counts); "receiving" and
+ * "warehouse" are the ฝ่ายรับเข้า / ฝ่ายคลัง crews recorded in the ▶ blocks. */
+export type TeamId = "online" | "offline" | "receiving" | "warehouse"
 
 export interface EmployeeDailyEntry {
   parcels: number | null
@@ -70,6 +71,99 @@ export interface ShipError {
   note: string
 }
 
+/** One row from the standalone "ปัญหารอแก้" sheet — workplace obstacles/issues
+ * reported by staff (unstable internet, printer/ink problems, PC crashes, etc.),
+ * read-only. Dates are "" when the sheet left that cell blank (e.g. not started/fixed yet). */
+export interface WorkIssue {
+  date: string
+  reporter: string
+  category: string
+  detail: string
+  urgency: string
+  assignee: string
+  startDate: string
+  dueDate: string
+  resolution: string
+  status: string
+  verifyResult: string
+  note: string
+}
+
+/** One day's record for a person in the รับเข้า/คลัง sheet. */
+export interface RwDailyEntry {
+  /** ค่าที่ 1 (SKU/บิล). */
+  value1: number | null
+  /** ค่าที่ 2 (จำนวนชิ้น). */
+  value2: number | null
+  checkIn?: string | null
+  checkOut?: string | null
+}
+
+export interface RwStaff {
+  name: string
+  byDate: Record<string, RwDailyEntry>
+  totalValue1: number
+  totalValue2: number
+}
+
+/** A per-person KPI category (e.g. "จำนวนสินค้าที่รับเข้า"). */
+export interface RwStaffCategory {
+  id: string
+  title: string
+  target: string
+  employees: RwStaff[]
+}
+
+/** A team-wide KPI metric with a free-text value per day. */
+export interface RwMetric {
+  id: string
+  title: string
+  target: string
+  byDate: Record<string, string>
+}
+
+export interface RwDepartment {
+  title: string
+  /** Everyone in the department with attendance (check-in/out), merged across rows —
+   * used by the unified Work & Attendance / OT pages. */
+  staff?: RwStaff[]
+  staffCategories: RwStaffCategory[]
+  metrics: RwMetric[]
+}
+
+/** Data from the standalone "รับเข้า + คลัง" work sheet (ฝ่ายรับเข้า / ฝ่ายคลัง). */
+export interface ReceivingWarehouse {
+  dates: string[]
+  departments: RwDepartment[]
+}
+
+/** One day's row from the standalone "รายงานคำสั่งซื้อ" sheet (BigSeller order-report export). */
+export interface OrderReportDay {
+  date: string
+  effSales: number
+  effOrders: number
+  totalOrders: number
+  parcels: number
+  totalRevenue: number
+  sellerSubsidy: number
+  productSales: number
+  origPrice: number
+  sales: number
+  refundAmount: number
+  refundOrders: number
+  refundCustomers: number
+  /** Percent, e.g. 0.47 means 0.47%. */
+  refundRate: number
+  cancelledAmount: number
+  cancelledOrders: number
+  aov: number
+  discountCode: number
+}
+
+export interface OrderReport {
+  days: OrderReportDay[]
+}
+
 export interface DashboardResponse {
   generatedAt: string
   todayDate: string
@@ -87,6 +181,15 @@ export interface DashboardResponse {
   /** Detailed post-shipment errors from the standalone error sheet. Optional:
    * absent until the Apps Script parser that reads that sheet is redeployed. */
   shipErrors?: ShipError[]
+  /** ฝ่ายรับเข้า / ฝ่ายคลัง work sheet. Optional/null until the parser that reads
+   * that tab is redeployed. */
+  receivingWarehouse?: ReceivingWarehouse | null
+  /** BigSeller order-report export ("รายงานคำสั่งซื้อ"). Optional/null until the
+   * parser that reads that tab is redeployed. */
+  orderReport?: OrderReport | null
+  /** Workplace obstacles/issues log ("ปัญหารอแก้"). Optional: absent until the
+   * parser that reads that tab is redeployed. */
+  workIssues?: WorkIssue[]
 }
 
 export interface ApiErrorResponse {

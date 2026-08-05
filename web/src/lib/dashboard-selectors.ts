@@ -1,4 +1,4 @@
-import type { Category, DashboardResponse, Employee, TeamId } from "@/api/types"
+import type { Category, DashboardResponse, Employee, EmployeeDailyEntry, TeamId } from "@/api/types"
 import { dateFromIso, isoDateOf } from "./format"
 
 /** A person's crew, defaulting to "online" for back-compat with payloads from
@@ -10,6 +10,8 @@ export function teamOf(employee: Employee): TeamId {
 export const TEAM_LABELS: Record<TeamId, string> = {
   online: "ออนไลน์",
   offline: "ออฟไลน์",
+  receiving: "ฝ่ายรับเข้า",
+  warehouse: "ฝ่ายคลัง",
 }
 
 /** Employees on the given crew. */
@@ -21,6 +23,113 @@ export function employeesForTeam(employees: Employee[], team: TeamId): Employee[
  * the team switcher entirely on older payloads (pre-parser-split) where everyone is online. */
 export function hasOfflineTeam(employees: Employee[]): boolean {
   return employees.some((e) => teamOf(e) === "offline")
+}
+
+// ── Department-wide people (attendance / OT) ─────────────────────────────────
+// The attendance & OT pages show everyone across all departments — the two
+// production crews (ออนไลน์/ออฟไลน์) plus the ฝ่ายรับเข้า/ฝ่ายคลัง staff — with a
+// single department filter. This normalises both data shapes into one Employee list.
+
+export const ALL_DEPARTMENTS = "__all_depts__"
+
+export interface DeptEmployee extends Employee {
+  department: string
+}
+
+/** Department labels that are the ฝ่ายรับเข้า/ฝ่ายคลัง crews (a person's "home"). */
+export const RW_DEPARTMENTS = new Set(["ฝ่ายรับเข้า", "ฝ่ายคลัง"])
+
+/**
+ * Every person who has (or can have) attendance, tagged with a department, drawn from
+ * BOTH shapes the sheet uses: the roster (`employees`, whose `team` now covers all four
+ * crews) and the ฝ่ายรับเข้า/ฝ่ายคลัง blocks (`receivingWarehouse`, where value1→parcels
+ * and value2→items). People are merged by department+name so the two sources can never
+ * double-count, and someone whose home is ฝ่ายรับเข้า/ฝ่ายคลัง is listed under that
+ * department only — their production-tab clock-ins (from helping the online/offline
+ * line) fold into that one record.
+ */
+export function buildDepartmentEmployees(data: DashboardResponse): DeptEmployee[] {
+  const byKey = new Map<string, DeptEmployee>() // `${department}|${name}`
+  const homeDept = new Map<string, string>() // name -> ฝ่ายรับเข้า / ฝ่ายคลัง
+
+  function upsert(name: string, department: string, entries: [string, EmployeeDailyEntry][]) {
+    const key = `${department}|${name}`
+    let de = byKey.get(key)
+    if (!de) {
+      de = { name, department, byDate: {}, totalParcels: 0, totalItems: 0 }
+      byKey.set(key, de)
+    }
+    for (const [date, entry] of entries) {
+      const cur = de.byDate[date]
+      de.byDate[date] = {
+        parcels: cur?.parcels ?? entry.parcels ?? null,
+        items: cur?.items ?? entry.items ?? null,
+        checkIn: cur?.checkIn ?? entry.checkIn ?? null,
+        checkOut: cur?.checkOut ?? entry.checkOut ?? null,
+      }
+    }
+    return de
+  }
+
+  for (const e of data.employees) {
+    const dept = TEAM_LABELS[teamOf(e)]
+    upsert(e.name, dept, Object.entries(e.byDate))
+    if (RW_DEPARTMENTS.has(dept)) homeDept.set(e.name, dept)
+  }
+
+  for (const d of data.receivingWarehouse?.departments ?? []) {
+    // Prefer the merged `staff` list; fall back to staffCategories for older payloads.
+    const source = d.staff && d.staff.length ? d.staff : d.staffCategories.flatMap((c) => c.employees)
+    for (const emp of source) {
+      const entries: [string, EmployeeDailyEntry][] = Object.entries(emp.byDate).map(([date, v]) => [
+        date,
+        { parcels: v.value1, items: v.value2, checkIn: v.checkIn ?? null, checkOut: v.checkOut ?? null },
+      ])
+      upsert(emp.name, d.title, entries)
+      homeDept.set(emp.name, d.title)
+    }
+  }
+
+  const out: DeptEmployee[] = []
+  for (const de of byKey.values()) {
+    const home = homeDept.get(de.name)
+    if (home && home !== de.department) {
+      // Fold this production record into the person's home-department record.
+      const target = byKey.get(`${home}|${de.name}`)
+      if (target) {
+        for (const [date, entry] of Object.entries(de.byDate)) {
+          const cur = target.byDate[date]
+          target.byDate[date] = {
+            parcels: cur?.parcels ?? entry.parcels,
+            items: cur?.items ?? entry.items,
+            checkIn: cur?.checkIn ?? entry.checkIn ?? null,
+            checkOut: cur?.checkOut ?? entry.checkOut ?? null,
+          }
+        }
+        continue
+      }
+    }
+    out.push(de)
+  }
+
+  for (const de of out) {
+    de.totalParcels = 0
+    de.totalItems = 0
+    for (const entry of Object.values(de.byDate)) {
+      if (typeof entry.parcels === "number") de.totalParcels += entry.parcels
+      if (typeof entry.items === "number") de.totalItems += entry.items
+    }
+  }
+  return out
+}
+
+/** Distinct department labels present in the data, in a stable display order. */
+export function availableDepartments(employees: DeptEmployee[]): string[] {
+  const order = ["ออนไลน์", "ออฟไลน์", "ฝ่ายรับเข้า", "ฝ่ายคลัง"]
+  const present = new Set(employees.map((e) => e.department))
+  const known = order.filter((d) => present.has(d))
+  const extra = [...present].filter((d) => !order.includes(d))
+  return [...known, ...extra]
 }
 
 /** Returns a copy of the employee with byDate/totals restricted to [start, end] (inclusive). */

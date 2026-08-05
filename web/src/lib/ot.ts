@@ -174,8 +174,13 @@ export interface OtRecord {
 export function collectOtRecords(
   employees: Employee[],
   config: OtConfig,
-  range?: { start: string; end: string }
+  range?: { start: string; end: string },
+  options?: { includeZeroOt?: boolean }
 ): OtRecord[] {
+  // includeZeroOt also keeps days that recorded a clock time but produced no overtime
+  // (left at/before the normal end hour). The OT & work-time TABLE uses it so no worked
+  // day is silently missing; OT summaries/approvals still count only otHours > 0.
+  const includeZeroOt = options?.includeZeroOt === true
   const records: OtRecord[] = []
   for (const e of employees) {
     for (const [date, entry] of Object.entries(e.byDate)) {
@@ -185,7 +190,8 @@ export function collectOtRecords(
       const status = calculateWorkStatus(entry)
       if (!status) continue
       const otHours = calculateOtHours(entry, config)
-      if (otHours <= 0) continue
+      const hasClockTime = !!entry.checkIn || !!entry.checkOut
+      if (otHours <= 0 && !(includeZeroOt && hasClockTime)) continue
       records.push({
         date,
         employeeName: e.name,
@@ -309,6 +315,46 @@ export function collectWorkedHours(
         itemsPerHour: worked > 0 ? Math.round((items / worked) * 10) / 10 : 0,
         dynamicTarget: target,
         achievementPct: target > 0 ? Math.round((parcels / target) * 1000) / 10 : 0,
+      })
+    }
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date) || a.employeeName.localeCompare(b.employeeName))
+}
+
+/** An employee-day that recorded a clock time but no usable worked span — only
+ * check-in (or only check-out), or a check-out that isn't after the check-in. The day
+ * still happened, so attendance views list it explicitly instead of dropping it. */
+export interface PartialAttendanceRecord {
+  date: string
+  employeeName: string
+  checkIn: string | null
+  checkOut: string | null
+  parcels: number
+  items: number
+}
+
+/** The employee-days `collectWorkedHours` has to skip, but which DO carry a clock time —
+ * the exact complement, so the two together cover every recorded time in the sheet. */
+export function collectPartialAttendance(
+  employees: Employee[],
+  config: OtConfig,
+  range?: { start: string; end: string }
+): PartialAttendanceRecord[] {
+  const out: PartialAttendanceRecord[] = []
+  for (const e of employees) {
+    for (const [date, entry] of Object.entries(e.byDate)) {
+      if (range && (date < range.start || date > range.end)) continue
+      if (date < config.attendanceStartDate) continue
+      const worked = calculateWorkedHours(entry, config)
+      if (worked !== null && worked > 0) continue // already a complete record
+      if (timeToMinutes(entry.checkIn) === null && timeToMinutes(entry.checkOut) === null) continue
+      out.push({
+        date,
+        employeeName: e.name,
+        checkIn: entry.checkIn ?? null,
+        checkOut: entry.checkOut ?? null,
+        parcels: entry.parcels ?? 0,
+        items: entry.items ?? 0,
       })
     }
   }

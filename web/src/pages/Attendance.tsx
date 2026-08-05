@@ -1,51 +1,151 @@
 import { useMemo, useState } from "react"
-import { Boxes, CalendarCheck2, Clock, Gauge, LogIn, PackageCheck, Timer, Users } from "lucide-react"
-import { useTeamDashboard } from "@/api/queries"
+import { Boxes, CalendarCheck2, Clock, Download, Gauge, LogIn, PackageCheck, Timer, Users } from "lucide-react"
+import { useDashboardQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { OtDataNotice } from "@/components/ot/OtDataNotice"
 import {
+  ARRIVAL_STATUS_LABEL,
+  arrivalStatus,
+  collectPartialAttendance,
   collectWorkedHours,
   datasetHasTimeData,
   getWorkedHoursSummary,
   timeToMinutes,
 } from "@/lib/ot"
+import { ALL_DEPARTMENTS, availableDepartments, buildDepartmentEmployees } from "@/lib/dashboard-selectors"
+import { downloadReportExcel } from "@/lib/exportReportExcel"
 import { useOtConfig } from "@/lib/settingsContext"
 import { formatMonthLabel } from "@/lib/format"
 
 export function Attendance() {
-  const { data, isLoading, isError, error } = useTeamDashboard()
+  const { data, isLoading, isError, error } = useDashboardQuery()
   const otConfig = useOtConfig()
   const [selectedMonth, setSelectedMonth] = useState("")
+  const [department, setDepartment] = useState(ALL_DEPARTMENTS)
   const [employee, setEmployee] = useState("all")
 
   const availableMonths = useMemo(
     () => (data ? [...new Set(data.dates.map((d) => d.slice(0, 7)))].sort() : []),
     [data]
   )
+  // All people across every department (ออนไลน์/ออฟไลน์/ฝ่ายรับเข้า/ฝ่ายคลัง).
+  const deptEmployees = useMemo(() => (data ? buildDepartmentEmployees(data) : []), [data])
+  const departments = useMemo(() => availableDepartments(deptEmployees), [deptEmployees])
 
   if (isLoading) return <LoadingSkeletonGrid count={4} />
   if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
 
-  const hasTime = datasetHasTimeData(data.employees)
+  const hasTime = datasetHasTimeData(deptEmployees)
   const currentMonth = data.todayDate.slice(0, 7)
   const activeMonth = selectedMonth || currentMonth
   const workStart = otConfig.workStartHour * 60
 
+  const scopedEmployees = department === ALL_DEPARTMENTS
+    ? deptEmployees
+    : deptEmployees.filter((e) => e.department === department)
+
   const range = { start: `${activeMonth}-01`, end: `${activeMonth}-31` }
-  const all = collectWorkedHours(data.employees, otConfig, range)
+  const all = collectWorkedHours(scopedEmployees, otConfig, range)
   const rows = employee === "all" ? all : all.filter((r) => r.employeeName === employee)
   const summary = getWorkedHoursSummary(rows)
 
-  const employeeNames = [...new Set(data.employees.map((e) => e.name))].sort()
+  // Days that recorded a clock time but no usable span (e.g. check-in with no check-out)
+  // are listed too, so the table matches every time entered in the sheet. Productivity
+  // averages above stay based on complete days only.
+  const partialAll = collectPartialAttendance(scopedEmployees, otConfig, range)
+  const partialRows = employee === "all" ? partialAll : partialAll.filter((r) => r.employeeName === employee)
+  const totalTimeRecords = rows.length + partialRows.length
+
+  const employeeNames = [...new Set(scopedEmployees.map((e) => e.name))].sort()
+  const deptByName = new Map(scopedEmployees.map((e) => [e.name, e.department]))
   const lateCount = rows.filter((r) => {
     const inMin = timeToMinutes(r.checkIn)
     return inMin !== null && inMin > workStart
   }).length
 
   const selectCls = "rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+
+  const deptLabel = department === ALL_DEPARTMENTS ? "ทุกฝ่าย" : department
+
+  /** Exports exactly what the table below shows — complete days first, then the days
+   * whose clock times are incomplete (blank in the computed columns). */
+  const handleExport = () => {
+    const completeRows: (string | number)[][] = rows.map((r) => [
+      r.date,
+      r.employeeName,
+      deptByName.get(r.employeeName) ?? "",
+      r.checkIn ?? "",
+      r.checkOut ?? "",
+      r.workedHours,
+      ARRIVAL_STATUS_LABEL[arrivalStatus(r.checkIn, otConfig)],
+      r.parcels,
+      r.items,
+      r.parcelsPerHour,
+      r.dynamicTarget,
+      Number(r.achievementPct.toFixed(1)),
+    ])
+    const partialExportRows: (string | number)[][] = partialRows.map((r) => [
+      r.date,
+      r.employeeName,
+      deptByName.get(r.employeeName) ?? "",
+      r.checkIn ?? "",
+      r.checkOut ?? "",
+      "",
+      r.checkOut ? "ขาดเวลาเข้า" : "ยังไม่ลงเวลาออก",
+      r.parcels,
+      r.items,
+      "",
+      "",
+      "",
+    ])
+    const tableRows = [...completeRows, ...partialExportRows].sort((a, b) =>
+      String(b[0]).localeCompare(String(a[0])) || String(a[1]).localeCompare(String(b[1]))
+    )
+
+    void downloadReportExcel({
+      filename: `attendance_${activeMonth}_${deptLabel}_${employee === "all" ? "ทั้งหมด" : employee}.xlsx`,
+      period: `${formatMonthLabel(activeMonth)} (${range.start} – ${range.end})`,
+      employeeFilter: `ฝ่าย: ${deptLabel} · พนักงาน: ${employee === "all" ? "ทั้งหมด" : employee}`,
+      summary: [
+        { label: "บันทึกเวลารวม (รายการ)", value: totalTimeRecords },
+        { label: "พนักงาน (คน)", value: summary.employeeCount },
+        { label: "วันที่มีบันทึก (วัน)", value: summary.dayCount },
+        { label: `เข้างานหลัง ${otConfig.workStartHour}:00 (ครั้ง)`, value: lateCount },
+        { label: "ชั่วโมงทำงานรวม (ชม.)", value: summary.totalWorkedHours },
+        { label: "พัสดุเฉลี่ย/คน/วัน", value: summary.avgParcelsPerPersonPerDay },
+        { label: "สินค้าเฉลี่ย/คน/วัน", value: summary.avgItemsPerPersonPerDay },
+        { label: "พัสดุเฉลี่ย/ชม.", value: summary.avgParcelsPerHour },
+        { label: "สินค้าเฉลี่ย/ชม.", value: summary.avgItemsPerHour },
+      ],
+      staffing: {
+        message:
+          partialRows.length > 0
+            ? `มี ${partialRows.length} รายการที่ลงเวลาไม่ครบ (ขาดเวลาเข้าหรือออก) — คำนวณ ชม.ทำงานไม่ได้`
+            : "ทุกรายการลงเวลาเข้า-ออกครบถ้วน",
+        ok: partialRows.length === 0,
+      },
+      tableTitle: "บันทึกเวลาเข้า-ออกงาน",
+      tableHeaders: [
+        "วันที่",
+        "พนักงาน",
+        "ฝ่าย",
+        "เวลาเข้า",
+        "เวลาออก",
+        "ชม.ทำงาน",
+        "สถานะเข้างาน",
+        "พัสดุ",
+        "สินค้า",
+        "พัสดุ/ชม.",
+        "เป้าหมาย",
+        "Achievement (%)",
+      ],
+      tableRows,
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -62,6 +162,21 @@ export function Attendance() {
             ))}
           </select>
         </div>
+        {departments.length > 1 && (
+          <div>
+            <label className="block text-[11px] text-muted-foreground">ฝ่าย</label>
+            <select
+              value={department}
+              onChange={(e) => { setDepartment(e.target.value); setEmployee("all") }}
+              className={selectCls + " font-semibold"}
+            >
+              <option value={ALL_DEPARTMENTS} className="bg-popover text-popover-foreground">ทุกฝ่าย</option>
+              {departments.map((d) => (
+                <option key={d} value={d} className="bg-popover text-popover-foreground">{d}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-[11px] text-muted-foreground">พนักงาน</label>
           <select value={employee} onChange={(e) => setEmployee(e.target.value)} className={selectCls}>
@@ -70,6 +185,14 @@ export function Attendance() {
               <option key={n} value={n} className="bg-popover text-popover-foreground">{n}</option>
             ))}
           </select>
+        </div>
+        <div className="ml-auto text-right">
+          <Button size="sm" variant="outline" onClick={handleExport} disabled={totalTimeRecords === 0}>
+            <Download className="size-4" /> ดึงรายงาน (Excel)
+          </Button>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            ส่งออก {totalTimeRecords} รายการตามตัวกรองด้านซ้าย
+          </p>
         </div>
       </div>
 
@@ -82,7 +205,7 @@ export function Attendance() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard title="บันทึกเวลารวม" value={rows.length} icon={LogIn} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="รายการ" />
+        <KpiCard title="บันทึกเวลารวม" value={totalTimeRecords} icon={LogIn} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="รายการ" />
         <KpiCard title="พนักงาน" value={summary.employeeCount} icon={Users} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="คน" />
         <KpiCard title="วันที่มีบันทึก" value={summary.dayCount} icon={CalendarCheck2} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="วัน" />
         <KpiCard title={`เข้างานหลัง ${otConfig.workStartHour}:00`} value={lateCount} icon={Clock} gradient="bg-gradient-to-br from-amber-500 to-rose-500" suffix="ครั้ง" />
@@ -108,6 +231,7 @@ export function Attendance() {
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="pb-2 font-medium">วันที่</th>
               <th className="pb-2 font-medium">พนักงาน</th>
+              <th className="pb-2 font-medium">ฝ่าย</th>
               <th className="pb-2 font-medium">เวลาเข้า</th>
               <th className="pb-2 font-medium">เวลาออก</th>
               <th className="pb-2 font-medium">ชม.ทำงาน</th>
@@ -119,13 +243,14 @@ export function Attendance() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.map((r, i) => {
               const inMin = timeToMinutes(r.checkIn)
               const late = inMin !== null && inMin > workStart
               return (
-                <tr key={`${r.date}-${r.employeeName}`} className="border-b border-white/5 last:border-0">
+                <tr key={`${r.date}-${r.employeeName}-${i}`} className="border-b border-white/5 last:border-0">
                   <td className="py-2 text-foreground">{r.date}</td>
                   <td className="py-2 text-foreground">{r.employeeName}</td>
+                  <td className="py-2 text-muted-foreground">{deptByName.get(r.employeeName) ?? "-"}</td>
                   <td className="py-2 text-muted-foreground">{r.checkIn ?? "-"}</td>
                   <td className="py-2 text-muted-foreground">{r.checkOut ?? "-"}</td>
                   <td className="py-2 font-semibold text-foreground">{r.workedHours.toFixed(2)}</td>
@@ -147,9 +272,26 @@ export function Attendance() {
                 </tr>
               )
             })}
-            {rows.length === 0 && (
+            {partialRows.map((r, i) => (
+              <tr key={`p-${r.date}-${r.employeeName}-${i}`} className="border-b border-white/5 last:border-0">
+                <td className="py-2 text-foreground">{r.date}</td>
+                <td className="py-2 text-foreground">{r.employeeName}</td>
+                <td className="py-2 text-muted-foreground">{deptByName.get(r.employeeName) ?? "-"}</td>
+                <td className="py-2 text-muted-foreground">{r.checkIn ?? "-"}</td>
+                <td className="py-2 text-muted-foreground">{r.checkOut ?? "-"}</td>
+                <td className="py-2 text-muted-foreground">-</td>
+                <td className="py-2">
+                  <Badge variant="outline">{r.checkOut ? "ขาดเวลาเข้า" : "ยังไม่ลงเวลาออก"}</Badge>
+                </td>
+                <td className="py-2 text-muted-foreground">{r.parcels} พัสดุ · {r.items} ชิ้น</td>
+                <td className="py-2 text-muted-foreground">-</td>
+                <td className="py-2 text-muted-foreground">-</td>
+                <td className="py-2 text-muted-foreground">-</td>
+              </tr>
+            ))}
+            {rows.length === 0 && partialRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="py-8 text-center text-muted-foreground">
                   {hasTime ? "ไม่มีบันทึกเวลาในเดือนนี้" : "ยังไม่มีข้อมูลเวลาเข้า-ออกงานในระบบ"}
                 </td>
               </tr>
@@ -159,7 +301,7 @@ export function Attendance() {
       </div>
 
       <p className="px-1 text-[11px] text-muted-foreground">
-        ชม.ทำงาน = เวลาออก − เวลาเข้า − พักเที่ยง · เป้าหมาย = ({otConfig.dailyTarget} ÷ {otConfig.workEndHour - otConfig.workStartHour - (otConfig.lunchEndHour - otConfig.lunchStartHour)} ชม.) × ชม.ทำงานจริง (Dynamic Target) · "เข้าก่อน (ส่งด่วน)" = เข้าก่อน {otConfig.workStartHour}:00 (นับเป็นชั่วโมงทำงาน ไม่ใช่ OT) · แสดงเฉพาะวันที่ตั้งแต่ {otConfig.attendanceStartDate} ที่มีทั้งเวลาเข้าและออก
+        ชม.ทำงาน = เวลาออก − เวลาเข้า − พักเที่ยง · เป้าหมาย = ({otConfig.dailyTarget} ÷ {otConfig.workEndHour - otConfig.workStartHour - (otConfig.lunchEndHour - otConfig.lunchStartHour)} ชม.) × ชม.ทำงานจริง (Dynamic Target) · "เข้าก่อน (ส่งด่วน)" = เข้าก่อน {otConfig.workStartHour}:00 (นับเป็นชั่วโมงทำงาน ไม่ใช่ OT) · แสดงทุกวันที่ลงเวลาไว้ตั้งแต่ {otConfig.attendanceStartDate}; วันที่ลงเวลาไม่ครบจะแสดง "-" ในช่องที่คำนวณไม่ได้ และไม่ถูกนำไปเฉลี่ยผลงาน
       </p>
     </div>
   )

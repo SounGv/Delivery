@@ -14,6 +14,9 @@ import {
   UserCheck,
   Timer,
   Wallet,
+  PackageOpen,
+  ShoppingCart,
+  Wrench,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSettings } from "@/lib/settingsContext"
@@ -31,7 +34,7 @@ export interface NavGroup {
   items: NavItem[]
 }
 
-// Exact mandated structure — 9 items in 5 groups. Merged pages (KPI & Ranking,
+// Exact mandated structure — 11 items in 5 groups. Merged pages (KPI & Ranking,
 // Productivity, OT & HR, Work & Attendance) each compose previously-separate
 // pages via tabs, so there are no duplicate menu entries.
 export const NAV_GROUPS: NavGroup[] = [
@@ -47,6 +50,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "employees", label: "Employees", icon: Users, enabled: true },
       { key: "work-attendance", label: "Work & Attendance", icon: UserCheck, enabled: true },
+      { key: "receiving-warehouse", label: "รับเข้า / คลัง", icon: PackageOpen, enabled: true },
+      { key: "work-issues", label: "ปัญหาหน้างาน", icon: Wrench, enabled: true },
     ],
   },
   {
@@ -60,6 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
     section: "REPORTS",
     items: [
       { key: "productivity", label: "Productivity", icon: LineChart, enabled: true },
+      { key: "sales-summary", label: "สรุปยอดขาย", icon: ShoppingCart, enabled: true },
       { key: "ot-hr", label: "OT & HR", icon: Timer, enabled: true },
       { key: "payroll", label: "Payroll Summary", icon: Wallet, enabled: true },
     ],

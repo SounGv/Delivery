@@ -58,7 +58,6 @@ export function Reports() {
   const [endDate, setEndDate] = useState<string>("")
   const [employeeFilter, setEmployeeFilter] = useState<string>("all")
   const [view, setView] = useState<ReportView>("day")
-  const [targetOverride, setTargetOverride] = useState<number | null>(null)
 
   if (isLoading) return <LoadingSkeletonGrid count={4} />
   if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
@@ -114,10 +113,10 @@ export function Reports() {
   const parcelsPerPersonTrend = percentChange(avgParcelsPerPersonPerDay, prevAvgParcelsPerPersonPerDay)
   const itemsPerPersonTrend = percentChange(avgItemsPerPersonPerDay, prevAvgItemsPerPersonPerDay)
 
-  // Progress-vs-target — target defaults from the per-person daily target × the REAL average
-  // daily headcount (not the cumulative roster count), but the manager can override it directly.
-  const autoTarget = Math.max(50, Math.round(((data.target?.value ?? 350) * (avgActiveEmployeesPerDay || 1)) / 50) * 50)
-  const effectiveTarget = targetOverride ?? autoTarget
+  // Progress-vs-target — the team daily target is derived from the single per-person
+  // daily target (set once in Settings) × the REAL average daily headcount, so there
+  // is no separate per-page target to keep in sync.
+  const effectiveTarget = Math.max(50, Math.round(((data.target?.value ?? 350) * (avgActiveEmployeesPerDay || 1)) / 50) * 50)
   const progressPct = effectiveTarget > 0 ? Math.min(100, Math.max(0, (avgParcelsPerDay / effectiveTarget) * 100)) : 0
 
   // Top employee is always ranked across the whole team for the selected range, independent of the employee filter above.
@@ -328,18 +327,9 @@ export function Reports() {
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
               <Target className="size-4 text-brand-400" /> Progress เป้าพัสดุ/วัน
             </h3>
-            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              เป้า
-              <input
-                type="number"
-                min={50}
-                step={50}
-                value={effectiveTarget}
-                onChange={(e) => setTargetOverride(Math.max(0, Number(e.target.value) || 0))}
-                className="w-20 rounded-lg border border-border bg-transparent px-2 py-1 text-sm text-foreground outline-none"
-              />
-              พัสดุ/วัน
-            </label>
+            <span className="text-[11px] text-muted-foreground">
+              เป้า {formatNumber(effectiveTarget)} พัสดุ/วัน ({targetPerPerson}/คน × {currentHeadcount} คน · ตั้งที่หน้า Settings)
+            </span>
           </div>
           <p className="text-xs text-muted-foreground">
             ปัจจุบัน {formatNumber(Math.round(avgParcelsPerDay))} / เป้า {formatNumber(effectiveTarget)} พัสดุ/วัน

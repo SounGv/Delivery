@@ -29,7 +29,7 @@ export type UseTeamDashboardResult = Omit<UseQueryResult<DashboardResponse, Erro
 
 export function useTeamDashboard(): UseTeamDashboardResult {
   const query = useDashboardQuery()
-  const { selectedTeam } = useSettings()
+  const { selectedTeam, targetOverride } = useSettings()
   const raw = query.data
 
   const data = useMemo<ScopedDashboard | undefined>(() => {
@@ -45,9 +45,16 @@ export function useTeamDashboard(): UseTeamDashboardResult {
       },
       { parcels: 0, items: 0 }
     )
-    const target = raw.targetsByTeam?.[selectedTeam] ?? (selectedTeam === "online" ? raw.target : null)
+    const teamTarget = raw.targetsByTeam?.[selectedTeam] ?? (selectedTeam === "online" ? raw.target : null)
+    // A "Target KPI" override in Settings wins over the sheet's target and applies
+    // everywhere at once, since every page reads its target from data.target — no
+    // page needs to know about the setting individually.
+    const target =
+      targetOverride != null
+        ? { label: `เป้ากำหนดเอง: ${targetOverride}`, value: targetOverride }
+        : teamTarget
     return { ...raw, employees, allEmployees: raw.employees, teamTotalsByDate, monthlyTotals, target }
-  }, [raw, selectedTeam])
+  }, [raw, selectedTeam, targetOverride])
 
   return { ...query, data } as UseTeamDashboardResult
 }

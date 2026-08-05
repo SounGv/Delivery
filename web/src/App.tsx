@@ -9,6 +9,9 @@ import { Attendance } from "@/pages/Attendance"
 import { KpiRanking } from "@/pages/KpiRanking"
 import { Productivity } from "@/pages/Productivity"
 import { OtHr } from "@/pages/OtHr"
+import { ReceivingWarehouse } from "@/pages/ReceivingWarehouse"
+import { SalesSummary } from "@/pages/SalesSummary"
+import { WorkIssues } from "@/pages/WorkIssues"
 import { PayrollPage } from "@/pages/DataPendingPage"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
@@ -23,6 +26,9 @@ const PAGES: Record<string, React.ComponentType> = {
   "kpi-ranking": KpiRanking,
   analytics: Analytics,
   productivity: Productivity,
+  "receiving-warehouse": ReceivingWarehouse,
+  "sales-summary": SalesSummary,
+  "work-issues": WorkIssues,
   "ot-hr": OtHr,
   payroll: PayrollPage,
   settings: Settings,

@@ -80,12 +80,122 @@ function parseSheetTab_(sheet, tz) {
   var currentSubLabel = '';
   var inShopBlock = false;
   var currentShop = null;
+  // "▶ ฝ่ายรับเข้า" / "▶ ฝ่ายคลัง" blocks were added to the monthly tab BELOW the
+  // Shopee-SLA block. They use the same date-block layout as production, so they're
+  // read here; deptTeam is the crew every row below such a marker belongs to.
+  var deptTeam = null;
+  var deptCatId = '';
+  var deptCatTitle = '';
+  var rwDeptMap = {};
+  var rwDeptOrder = [];
+  function rwDept_(title) {
+    if (!rwDeptMap[title]) {
+      rwDeptMap[title] = { title: title, staffMap: {}, catMap: {}, metricMap: {} };
+      rwDeptOrder.push(title);
+    }
+    return rwDeptMap[title];
+  }
 
   for (var r = 2; r < values.length; r++) {
     var row = values[r];
+    var displayRowAll = displayValues[r];
     var colA = row[0] !== '' && row[0] !== null ? String(row[0]).trim() : '';
     var colB = leadingCols > 1 && row[1] !== '' && row[1] !== null ? String(row[1]).trim() : '';
     var colC = leadingCols > 2 && row[2] !== '' && row[2] !== null ? String(row[2]).trim() : '';
+
+    // A ▶ marker opens a department block. It also ENDS the Shopee-SLA block, whose
+    // flag is otherwise sticky and would swallow every row below it.
+    if (colA.indexOf('▶') !== -1) {
+      deptTeam = colA.indexOf('รับเข้า') !== -1 ? 'receiving' : (colA.indexOf('คลัง') !== -1 ? 'warehouse' : null);
+      inShopBlock = false;
+      currentShop = null;
+      currentCategory = null;
+      deptCatId = '';
+      deptCatTitle = '';
+      continue;
+    }
+    // Column B ("ฝ่ายรับเข้า - รายบุคคล") confirms the block; any other label ends it.
+    if (colB) {
+      if (colB.indexOf('ฝ่ายรับเข้า') !== -1) deptTeam = 'receiving';
+      else if (colB.indexOf('ฝ่ายคลัง') !== -1) deptTeam = 'warehouse';
+      else deptTeam = null;
+      if (deptTeam) { inShopBlock = false; currentShop = null; }
+    }
+
+    if (deptTeam) {
+      var deptTitle = deptTeam === 'receiving' ? 'ฝ่ายรับเข้า' : 'ฝ่ายคลัง';
+      var rwd = rwDept_(deptTitle);
+      if (colA) {
+        var dm = colA.match(/^(\d+)\./);
+        deptCatId = dm ? dm[1] : '';
+        deptCatTitle = colA.replace(/^\d+\.\s*/, '').trim();
+      }
+      var deptCatKey = deptCatId || deptCatTitle;
+      // Free-text KPI rows (e.g. "ปัญหาต่างๆ") put a whole sentence in the ชื่อ column,
+      // so only short values on non-"ปัญหา" rows are treated as people.
+      var isProblemRow = deptCatTitle.indexOf('ปัญหา') !== -1;
+      (function (row, displayRow, team) {
+        blocks.forEach(function (b) {
+          var nameIdx = b.fieldKeys.indexOf('ชื่อ'); if (nameIdx === -1) nameIdx = 0;
+          var parcelsIdx = b.fieldKeys.indexOf('จำนวนพัสดุ'); if (parcelsIdx === -1) parcelsIdx = 1;
+          var itemsIdx = b.fieldKeys.indexOf('จำนวนสินค้า'); if (itemsIdx === -1) itemsIdx = 2;
+          var inIdx = findFieldIndex_(b.fieldKeys, 'เวลาเข้า');
+          var outIdx = findFieldIndex_(b.fieldKeys, 'เวลาออก');
+
+          var nameRaw = row[b.col + nameIdx];
+          var name = (nameRaw === '' || nameRaw === null || nameRaw === undefined) ? '' : String(nameRaw).trim();
+
+          if (name && name.length <= 20 && !isProblemRow) {
+            var pRaw = row[b.col + parcelsIdx];
+            var iRaw = row[b.col + itemsIdx];
+            var parcels = (pRaw === '' || pRaw === null || pRaw === undefined) ? null : Number(pRaw);
+            var items = (iRaw === '' || iRaw === null || iRaw === undefined) ? null : Number(iRaw);
+            var checkIn = inIdx !== -1 ? timeFromCell_(row[b.col + inIdx], displayRow[b.col + inIdx]) : null;
+            var checkOut = outIdx !== -1 ? timeFromCell_(row[b.col + outIdx], displayRow[b.col + outIdx]) : null;
+
+            var entry = { parcels: isNaN(parcels) ? null : parcels, items: isNaN(items) ? null : items };
+            if (checkIn) entry.checkIn = checkIn;
+            if (checkOut) entry.checkOut = checkOut;
+
+            var empKey = name + ' ' + team;
+            if (!employeesMap[empKey]) {
+              employeesMap[empKey] = { name: name, team: team, byDate: {}, totalParcels: 0, totalItems: 0 };
+            }
+            employeesMap[empKey].byDate[b.dateKey] = entry;
+            if (typeof entry.parcels === 'number') employeesMap[empKey].totalParcels += entry.parcels;
+            if (typeof entry.items === 'number') employeesMap[empKey].totalItems += entry.items;
+
+            // Mirror into the ฝ่ายรับเข้า/ฝ่ายคลัง view structure.
+            if (!rwd.catMap[deptCatKey]) {
+              rwd.catMap[deptCatKey] = { id: deptCatId, title: deptCatTitle, target: colC || '', empMap: {} };
+            }
+            var rwEntry = { value1: entry.parcels, value2: entry.items };
+            if (checkIn) rwEntry.checkIn = checkIn;
+            if (checkOut) rwEntry.checkOut = checkOut;
+            var em = rwd.catMap[deptCatKey].empMap;
+            if (!em[name]) em[name] = { name: name, byDate: {} };
+            em[name].byDate[b.dateKey] = rwEntry;
+            if (!rwd.staffMap[name]) rwd.staffMap[name] = { name: name, byDate: {} };
+            rwd.staffMap[name].byDate[b.dateKey] = rwEntry;
+          } else if (deptCatTitle) {
+            // Department-wide KPI value for this date (read displayed text so time
+            // cells don't come through as 1899 Date strings).
+            var texts = [];
+            for (var bc = b.col; bc <= b.endCol; bc++) {
+              var dv = displayRow[bc];
+              if (dv !== '' && dv !== null && dv !== undefined && String(dv).trim()) texts.push(String(dv).trim());
+            }
+            if (texts.length) {
+              if (!rwd.metricMap[deptCatKey]) {
+                rwd.metricMap[deptCatKey] = { id: deptCatId, title: deptCatTitle, target: colC || '', byDate: {} };
+              }
+              rwd.metricMap[deptCatKey].byDate[b.dateKey] = texts.join(' ');
+            }
+          }
+        });
+      })(row, displayRowAll, deptTeam);
+      continue;
+    }
 
     if (colC.indexOf('เกณฑ์ข้อที่') !== -1) {
       inShopBlock = true;
@@ -211,6 +321,21 @@ function parseSheetTab_(sheet, tz) {
     teamTargets[t] = { label: targetsByTeam[t] || '', value: parseTargetValue_(targetsByTeam[t]) };
   });
 
+  // The ▶ ฝ่ายรับเข้า / ▶ ฝ่ายคลัง blocks, in the same shape the dedicated
+  // "รับเข้า+คลัง" sheet produces, so both sources feed one view.
+  var rwDepartments = rwDeptOrder.map(function (title) {
+    var d = rwDeptMap[title];
+    return {
+      title: title,
+      staff: rwPeopleList_(d.staffMap),
+      staffCategories: Object.keys(d.catMap).map(function (k) {
+        var c = d.catMap[k];
+        return { id: c.id, title: c.title, target: c.target, employees: rwPeopleList_(c.empMap) };
+      }),
+      metrics: Object.keys(d.metricMap).map(function (k) { return d.metricMap[k]; })
+    };
+  });
+
   return {
     dates: blocks.map(function (b) { return b.dateKey; }),
     employees: Object.keys(employeesMap).map(function (k) { return employeesMap[k]; }),
@@ -218,7 +343,10 @@ function parseSheetTab_(sheet, tz) {
     target: teamTargets.online || null,
     targetsByTeam: teamTargets,
     categories: otherCategories,
-    shopSla: shopSla
+    shopSla: shopSla,
+    receivingWarehouse: rwDepartments.length
+      ? { dates: blocks.map(function (b) { return b.dateKey; }), departments: rwDepartments }
+      : null
   };
 }
 
@@ -286,6 +414,506 @@ function parseShipErrorSheet_(sheet, tz) {
   return out;
 }
 
+var THAI_MONTH_MAP_ = {
+  'ม.ค.': 0, 'ก.พ.': 1, 'มี.ค.': 2, 'เม.ย.': 3, 'พ.ค.': 4, 'มิ.ย.': 5,
+  'ก.ค.': 6, 'ส.ค.': 7, 'ก.ย.': 8, 'ต.ค.': 9, 'พ.ย.': 10, 'ธ.ค.': 11
+};
+
+/** Parses a "31 พ.ค. 2026" style long-form Thai date (as typed/exported by BigSeller)
+ * into a Date. Falls back to the cell's own Date value when it's already date-typed. */
+function parseThaiLongDate_(raw, display) {
+  if (Object.prototype.toString.call(raw) === '[object Date]') return normalizeHeaderDate_(raw);
+  var s = String(display != null ? display : (raw != null ? raw : '')).trim();
+  var m = s.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})$/);
+  if (!m) return null;
+  var day = parseInt(m[1], 10);
+  var mon = THAI_MONTH_MAP_[m[2]];
+  var year = parseInt(m[3], 10);
+  if (mon === undefined || isNaN(day) || isNaN(year)) return null;
+  return new Date(year, mon, day);
+}
+
+/** Reads a percentage cell as a plain number (e.g. "0.47%" -> 0.47), preferring the
+ * display text since the underlying value for a percent-formatted cell is the raw
+ * fraction (0.0047), not the number shown to the user. */
+function percentFromCell_(raw, display) {
+  var s = String(display != null ? display : '').trim();
+  if (s.indexOf('%') !== -1) {
+    var v = parseFloat(s.replace('%', '').replace(/,/g, ''));
+    return isNaN(v) ? null : v;
+  }
+  if (typeof raw === 'number') return raw <= 1 ? raw * 100 : raw;
+  return null;
+}
+
+function numFromCell_(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  if (typeof v === 'number') return isNaN(v) ? null : v;
+  var n = Number(String(v).replace(/,/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * Reads the standalone "รายงานคำสั่งซื้อ" sheet (BigSeller order-report export) — a
+ * FLAT table, one row per day. Columns are matched by header keyword (most-specific
+ * pattern checked first, since several headers share substrings like "คำสั่งซื้อ"),
+ * so reordered/renamed columns degrade gracefully instead of misreading data.
+ * Read-only. Returns [] for a non-matching sheet so it never breaks the payload.
+ */
+function parseOrderReportSheet_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return [];
+  var displayValues = range.getDisplayValues();
+
+  var headerRowIdx = -1;
+  var col = {};
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('วันที่') === -1 || joined.indexOf('คำสั่งซื้อ') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h === 'วันที่') col.date = c;
+      else if (h.indexOf('ยอดขายของคำสั่งซื้อที่มีผล') !== -1) col.effSales = c;
+      else if (h === 'คำสั่งซื้อที่มีผล') col.effOrders = c;
+      else if (h.indexOf('คำสั่งซื้อทั้งหมด') !== -1) col.totalOrders = c;
+      else if (h.indexOf('จำนวนพัสดุ') !== -1) col.parcels = c;
+      else if (h.indexOf('รายได้รวม') !== -1) col.totalRevenue = c;
+      else if (h.indexOf('เงินอุดหนุน') !== -1) col.sellerSubsidy = c;
+      else if (h.indexOf('ยอดขายสินค้า') !== -1) col.productSales = c;
+      else if (h.indexOf('ราคาสินค้าเดิม') !== -1) col.origPrice = c;
+      else if (h === 'ยอดขาย') col.sales = c;
+      else if (h.indexOf('จำนวนคำสั่งซื้อที่คืนเงิน') !== -1) col.refundAmount = c;
+      else if (h === 'คำสั่งซื้อที่คืนเงิน') col.refundOrders = c;
+      else if (h.indexOf('ลูกค้าที่คืนเงิน') !== -1) col.refundCustomers = c;
+      else if (h.indexOf('อัตราการคืนเงิน') !== -1) col.refundRate = c;
+      else if (h.indexOf('ยอดเงินคำสั่งซื้อที่ยกเลิก') !== -1) col.cancelledAmount = c;
+      else if (h === 'คำสั่งซื้อที่ยกเลิก') col.cancelledOrders = c;
+      else if (h.indexOf('ยอดขายเฉลี่ยต่อคำสั่งซื้อ') !== -1) col.aov = c;
+      else if (h.indexOf('โค้ดส่วนลด') !== -1) col.discountCode = c;
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || col.date === undefined) return [];
+
+  var out = [];
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var displayRow = displayValues[i];
+    var dateObj = parseThaiLongDate_(row[col.date], displayRow[col.date]);
+    if (!dateObj) continue;
+
+    out.push({
+      date: Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd'),
+      effSales: numFromCell_(row[col.effSales]) || 0,
+      effOrders: numFromCell_(row[col.effOrders]) || 0,
+      totalOrders: numFromCell_(row[col.totalOrders]) || 0,
+      parcels: numFromCell_(row[col.parcels]) || 0,
+      totalRevenue: numFromCell_(row[col.totalRevenue]) || 0,
+      sellerSubsidy: numFromCell_(row[col.sellerSubsidy]) || 0,
+      productSales: numFromCell_(row[col.productSales]) || 0,
+      origPrice: numFromCell_(row[col.origPrice]) || 0,
+      sales: numFromCell_(row[col.sales]) || 0,
+      refundAmount: numFromCell_(row[col.refundAmount]) || 0,
+      refundOrders: numFromCell_(row[col.refundOrders]) || 0,
+      refundCustomers: numFromCell_(row[col.refundCustomers]) || 0,
+      refundRate: percentFromCell_(row[col.refundRate], displayRow[col.refundRate]) || 0,
+      cancelledAmount: numFromCell_(row[col.cancelledAmount]) || 0,
+      cancelledOrders: numFromCell_(row[col.cancelledOrders]) || 0,
+      aov: numFromCell_(row[col.aov]) || 0,
+      discountCode: numFromCell_(row[col.discountCode]) || 0
+    });
+  }
+  return out;
+}
+
+/** Merges order-report day rows from more than one matching tab, by date (later tab
+ * wins on overlap) — mirrors mergeReceivingWarehouse_'s union-by-key approach. */
+function mergeOrderReportDays_(a, b) {
+  var byDate = {};
+  (a || []).forEach(function (d) { byDate[d.date] = d; });
+  (b || []).forEach(function (d) { byDate[d.date] = d; });
+  return Object.keys(byDate).sort().map(function (d) { return byDate[d]; });
+}
+
+/** Parses a "d/m/yy" (or "d/m/yyyy") date typed with a Thai Buddhist-Era short
+ * year — e.g. "1/8/69" means 1 Aug 2569 BE = 2026 AD — the convention used on
+ * the "ปัญหารอแก้" sheet. Unlike parseDdmmyyyy_ (which assumes a 2-digit year is
+ * a plain Gregorian short-year), every 2-digit year here is treated as B.E.
+ * (2500 + yy), matching normalizeHeaderDate_'s 1957+yy recovery formula. */
+function parseDdmmyyBuddhist_(text) {
+  var m = String(text).match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*$/);
+  if (!m) return null;
+  var d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+  if (y < 100) y = 1957 + y;
+  else if (y > 2500) y -= 543;
+  var date = new Date(y, mo - 1, d);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/** Reads a "ปัญหารอแก้" (work issues / obstacles) date cell — Date-typed cells
+ * already carry Google Sheets' own (buggy) 2-digit-year reinterpretation, so
+ * normalizeHeaderDate_ recovers those; plain text cells are parsed with the
+ * B.E.-short-year convention above. */
+function issueDateFromCell_(raw, display) {
+  if (Object.prototype.toString.call(raw) === '[object Date]') return normalizeHeaderDate_(raw);
+  return parseDdmmyyBuddhist_(display || raw);
+}
+
+/**
+ * Reads the standalone "ปัญหารอแก้" sheet (workplace obstacles/issues log, e.g.
+ * unstable internet, printer/ink problems, PC crashes) — a FLAT table, one row
+ * per issue. Columns matched by header keyword so column order/typos (e.g. the
+ * sheet's own "สถานนะ" for "สถานะ") degrade gracefully. Column A is a free
+ * "ตัวอย่าง" (example) tag on the sheet's demo rows — those rows are skipped so
+ * seed/example data never shows up as a real reported issue. Read-only.
+ */
+function parseWorkIssuesSheet_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return [];
+  var displayValues = range.getDisplayValues();
+
+  var headerRowIdx = -1;
+  var col = {};
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('รายละเอียดปัญหา') === -1 || joined.indexOf('ผู้แจ้ง') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h === 'วันที่') col.date = c;
+      else if (h.indexOf('ผู้แจ้ง') !== -1) col.reporter = c;
+      else if (h.indexOf('หมวดหมู่') !== -1) col.category = c;
+      else if (h.indexOf('รายละเอียดปัญหา') !== -1) col.detail = c;
+      else if (h.indexOf('ความเร่งด่วน') !== -1) col.urgency = c;
+      else if (h.indexOf('ผู้รับผิดชอบ') !== -1) col.assignee = c;
+      else if (h.indexOf('วันที่เริ่มแก้ไข') !== -1) col.startDate = c;
+      else if (h.indexOf('กำหนดเสร็จ') !== -1) col.dueDate = c;
+      else if (h.indexOf('วิธีแก้ไข') !== -1) col.resolution = c;
+      else if (h.indexOf('สถาน') !== -1) col.status = c;
+      else if (h.indexOf('ผลตรวจสอบ') !== -1) col.verifyResult = c;
+      else if (h.indexOf('หมายเหตุ') !== -1) col.note = c;
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || col.detail === undefined) return [];
+
+  function cellDate_(rowIdx, c) {
+    if (c === undefined) return '';
+    var raw = values[rowIdx][c];
+    var dateObj = issueDateFromCell_(raw, displayValues[rowIdx][c]);
+    return dateObj ? Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd') : '';
+  }
+  function cellText_(rowIdx, c) {
+    if (c === undefined) return '';
+    var v = values[rowIdx][c];
+    return v == null ? '' : String(v).trim();
+  }
+
+  var out = [];
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var colAText = String(row[0] == null ? '' : row[0]).trim();
+    if (colAText.normalize) colAText = colAText.normalize('NFC');
+    if (colAText === 'ตัวอย่าง') continue; // skip seed/example rows
+    var detail = cellText_(i, col.detail);
+    var reporter = cellText_(i, col.reporter);
+    if (!detail && !reporter) continue; // fully blank row
+
+    out.push({
+      date: cellDate_(i, col.date),
+      reporter: reporter,
+      category: cellText_(i, col.category),
+      detail: detail,
+      urgency: cellText_(i, col.urgency),
+      assignee: cellText_(i, col.assignee),
+      startDate: cellDate_(i, col.startDate),
+      dueDate: cellDate_(i, col.dueDate),
+      resolution: cellText_(i, col.resolution),
+      status: cellText_(i, col.status),
+      verifyResult: cellText_(i, col.verifyResult),
+      note: cellText_(i, col.note)
+    });
+  }
+  return out;
+}
+
+/** Parses a "dd/mm/yyyy" header string into a Date. Years in the 2500s are Thai
+ * Buddhist Era and mapped back to Gregorian; plain "2026" is left as-is. */
+function parseDdmmyyyy_(text) {
+  var m = String(text).match(/^\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*$/);
+  if (!m) return null;
+  var d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+  if (y < 100) y = (y >= 30 ? 1900 : 2000) + y;
+  if (y > 2500) y -= 543;
+  var date = new Date(Date.UTC(y, mo - 1, d));
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Parses the standalone "รับเข้า + คลัง" work sheet — a SEPARATE schema from the
+ * monthly production tabs. Layout:
+ *   row 2: date headers (each spanning a 5-column date-block)
+ *   row 3: per-block sub-headers — ชื่อ | ค่าที่ 1 (SKU/บิล) | ค่าที่ 2 (จำนวนชิ้น) | เวลาเข้างาน | เวลาออกงาน
+ *   col A: หมวดงาน (KPI category, e.g. "1. จำนวนสินค้าที่รับเข้า")
+ *   col B: ทีม/รายละเอียด (e.g. "ฝ่ายรับเข้า - รายบุคคล" / "ฝ่ายคลัง - รวมทั้งฝ่าย")
+ *   col C: เป้าหมาย (target text)
+ *   "▶ ฝ่ายรับเข้า" / "▶ ฝ่ายคลัง" rows mark department boundaries.
+ * Two row kinds: per-person ("รายบุคคล" → staff with value1/value2/check-in/out per day)
+ * and team-wide ("รวมทั้งฝ่าย" → one KPI metric with a free-text value per day).
+ * Returns null for a sheet that doesn't match this schema. Read-only.
+ */
+function parseReceivingWarehouseTab_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 4) return null;
+  var displayValues = range.getDisplayValues();
+
+  var dateRow = values[1];       // row 2
+  var subHeaderRow = values[2];  // row 3
+  // Date-blocks start where the sub-header is "ชื่อ".
+  var starts = [];
+  for (var c = 0; c < subHeaderRow.length; c++) {
+    if (String(subHeaderRow[c] || '').trim() === 'ชื่อ') starts.push(c);
+  }
+  if (starts.length === 0) return null;
+
+  var blocks = [];
+  for (var i = 0; i < starts.length; i++) {
+    var col = starts[i];
+    var end = (i + 1 < starts.length) ? starts[i + 1] - 1 : subHeaderRow.length - 1;
+    var rawDate = dateRow[col];
+    var dateObj = (Object.prototype.toString.call(rawDate) === '[object Date]')
+      ? normalizeHeaderDate_(rawDate)
+      : parseDdmmyyyy_(rawDate);
+    if (!dateObj) continue;
+    var fields = {};
+    for (var bc = col; bc <= end; bc++) {
+      var h = String(subHeaderRow[bc] || '').replace(/\s+/g, ' ').trim();
+      if (h.indexOf('ชื่อ') !== -1) fields.name = bc;
+      else if (h.indexOf('ค่าที่ 1') !== -1) fields.v1 = bc;
+      else if (h.indexOf('ค่าที่ 2') !== -1) fields.v2 = bc;
+      else if (h.indexOf('เวลาเข้า') !== -1) fields.checkIn = bc;
+      else if (h.indexOf('เวลาออก') !== -1) fields.checkOut = bc;
+    }
+    blocks.push({ col: col, end: end, fields: fields, dateKey: Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd') });
+  }
+  if (blocks.length === 0) return null;
+
+  var deptMap = {}; // title -> { title, personCats, metrics, staffMap }
+  var deptOrder = [];
+  function dept(title) {
+    if (!deptMap[title]) { deptMap[title] = { title: title, personCats: {}, metrics: {}, staffMap: {} }; deptOrder.push(title); }
+    return deptMap[title];
+  }
+  // Records a person's attendance for the department. Called for every name that
+  // carries a check-in/out (or that sits on a "รายบุคคล" row) — so both the
+  // ฝ่ายรับเข้า per-person section AND the ฝ่ายคลัง rows that pin a name to a KPI
+  // become attendance the app can show/filter.
+  function addStaff(d, name, dateKey, v1, v2, checkIn, checkOut) {
+    if (!d.staffMap[name]) d.staffMap[name] = { name: name, byDate: {} };
+    var e = d.staffMap[name].byDate[dateKey] || {};
+    if (typeof v1 === 'number' && !isNaN(v1)) e.value1 = v1;
+    if (typeof v2 === 'number' && !isNaN(v2)) e.value2 = v2;
+    if (checkIn) e.checkIn = checkIn;
+    if (checkOut) e.checkOut = checkOut;
+    d.staffMap[name].byDate[dateKey] = e;
+  }
+
+  // currentDept / currentIsPerson / currentCat PERSIST across continuation rows,
+  // because column A (หมวดงาน) and B (ทีม/รายละเอียด) are vertically merged — only
+  // the first row of each section carries them; the rest come back blank.
+  var currentDept = null;
+  var currentIsPerson = false;
+  var currentCat = null;
+  var dateKeySet = {};
+  blocks.forEach(function (b) { dateKeySet[b.dateKey] = true; });
+
+  for (var r = 3; r < values.length; r++) {
+    var row = values[r];
+    var displayRow = displayValues[r];
+    var colA = row[0] != null ? String(row[0]).trim() : '';
+    var colB = row[1] != null ? String(row[1]).trim() : '';
+    var colC = row[2] != null ? String(row[2]).trim() : '';
+
+    if (colA.indexOf('▶') !== -1) { currentDept = colA.replace(/▶/g, '').trim(); currentCat = null; continue; }
+
+    if (colB) {
+      currentDept = colB.split('-')[0].trim();
+      currentIsPerson = colB.indexOf('รายบุคคล') !== -1;
+    }
+    if (!currentDept) continue;
+    var d = dept(currentDept);
+
+    var idm = colA.match(/^(\d+)\./);
+    var startsCat = !!idm;
+    var catId = idm ? idm[1] : '';
+    var catTitle = colA.replace(/^\d+\.\s*/, '').trim();
+
+    (function (row, displayRow) {
+      if (currentIsPerson) {
+        if (startsCat) {
+          if (!d.personCats[catId]) d.personCats[catId] = { id: catId, title: catTitle, target: colC || '', employeesMap: {} };
+          currentCat = d.personCats[catId];
+        }
+        if (!currentCat) return;
+        var cat = currentCat;
+        blocks.forEach(function (b) {
+          var nameRaw = b.fields.name != null ? row[b.fields.name] : null;
+          if (!nameRaw || !String(nameRaw).trim()) return;
+          var name = String(nameRaw).trim();
+          var v1raw = b.fields.v1 != null ? row[b.fields.v1] : null;
+          var v2raw = b.fields.v2 != null ? row[b.fields.v2] : null;
+          var v1 = (v1raw === '' || v1raw == null) ? null : Number(v1raw);
+          var v2 = (v2raw === '' || v2raw == null) ? null : Number(v2raw);
+          var checkIn = b.fields.checkIn != null ? timeFromCell_(row[b.fields.checkIn], displayRow[b.fields.checkIn]) : null;
+          var checkOut = b.fields.checkOut != null ? timeFromCell_(row[b.fields.checkOut], displayRow[b.fields.checkOut]) : null;
+          if (!cat.employeesMap[name]) cat.employeesMap[name] = { name: name, byDate: {} };
+          var entry = { value1: isNaN(v1) ? null : v1, value2: isNaN(v2) ? null : v2 };
+          if (checkIn) entry.checkIn = checkIn;
+          if (checkOut) entry.checkOut = checkOut;
+          cat.employeesMap[name].byDate[b.dateKey] = entry;
+          addStaff(d, name, b.dateKey, entry.value1, entry.value2, checkIn, checkOut);
+        });
+      } else {
+        // Team-wide KPI metric: one metric per row, a free-text value per date.
+        var metric = null;
+        if (startsCat || catTitle) {
+          var metricKey = catId || catTitle;
+          if (!d.metrics[metricKey]) d.metrics[metricKey] = { id: catId, title: catTitle, target: colC || '', byDate: {} };
+          metric = d.metrics[metricKey];
+        }
+        blocks.forEach(function (b) {
+          // Read DISPLAY values so time cells render "08:57" (not a 1899 Date string).
+          var texts = [];
+          for (var bc = b.col; bc <= b.end; bc++) {
+            var dv = displayRow[bc];
+            if (dv != null && String(dv).trim()) texts.push(String(dv).trim());
+          }
+          if (metric && texts.length) metric.byDate[b.dateKey] = texts.join(' ');
+          // Some departments (e.g. ฝ่ายคลัง) pin a person to each KPI row rather than
+          // having a separate "รายบุคคล" section. Treat the name in the ชื่อ column as
+          // that person's attendance — even before a clock-in/out is filled in — so the
+          // department shows up in the filter. Skip "ปัญหา" rows (free text, not a name)
+          // and anything too long to be a name.
+          var nameRaw = b.fields.name != null ? row[b.fields.name] : null;
+          var nameStr = nameRaw != null ? String(nameRaw).trim() : '';
+          var checkIn = b.fields.checkIn != null ? timeFromCell_(row[b.fields.checkIn], displayRow[b.fields.checkIn]) : null;
+          var checkOut = b.fields.checkOut != null ? timeFromCell_(row[b.fields.checkOut], displayRow[b.fields.checkOut]) : null;
+          if (nameStr && nameStr.length <= 20 && catTitle.indexOf('ปัญหา') === -1) {
+            var v1raw = b.fields.v1 != null ? row[b.fields.v1] : null;
+            var v2raw = b.fields.v2 != null ? row[b.fields.v2] : null;
+            var v1 = (v1raw === '' || v1raw == null) ? null : Number(v1raw);
+            var v2 = (v2raw === '' || v2raw == null) ? null : Number(v2raw);
+            addStaff(d, nameStr, b.dateKey, isNaN(v1) ? null : v1, isNaN(v2) ? null : v2, checkIn, checkOut);
+          }
+        });
+      }
+    })(row, displayRow);
+  }
+
+  function totalsAndList(map) {
+    return Object.keys(map).map(function (n) {
+      var e = map[n];
+      var t1 = 0, t2 = 0;
+      Object.keys(e.byDate).forEach(function (dk) {
+        var en = e.byDate[dk];
+        if (typeof en.value1 === 'number') t1 += en.value1;
+        if (typeof en.value2 === 'number') t2 += en.value2;
+      });
+      return { name: e.name, byDate: e.byDate, totalValue1: t1, totalValue2: t2 };
+    });
+  }
+
+  var departments = deptOrder.map(function (title) {
+    var d = deptMap[title];
+    return {
+      title: title,
+      staff: totalsAndList(d.staffMap),
+      staffCategories: Object.keys(d.personCats).map(function (k) {
+        var cat = d.personCats[k];
+        return { id: cat.id, title: cat.title, target: cat.target, employees: totalsAndList(cat.employeesMap) };
+      }),
+      metrics: Object.keys(d.metrics).map(function (k) { return d.metrics[k]; })
+    };
+  });
+
+  return { dates: Object.keys(dateKeySet).sort(), departments: departments };
+}
+
+/** Merges two parsed รับเข้า+คลัง results (one per monthly tab) into one — union of
+ * dates, and departments merged by title (staff/staffCategories by name, metrics by
+ * id), so ก.ค. + ส.ค. + … combine instead of the last tab overwriting the rest. */
+function mergeReceivingWarehouse_(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+
+  var dateSet = {};
+  a.dates.concat(b.dates).forEach(function (x) { dateSet[x] = true; });
+
+  var byTitle = {};
+  var order = [];
+  function ensure(title) {
+    if (!byTitle[title]) { byTitle[title] = { title: title, staffMap: {}, catMap: {}, metricMap: {} }; order.push(title); }
+    return byTitle[title];
+  }
+  function mergePeople(map, list) {
+    (list || []).forEach(function (e) {
+      if (!map[e.name]) map[e.name] = { name: e.name, byDate: {} };
+      Object.keys(e.byDate).forEach(function (dk) { map[e.name].byDate[dk] = e.byDate[dk]; });
+    });
+  }
+  [a, b].forEach(function (rw) {
+    rw.departments.forEach(function (dep) {
+      var t = ensure(dep.title);
+      mergePeople(t.staffMap, dep.staff);
+      (dep.staffCategories || []).forEach(function (c) {
+        if (!t.catMap[c.id]) t.catMap[c.id] = { id: c.id, title: c.title, target: c.target, empMap: {} };
+        mergePeople(t.catMap[c.id].empMap, c.employees);
+      });
+      (dep.metrics || []).forEach(function (m) {
+        var key = m.id || m.title;
+        if (!t.metricMap[key]) t.metricMap[key] = { id: m.id, title: m.title, target: m.target, byDate: {} };
+        Object.keys(m.byDate).forEach(function (dk) { t.metricMap[key].byDate[dk] = m.byDate[dk]; });
+      });
+    });
+  });
+
+  function withTotals(map) {
+    return Object.keys(map).map(function (n) {
+      var e = map[n];
+      var t1 = 0, t2 = 0;
+      Object.keys(e.byDate).forEach(function (dk) {
+        var en = e.byDate[dk];
+        if (typeof en.value1 === 'number') t1 += en.value1;
+        if (typeof en.value2 === 'number') t2 += en.value2;
+      });
+      return { name: e.name, byDate: e.byDate, totalValue1: t1, totalValue2: t2 };
+    });
+  }
+
+  var departments = order.map(function (title) {
+    var d = byTitle[title];
+    return {
+      title: title,
+      staff: withTotals(d.staffMap),
+      staffCategories: Object.keys(d.catMap).map(function (k) {
+        var c = d.catMap[k];
+        return { id: c.id, title: c.title, target: c.target, employees: withTotals(c.empMap) };
+      }),
+      metrics: Object.keys(d.metricMap).map(function (k) { return d.metricMap[k]; })
+    };
+  });
+
+  return { dates: Object.keys(dateSet).sort(), departments: departments };
+}
+
 function buildDashboardPayload_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = ss.getSpreadsheetTimeZone();
@@ -298,6 +926,9 @@ function buildDashboardPayload_() {
   var target = null;
   var targetsByTeam = {};
   var shipErrors = [];
+  var receivingWarehouse = null;
+  var orderReportDays = [];
+  var workIssues = [];
 
   sheets.forEach(function (sheet) {
     var parsed;
@@ -307,8 +938,45 @@ function buildDashboardPayload_() {
       parsed = null; // one malformed tab shouldn't break the whole dashboard
     }
     if (!parsed) {
-      // Not a monthly date-block tab — if its name marks it as the error sheet, read it flat.
+      // Normalized so a tab name whose Thai combining marks were typed/pasted in a
+      // different Unicode form (NFD vs NFC — common when copy-pasting between apps)
+      // still matches these literal substrings, which are themselves NFC.
       var nm = sheet.getName();
+      if (nm && nm.normalize) nm = nm.normalize('NFC');
+      // The daily "รับเข้า + คลัง" work sheet has its own schema (not a monthly
+      // production tab). The monthly summary variant is skipped for now.
+      if (nm.indexOf('ตารางงาน') !== -1 && nm.indexOf('รับเข้า') !== -1 && nm.indexOf('รายเดือน') === -1) {
+        try {
+          var rw = parseReceivingWarehouseTab_(sheet, tz);
+          // Merge across monthly tabs (ก.ค. + ส.ค. + …) instead of letting the last overwrite.
+          if (rw) receivingWarehouse = mergeReceivingWarehouse_(receivingWarehouse, rw);
+        } catch (e3) { /* ignore malformed รับเข้า+คลัง sheet */ }
+        return;
+      }
+      // The standalone BigSeller order-report export ("รายงานคำสั่งซื้อ", possibly
+      // suffixed e.g. "... ออนไลน์") — a flat one-row-per-day sales sheet, unrelated
+      // to the monthly production tabs. Detected by CONTENT (header keywords), not
+      // by tab name, so a rename never silently drops this data again; the parser
+      // itself returns [] fast for any sheet whose header doesn't match.
+      try {
+        var orderDays = parseOrderReportSheet_(sheet, tz);
+        if (orderDays.length) {
+          orderReportDays = mergeOrderReportDays_(orderReportDays, orderDays);
+          return;
+        }
+      } catch (e4) { /* ignore malformed order-report sheet */ }
+      // The "ปัญหารอแก้" workplace-obstacles log (unstable internet, printer/ink,
+      // PC crashes, ...) — a flat one-row-per-issue sheet. Detected by CONTENT
+      // (header keywords), not tab name, for the same rename-proofing reason as
+      // the order-report sheet above.
+      try {
+        var issues = parseWorkIssuesSheet_(sheet, tz);
+        if (issues.length) {
+          workIssues = workIssues.concat(issues);
+          return;
+        }
+      } catch (e5) { /* ignore malformed work-issues sheet */ }
+      // Otherwise, if its name marks it as the error sheet, read it flat.
       if (nm.indexOf('ผิด') !== -1) {
         try {
           var errs = parseShipErrorSheet_(sheet, tz);
@@ -337,6 +1005,10 @@ function buildDashboardPayload_() {
     });
 
     if (parsed.target && !target) target = parsed.target;
+    // ▶ ฝ่ายรับเข้า / ▶ ฝ่ายคลัง blocks found inside this monthly tab.
+    if (parsed.receivingWarehouse) {
+      receivingWarehouse = mergeReceivingWarehouse_(receivingWarehouse, parsed.receivingWarehouse);
+    }
     if (parsed.targetsByTeam) {
       Object.keys(parsed.targetsByTeam).forEach(function (t) {
         if (!targetsByTeam[t]) targetsByTeam[t] = parsed.targetsByTeam[t];
@@ -438,7 +1110,10 @@ function buildDashboardPayload_() {
     targetsByTeam: targetsByTeam,
     categories: categories,
     shopSla: shopSla,
-    shipErrors: shipErrors
+    shipErrors: shipErrors,
+    receivingWarehouse: receivingWarehouse,
+    orderReport: orderReportDays.length ? { days: orderReportDays } : null,
+    workIssues: workIssues
   };
 }
 
@@ -475,4 +1150,33 @@ function normalizeTime_(raw) {
   var min = parseInt(m[2], 10);
   if (isNaN(h) || isNaN(min) || h > 23 || min > 59) return null;
   return (h < 10 ? '0' + h : '' + h) + ':' + (min < 10 ? '0' + min : '' + min);
+}
+
+/** Reads a check-in/out time robustly: the DISPLAYED "8:57" first, falling back to
+ * the raw cell's own hours/minutes when the value is a 1899 time-of-day Date whose
+ * display string isn't "HH:mm". */
+function timeFromCell_(rawCell, dispCell) {
+  var t = normalizeTime_(dispCell);
+  if (t) return t;
+  if (Object.prototype.toString.call(rawCell) === '[object Date]') {
+    var h = rawCell.getHours(), m = rawCell.getMinutes();
+    if (!isNaN(h) && !isNaN(m) && (h !== 0 || m !== 0)) {
+      return (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m);
+    }
+  }
+  return null;
+}
+
+/** {name -> {name, byDate}} map to a list with value1/value2 totals. */
+function rwPeopleList_(map) {
+  return Object.keys(map).map(function (n) {
+    var e = map[n];
+    var t1 = 0, t2 = 0;
+    Object.keys(e.byDate).forEach(function (dk) {
+      var en = e.byDate[dk];
+      if (typeof en.value1 === 'number') t1 += en.value1;
+      if (typeof en.value2 === 'number') t2 += en.value2;
+    });
+    return { name: e.name, byDate: e.byDate, totalValue1: t1, totalValue2: t2 };
+  });
 }

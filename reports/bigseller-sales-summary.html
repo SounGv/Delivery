@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>แดชบอร์ดสรุปยอดขาย BigSeller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --bg2: #0d1526;
+    --card: #111a2e;
+    --card-border: rgba(148,163,184,0.12);
+    --text: #e6ebf5;
+    --text-dim: #8b97ae;
+    --teal: #2dd4bf;
+    --teal-dim: rgba(45,212,191,0.15);
+    --coral: #ff8a65;
+    --coral-dim: rgba(255,138,101,0.15);
+    --danger: #f87171;
+    --grid: rgba(148,163,184,0.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 20% 0%, #0f1c33 0%, var(--bg) 45%) fixed;
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    line-height: 1.5;
+  }
+  h1, h2, h3, .num-lg { font-family: 'Prompt', sans-serif; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+    gap: 12px; margin-bottom: 28px; padding-bottom: 20px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  header.top h1 {
+    font-size: 26px; font-weight: 700; margin: 0 0 6px; letter-spacing: .2px;
+  }
+  header.top .sub { color: var(--text-dim); font-size: 14px; }
+  header.top .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(45,212,191,.3);
+    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+  header.top .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 22px;
+  }
+  @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 640px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .card {
+    background: linear-gradient(180deg, var(--card), var(--bg2));
+    border: 1px solid var(--card-border);
+    border-radius: 14px; padding: 18px;
+  }
+  .kpi .label { color: var(--text-dim); font-size: 12.5px; margin-bottom: 8px; }
+  .kpi .value { font-size: 21px; font-weight: 700; }
+  .kpi .unit { font-size: 12px; color: var(--text-dim); font-weight: 400; margin-left: 3px; }
+  .kpi .delta { font-size: 12px; margin-top: 6px; color: var(--text-dim); }
+  .kpi.accent-teal .value { color: var(--teal); }
+  .kpi.accent-coral .value { color: var(--coral); }
+  .kpi.accent-danger .value { color: var(--danger); }
+
+  .row { display: grid; gap: 14px; margin-bottom: 14px; }
+  .row.cols-2 { grid-template-columns: 2fr 1fr; }
+  .row.cols-2b { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 900px) { .row.cols-2, .row.cols-2b { grid-template-columns: 1fr; } }
+
+  .panel h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .panel .desc { color: var(--text-dim); font-size: 12.5px; margin-bottom: 14px; }
+  .chart-box { position: relative; height: 300px; }
+  .chart-box.tall { height: 340px; }
+  .chart-box.short { height: 260px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--text-dim); font-weight: 600; font-size: 12px;
+        padding: 8px 6px; border-bottom: 1px solid var(--card-border); }
+  td { padding: 9px 6px; border-bottom: 1px solid rgba(148,163,184,.06); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .wd { color: var(--text-dim); font-size: 11.5px; }
+  table.top tbody tr:first-child td { color: var(--teal); font-weight: 600; }
+  table.bottom tbody tr:nth-child(-n+3) td { color: var(--coral); font-weight: 600; }
+
+  .insight-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+  @media (max-width: 900px) { .insight-grid { grid-template-columns: 1fr; } }
+  .insight .tag {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .3px;
+    padding: 3px 9px; border-radius: 6px; margin-bottom: 10px;
+  }
+  .insight.pos .tag { background: var(--teal-dim); color: var(--teal); }
+  .insight.warn .tag { background: var(--coral-dim); color: var(--coral); }
+  .insight.info .tag { background: rgba(148,163,184,.15); color: #cbd5e1; }
+  .insight h3 { font-size: 15px; margin: 0 0 8px; }
+  .insight p { font-size: 13.5px; color: #c7d0e0; margin: 0; }
+
+  footer {
+    margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--card-border);
+    color: var(--text-dim); font-size: 12px; line-height: 1.7;
+  }
+  footer b { color: #b7c0d4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>แดชบอร์ดสรุปยอดขาย &mdash; BigSeller</h1>
+      <div class="sub">ช่วงข้อมูล: 1 พ.ค. 2026 &ndash; 31 ก.ค. 2026 &nbsp;(&nbsp;92 วัน&nbsp;) &middot; แหล่งที่มา: ชีต &ldquo;รายงานคำสั่งซื้อ&rdquo; (Google Sheets / BigSeller export)</div>
+    </div>
+    <div class="badge">ข้อมูลล่าสุด ณ 31 ก.ค. 2026</div>
+  </header>
+
+  <section class="kpi-grid">
+    <div class="card kpi accent-teal">
+      <div class="label">ยอดขายรวม (คำสั่งซื้อที่มีผล)</div>
+      <div class="value">฿113,224,395</div>
+      <div class="delta">เฉลี่ย ฿1,230,700 /วัน</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">จำนวนคำสั่งซื้อที่มีผล</div>
+      <div class="value">260,842<span class="unit">ออเดอร์</span></div>
+      <div class="delta">จากทั้งหมด 292,253 ออเดอร์</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">AOV เฉลี่ย (ยอดขาย/ออเดอร์)</div>
+      <div class="value">฿438.17</div>
+      <div class="delta">ต่อคำสั่งซื้อ 1 รายการ</div>
+    </div>
+    <div class="card kpi accent-coral">
+      <div class="label">อัตรายกเลิกรวม</div>
+      <div class="value">10.75<span class="unit">%</span></div>
+      <div class="delta">31,411 ออเดอร์ &middot; ฿14,832,272</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">อัตราคืนเงินเฉลี่ย</div>
+      <div class="value">0.64<span class="unit">%</span></div>
+      <div class="delta">เฉลี่ยต่อวัน (92 วัน)</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">ยอดใช้โค้ดส่วนลด</div>
+      <div class="value">฿24,644,278</div>
+      <div class="delta">21.8% ของยอดขายรวม</div>
+    </div>
+  </section>
+
+  <section class="row cols-2">
+    <div class="card panel">
+      <h2>แนวโน้มยอดขายรายวัน</h2>
+      <div class="desc">ยอดขายของคำสั่งซื้อที่มีผล รายวัน ตลอดช่วง 1 พ.ค. &ndash; 31 ก.ค. 2026 &middot; จุดสูงสุด: 7 ก.ค. (฿4,092,837)</div>
+      <div class="chart-box tall"><canvas id="dailyTrend"></canvas></div>
+    </div>
+    <div class="card panel">
+      <h2>ยอดขายเฉลี่ยตามวันในสัปดาห์</h2>
+      <div class="desc">วันขายดีที่สุด: <b style="color:var(--teal)">อังคาร</b> &middot; วันขายน้อยที่สุด: <b style="color:var(--coral)">อาทิตย์</b></div>
+      <div class="chart-box tall"><canvas id="wdChart"></canvas></div>
+    </div>
+  </section>
+
+  <section class="row cols-2b">
+    <div class="card panel">
+      <h2>ยอดขายรวมรายสัปดาห์</h2>
+      <div class="desc">แบ่งเป็นช่วง 7 วัน จากวันแรกของข้อมูล (สัปดาห์สุดท้ายมีข้อมูลไม่ครบ 7 วัน)</div>
+      <div class="chart-box"><canvas id="weekChart"></canvas></div>
+    </div>
+    <div class="card panel">
+      <h2>อัตรายกเลิก vs อัตราคืนเงิน รายวัน</h2>
+      <div class="desc">เทียบสัดส่วน % ต่อวัน &middot; แกนซ้าย = อัตรายกเลิก, แกนขวา = อัตราคืนเงิน</div>
+      <div class="chart-box"><canvas id="rateChart"></canvas></div>
+    </div>
+  </section>
+
+  <section class="row cols-2b">
+    <div class="card panel">
+      <h2>Top 5 วันที่ขายดีที่สุด</h2>
+      <table class="top">
+        <thead><tr><th>วันที่</th><th class="num">ยอดขาย (฿)</th><th class="num">ออเดอร์</th><th class="num">AOV (฿)</th><th class="num">อัตรายกเลิก</th></tr></thead>
+        <tbody><tr><td>07 ก.ค. 2026 <span class="wd">(อังคาร)</span></td><td class="num">4,092,837</td><td class="num">8,166</td><td class="num">510</td><td class="num">8.0%</td></tr>
+<tr><td>06 มิ.ย. 2026 <span class="wd">(เสาร์)</span></td><td class="num">3,920,164</td><td class="num">8,041</td><td class="num">493</td><td class="num">9.2%</td></tr>
+<tr><td>05 พ.ค. 2026 <span class="wd">(อังคาร)</span></td><td class="num">3,064,887</td><td class="num">6,360</td><td class="num">487</td><td class="num">8.7%</td></tr>
+<tr><td>25 มิ.ย. 2026 <span class="wd">(พฤหัสบดี)</span></td><td class="num">1,804,321</td><td class="num">3,896</td><td class="num">464</td><td class="num">8.6%</td></tr>
+<tr><td>08 ก.ค. 2026 <span class="wd">(พุธ)</span></td><td class="num">1,775,415</td><td class="num">3,994</td><td class="num">452</td><td class="num">8.6%</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card panel">
+      <h2>Bottom 5 วันที่ขายน้อยที่สุด</h2>
+      <table class="bottom">
+        <thead><tr><th>วันที่</th><th class="num">ยอดขาย (฿)</th><th class="num">ออเดอร์</th><th class="num">AOV (฿)</th><th class="num">อัตรายกเลิก</th></tr></thead>
+        <tbody><tr><td>12 มิ.ย. 2026 <span class="wd">(ศุกร์)</span></td><td class="num">647,032</td><td class="num">1,530</td><td class="num">421</td><td class="num">28.4%</td></tr>
+<tr><td>13 มิ.ย. 2026 <span class="wd">(เสาร์)</span></td><td class="num">700,331</td><td class="num">1,743</td><td class="num">406</td><td class="num">20.9%</td></tr>
+<tr><td>11 มิ.ย. 2026 <span class="wd">(พฤหัสบดี)</span></td><td class="num">713,603</td><td class="num">1,730</td><td class="num">418</td><td class="num">33.0%</td></tr>
+<tr><td>18 ก.ค. 2026 <span class="wd">(เสาร์)</span></td><td class="num">812,790</td><td class="num">2,029</td><td class="num">407</td><td class="num">13.9%</td></tr>
+<tr><td>19 ก.ค. 2026 <span class="wd">(อาทิตย์)</span></td><td class="num">827,750</td><td class="num">2,049</td><td class="num">437</td><td class="num">12.7%</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="insight-grid">
+    <div class="card insight pos">
+      <div class="tag">PEAK DAY</div>
+      <h3>7 ก.ค. 2026 ทำยอดสูงสุดของไตรมาส</h3>
+      <p>ยอดขาย ฿4,092,837 จาก 8,166 ออเดอร์ (AOV ฿510) สูงกว่าค่าเฉลี่ยรายวัน (1,230,700 บาท) กว่า 3 เท่า &mdash; ควรตรวจสอบว่าเป็นผลจากแคมเปญ/โปรโมชันใด เพื่อนำไปวางแผนซ้ำ</p>
+    </div>
+    <div class="card insight warn">
+      <div class="tag">RISK PERIOD</div>
+      <h3>11&ndash;13 มิ.ย. อัตรายกเลิกพุ่งสูงผิดปกติ</h3>
+      <p>อัตรายกเลิกขึ้นไปถึง 21&ndash;33% ในช่วง 3 วันนี้ (ปกติเฉลี่ย ~10%) และเป็นช่วงที่ยอดขายต่ำสุดของไตรมาสด้วย &mdash; ควรตรวจสต็อก/ระบบชำระเงิน/โลจิสติกส์ในช่วงดังกล่าวย้อนหลัง</p>
+    </div>
+    <div class="card insight info">
+      <div class="tag">PATTERN</div>
+      <h3>อังคารขายดีสุด อาทิตย์ขายน้อยสุด</h3>
+      <p>ยอดขายเฉลี่ยวันอังคารสูงกว่าวันอาทิตย์ประมาณ 53% &mdash; ใช้เป็นแนวทางจัดโปรโมชัน/สต็อกให้สอดคล้องกับพฤติกรรมลูกค้ารายสัปดาห์</p>
+    </div>
+  </section>
+
+  <footer>
+    <div><b>ที่มาข้อมูล:</b> ชีต &ldquo;รายงานคำสั่งซื้อ&rdquo; ในไฟล์ Google Sheets ของทีม (BigSeller export) &middot; ดึงข้อมูล ณ วันที่สร้างรายงานนี้</div>
+    <div><b>ข้อจำกัด:</b> ข้อมูลไม่ได้แยกตามช่องทางการขาย (Shopee/Lazada/TikTok ฯลฯ), ไม่แยกตาม SKU/หมวดหมู่สินค้า, และ &ldquo;อัตรายกเลิก&rdquo;/&ldquo;อัตราคืนเงิน&rdquo; คำนวณจากคอลัมน์ดิบในชีตโดยไม่ได้ตรวจสอบสาเหตุย้อนหลัง ตัวเลข AOV คำนวณแบบถ่วงน้ำหนัก (ยอดขายรวม/ออเดอร์รวม) ไม่ใช่ค่าเฉลี่ยอย่างง่ายของแต่ละวัน</div>
+  </footer>
+
+</div>
+
+<script>
+const DATA = {"daily_labels": ["1 พ.ค.", "2 พ.ค.", "3 พ.ค.", "4 พ.ค.", "5 พ.ค.", "6 พ.ค.", "7 พ.ค.", "8 พ.ค.", "9 พ.ค.", "10 พ.ค.", "11 พ.ค.", "12 พ.ค.", "13 พ.ค.", "14 พ.ค.", "15 พ.ค.", "16 พ.ค.", "17 พ.ค.", "18 พ.ค.", "19 พ.ค.", "20 พ.ค.", "21 พ.ค.", "22 พ.ค.", "23 พ.ค.", "24 พ.ค.", "25 พ.ค.", "26 พ.ค.", "27 พ.ค.", "28 พ.ค.", "29 พ.ค.", "30 พ.ค.", "31 พ.ค.", "1 มิ.ย.", "2 มิ.ย.", "3 มิ.ย.", "4 มิ.ย.", "5 มิ.ย.", "6 มิ.ย.", "7 มิ.ย.", "8 มิ.ย.", "9 มิ.ย.", "10 มิ.ย.", "11 มิ.ย.", "12 มิ.ย.", "13 มิ.ย.", "14 มิ.ย.", "15 มิ.ย.", "16 มิ.ย.", "17 มิ.ย.", "18 มิ.ย.", "19 มิ.ย.", "20 มิ.ย.", "21 มิ.ย.", "22 มิ.ย.", "23 มิ.ย.", "24 มิ.ย.", "25 มิ.ย.", "26 มิ.ย.", "27 มิ.ย.", "28 มิ.ย.", "29 มิ.ย.", "30 มิ.ย.", "1 ก.ค.", "2 ก.ค.", "3 ก.ค.", "4 ก.ค.", "5 ก.ค.", "6 ก.ค.", "7 ก.ค.", "8 ก.ค.", "9 ก.ค.", "10 ก.ค.", "11 ก.ค.", "12 ก.ค.", "13 ก.ค.", "14 ก.ค.", "15 ก.ค.", "16 ก.ค.", "17 ก.ค.", "18 ก.ค.", "19 ก.ค.", "20 ก.ค.", "21 ก.ค.", "22 ก.ค.", "23 ก.ค.", "24 ก.ค.", "25 ก.ค.", "26 ก.ค.", "27 ก.ค.", "28 ก.ค.", "29 ก.ค.", "30 ก.ค.", "31 ก.ค."], "daily_sales": [1284664.41, 1012020.59, 1020810.9, 1429829.24, 3064886.82, 1774709.03, 1501908.18, 1286901.21, 1095914.29, 1030832.28, 1184582.04, 1082369.99, 1149287.05, 1056069.83, 1409472.72, 881594.36, 937430.04, 1017585.7, 1106936.51, 1032722.72, 1095506.64, 997675.08, 891436.86, 916160.12, 1693154.77, 1323952.53, 1205858.59, 1241587.88, 1213272.97, 1057836.7, 1066843.32, 1095234.79, 1226121.03, 1200076.81, 1227139.29, 1467287.94, 3920164.31, 1467729.4, 1475107.06, 1173732.3, 1084969.84, 713602.92, 647032.4, 700330.64, 864456.96, 1420678.47, 1124248.31, 1000728.19, 962143.46, 1002545.66, 893338.51, 888079.71, 1065209.85, 1064392.9, 1014341.35, 1804321.38, 1293700.14, 1154828.5, 1069457.36, 1204284.99, 1384578.59, 1374687.04, 1360261.54, 1203359.52, 1062407.02, 1067262.41, 1456411.88, 4092837.43, 1775414.54, 1432985.1, 1075188.69, 969626.29, 878468.7, 1169579.54, 1112997.82, 1602448.93, 1052738.37, 1141095.95, 812789.89, 827749.61, 1145056.28, 1283482.25, 1121390.8, 1048008.67, 978308.62, 1598489.23, 941169.0, 1019887.58, 844849.64, 916666.76, 1155869.74, 1029229.46], "daily_cancel_rate": [12.29, 13.434, 12.393, 10.685, 8.699, 8.948, 10.357, 10.321, 12.942, 10.826, 10.809, 8.891, 8.816, 9.965, 8.75, 13.081, 11.433, 8.697, 9.638, 9.085, 8.305, 9.217, 13.359, 11.789, 9.434, 9.292, 9.965, 9.177, 9.1, 13.442, 16.272, 12.54, 12.236, 12.718, 11.721, 10.515, 9.172, 11.4, 9.424, 9.71, 9.781, 32.998, 28.438, 20.952, 15.591, 10.294, 8.402, 10.547, 9.473, 9.633, 11.784, 11.781, 9.529, 9.515, 10.509, 8.588, 8.968, 11.92, 12.85, 10.108, 8.584, 9.327, 9.578, 9.619, 12.367, 10.308, 10.334, 7.989, 8.562, 9.8, 9.751, 10.492, 11.361, 8.971, 9.749, 7.334, 8.677, 8.862, 13.953, 12.734, 9.576, 9.655, 9.381, 9.321, 10.401, 10.243, 12.762, 12.793, 14.958, 12.568, 9.573, 9.587], "daily_refund_rate": [0.49, 0.85, 0.43, 0.76, 0.75, 0.92, 0.74, 0.48, 0.44, 0.29, 0.9, 0.88, 0.88, 0.92, 0.89, 0.68, 0.26, 0.78, 1.12, 0.76, 0.75, 0.6, 0.58, 0.31, 0.39, 0.64, 0.61, 0.98, 0.71, 0.35, 0.47, 0.74, 0.83, 0.56, 0.86, 0.53, 0.34, 0.38, 0.73, 0.53, 0.52, 0.39, 0.33, 0.32, 0.38, 0.61, 0.76, 0.62, 0.48, 0.62, 0.86, 0.6, 0.54, 1.1, 0.97, 0.8, 0.95, 0.49, 0.4, 0.62, 0.54, 0.87, 0.95, 0.95, 0.63, 0.68, 0.83, 0.79, 0.64, 0.82, 1.26, 0.53, 0.54, 0.95, 0.78, 0.91, 0.75, 1.02, 0.59, 0.26, 0.56, 0.51, 0.84, 0.86, 0.83, 0.57, 0.58, 0.37, 0.04, 0.12, 0.15, 0.0], "weeks": [{"label": "1 พ.ค.-7 พ.ค.", "sales": 11088829.17, "days": 7}, {"label": "8 พ.ค.-14 พ.ค.", "sales": 7885956.69, "days": 7}, {"label": "15 พ.ค.-21 พ.ค.", "sales": 7481248.69, "days": 7}, {"label": "22 พ.ค.-28 พ.ค.", "sales": 8269825.83, "days": 7}, {"label": "29 พ.ค.-4 มิ.ย.", "sales": 8086524.91, "days": 7}, {"label": "5 มิ.ย.-11 มิ.ย.", "sales": 11302593.77, "days": 7}, {"label": "12 มิ.ย.-18 มิ.ย.", "sales": 6719618.43, "days": 7}, {"label": "19 มิ.ย.-25 มิ.ย.", "sales": 7732229.36, "days": 7}, {"label": "26 มิ.ย.-2 ก.ค.", "sales": 8841798.16, "days": 7}, {"label": "3 ก.ค.-9 ก.ค.", "sales": 12090677.9, "days": 7}, {"label": "10 ก.ค.-16 ก.ค.", "sales": 7861048.34, "days": 7}, {"label": "17 ก.ค.-23 ก.ค.", "sales": 7379573.45, "days": 7}, {"label": "24 ก.ค.-30 ก.ค.", "sales": 7455240.57, "days": 7}, {"label": "31 ก.ค.-31 ก.ค.", "sales": 1029229.46, "days": 1}], "wd_labels": ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."], "wd_avg": [1259738.63, 1529645.09, 1250253.97, 1204011.0, 1144981.05, 1234675.17, 998188.45], "peak_index": 67, "peak_label": "7 ก.ค.", "peak_value": 4092837.43};
+
+Chart.defaults.font.family = "'Sarabun', sans-serif";
+Chart.defaults.color = '#8b97ae';
+Chart.defaults.borderColor = 'rgba(148,163,184,0.08)';
+
+const fmtBaht = (v) => '฿' + Number(v).toLocaleString('th-TH', {maximumFractionDigits:0});
+const fmtNum = (v) => Number(v).toLocaleString('th-TH');
+
+const tooltipBase = {
+  backgroundColor: '#0d1526',
+  borderColor: 'rgba(148,163,184,0.2)',
+  borderWidth: 1,
+  titleColor: '#e6ebf5',
+  bodyColor: '#c7d0e0',
+  padding: 10,
+  titleFont: { family: "'Prompt', sans-serif", weight: '600' },
+  bodyFont: { family: "'Sarabun', sans-serif" },
+};
+
+// 1. Daily trend line
+new Chart(document.getElementById('dailyTrend'), {
+  type: 'line',
+  data: {
+    labels: DATA.daily_labels,
+    datasets: [{
+      label: 'ยอดขายรายวัน',
+      data: DATA.daily_sales,
+      borderColor: '#2dd4bf',
+      backgroundColor: 'rgba(45,212,191,0.12)',
+      borderWidth: 2,
+      pointRadius: (ctx) => ctx.dataIndex === DATA.peak_index ? 5 : 0,
+      pointHoverRadius: 5,
+      pointBackgroundColor: (ctx) => ctx.dataIndex === DATA.peak_index ? '#ff8a65' : '#2dd4bf',
+      fill: true,
+      tension: 0.3,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: { ...tooltipBase, callbacks: { label: (c) => 'ยอดขาย: ' + fmtBaht(c.parsed.y) } },
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 14, autoSkip: true } },
+      y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { callback: (v) => (v/1e6).toFixed(1) + 'M' } },
+    }
+  }
+});
+
+// 2. Weekday average bar
+new Chart(document.getElementById('wdChart'), {
+  type: 'bar',
+  data: {
+    labels: DATA.wd_labels,
+    datasets: [{
+      label: 'ยอดขายเฉลี่ย',
+      data: DATA.wd_avg,
+      backgroundColor: DATA.wd_avg.map(v => v === Math.max(...DATA.wd_avg) ? '#2dd4bf' : (v === Math.min(...DATA.wd_avg) ? '#ff8a65' : 'rgba(148,163,184,0.35)')),
+      borderRadius: 6,
+      maxBarThickness: 46,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { ...tooltipBase, callbacks: { label: (c) => 'เฉลี่ย: ' + fmtBaht(c.parsed.y) } },
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { callback: (v) => (v/1e6).toFixed(1) + 'M' } },
+    }
+  }
+});
+
+// 3. Weekly total bar
+new Chart(document.getElementById('weekChart'), {
+  type: 'bar',
+  data: {
+    labels: DATA.weeks.map(w => w.label),
+    datasets: [{
+      label: 'ยอดขายรายสัปดาห์',
+      data: DATA.weeks.map(w => w.sales),
+      backgroundColor: 'rgba(45,212,191,0.55)',
+      borderColor: '#2dd4bf',
+      borderWidth: 1,
+      borderRadius: 5,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { ...tooltipBase, callbacks: {
+        label: (c) => 'ยอดขาย: ' + fmtBaht(c.parsed.y),
+        afterLabel: (c) => DATA.weeks[c.dataIndex].days < 7 ? `(ข้อมูล ${DATA.weeks[c.dataIndex].days} วัน)` : '',
+      } },
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+      y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { callback: (v) => (v/1e6).toFixed(0) + 'M' } },
+    }
+  }
+});
+
+// 4. Cancel vs Refund dual line
+new Chart(document.getElementById('rateChart'), {
+  type: 'line',
+  data: {
+    labels: DATA.daily_labels,
+    datasets: [
+      {
+        label: 'อัตรายกเลิก (%)',
+        data: DATA.daily_cancel_rate,
+        borderColor: '#ff8a65',
+        backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+        yAxisID: 'yLeft', tension: 0.25,
+      },
+      {
+        label: 'อัตราคืนเงิน (%)',
+        data: DATA.daily_refund_rate,
+        borderColor: '#2dd4bf',
+        backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+        yAxisID: 'yRight', tension: 0.25,
+      },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { boxWidth: 10, usePointStyle: true, pointStyle: 'circle' } },
+      tooltip: { ...tooltipBase, callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(2)}%` } },
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { maxTicksLimit: 12, autoSkip: true } },
+      yLeft: { position: 'left', grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { callback: (v) => v + '%' } },
+      yRight: { position: 'right', grid: { display: false }, ticks: { callback: (v) => v + '%' } },
+    }
+  }
+});
+</script>
+</body>
+</html>
