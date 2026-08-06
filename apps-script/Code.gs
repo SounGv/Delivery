@@ -40,9 +40,10 @@ const SCHEMA = {
     'Phone','ContactPerson','Note','Status','CreatedAt','UpdatedAt','IsDeleted'],
 
   Employees: ['EmployeeID','EmployeeName','Phone','Role','VehicleID','Status',
+    'Username','PINHash',
     'CreatedAt','UpdatedAt','IsDeleted'],
 
-  Routes: ['RouteID','DeliveryDate','RouteType','DriverName','DriverPhone','VehicleType',
+  Routes: ['RouteID','DeliveryDate','RouteType','DriverName','DriverPhone','DriverEmployeeID','VehicleType',
     'VehicleName','LicensePlate','ProviderName','TotalStops','TotalBoxes','TotalDistance',
     'EstimatedDuration','EstimatedFuelCost','EstimatedTollCost','EstimatedParkingCost',
     'EstimatedExternalCost','EstimatedOtherCost','EstimatedTotalCost','ActualFuelCost',
@@ -228,6 +229,13 @@ function doPost(e) {
   let body = {};
   try { body = JSON.parse(e.postData.contents || '{}'); } catch (x) {}
   const action = body.action || (e.parameter && e.parameter.action);
+  // requestId: ฝั่ง frontend แนบ id เดิมมาซ้ำเวลา retry (เน็ตสะดุด/timeout) — เช็คแคชก่อน
+  // กันเขียนซ้ำ (เช่น confirmRoute สร้าง Route สองอันจากคลิกเดียว)
+  const reqId = body.requestId;
+  if (reqId) {
+    const cached = cacheGetJSON('req:' + reqId);
+    if (cached) return json(cached);
+  }
   try {
     const map = {
       createDelivery, updateDelivery, deleteDelivery, bulkImportDeliveries,
@@ -238,12 +246,18 @@ function doPost(e) {
       createExternalVehicle, updateExternalVehicle,
       createExpense, updateExpense, createClaim, updateClaim,
       updateSetting, syncCartrack,
-      logGPS, checkIn, startRoute, completeDelivery, failDelivery, uploadPOD
+      logGPS, checkIn, startRoute, completeDelivery, failDelivery, uploadPOD,
+      setDriverPin, driverLogin, driverLogout, getMyRoutes
     };
     if (!map[action]) return json({ ok:false, error:'unknown action: '+action });
     const out = map[action](body);
-    bumpVersion();   // ข้อมูลเปลี่ยน → ล้างแคช getBootstrap ให้ดึงของใหม่รอบถัดไป
-    return json({ ok:true, data: out });
+    // ข้ามการล้างแคชสำหรับ action ที่ไม่กระทบข้อมูลใน getBootstrap เลย (RouteStops/GPSLogs/session ไม่ได้อยู่ใน bootstrap)
+    // เพราะ action พวกนี้ถี่มาก (คนขับเช็คอินทุกจุด/ล็อกอินทุกเช้า) ถ้าล้างแคชทุกครั้งจะทำให้ getBootstrap แทบไม่เคยแคชติดเลยในวันที่มีงานส่งจริง
+    var NO_CACHE_BUST = { checkIn:1, logGPS:1, driverLogin:1, driverLogout:1, getMyRoutes:1 };
+    if (!NO_CACHE_BUST[action]) bumpVersion();
+    const result = { ok:true, data: out };
+    if (reqId) cachePutJSON('req:' + reqId, result, 300); // เก็บผลลัพธ์ไว้ 5 นาที เผื่อ retry
+    return json(result);
   } catch (err) {
     return json({ ok:false, error:String(err) });
   }
@@ -406,7 +420,7 @@ function getBootstrap(p){
     date: date,
     settings: readAll('Settings'),
     customers: readAll('Customers'),
-    employees: readAll('Employees'),
+    employees: stripEmployeeSecrets(readAll('Employees')),
     vehicles: readAll('Vehicles'),
     externalProviders: readAll('ExternalProviders'),
     externalVehicles: readAll('ExternalVehicles'),
@@ -436,8 +450,12 @@ function getRouteStops(p){
   if (p && p.routeId) rows = rows.filter(r => r.RouteID === p.routeId);
   return rows.sort((a,b)=> (a.StopOrder||0)-(b.StopOrder||0));
 }
+// ตัด PINHash ออกก่อนส่งให้ frontend เสมอ — Web app เปิดเป็น "Anyone" เข้าถึงได้ ไม่ควรให้ hash หลุดออกไปให้ brute-force offline
+function stripEmployeeSecrets(rows){
+  return rows.map(function(r){ const o = Object.assign({}, r); delete o.PINHash; return o; });
+}
 function getCustomers(){ return readAll('Customers'); }
-function getEmployees(){ return readAll('Employees'); }
+function getEmployees(){ return stripEmployeeSecrets(readAll('Employees')); }
 function getVehicles(){ return readAll('Vehicles'); }
 function getExternalProviders(){ return readAll('ExternalProviders'); }
 function getExternalVehicles(){ return readAll('ExternalVehicles'); }
@@ -736,7 +754,62 @@ function settingValue(key, fallback){
 }
 
 /* ==================================================================
-   7. MOBILE / GPS ENDPOINTS
+   7. DRIVER AUTH — ล็อกอินคนขับด้วย Username+PIN, session ผ่าน CacheService
+   token อายุ 6 ชม. (สูงสุดของ CacheService) ต่ออายุอัตโนมัติทุกครั้งที่ใช้ (sliding expiry)
+   ================================================================== */
+var DRIVER_SESSION_TTL = 21600;
+function hashPin(employeeId, pin){
+  const raw = String(employeeId) + ':' + String(pin);
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
+  return digest.map(function(x){ return ((x<0?x+256:x)).toString(16).padStart(2,'0'); }).join('');
+}
+function setDriverPin(b){
+  const pin = String(b.pin||'').trim();
+  if (!/^\d{4,6}$/.test(pin)) throw new Error('PIN ต้องเป็นเลข 4-6 หลัก');
+  const username = String(b.username||'').trim();
+  if (!username) throw new Error('กรอก Username ก่อน');
+  return updateById('Employees', b.id, { Username:username, PINHash:hashPin(b.id, pin) });
+}
+function driverLogin(b){
+  const username = String(b.username||'').trim().toLowerCase();
+  const emp = readAll('Employees').find(function(e){ return String(e.Username||'').trim().toLowerCase()===username; });
+  if (!emp) throw new Error('ไม่พบ Username นี้');
+  if (!emp.PINHash || hashPin(emp.EmployeeID, b.pin) !== emp.PINHash) throw new Error('PIN ไม่ถูกต้อง');
+  const token = Utilities.getUuid();
+  CacheService.getScriptCache().put('drv:'+token, emp.EmployeeID, DRIVER_SESSION_TTL);
+  logActivity('DRIVER_LOGIN', emp.EmployeeID, 'คนขับเข้าสู่ระบบ', emp.EmployeeName);
+  return { token, employee:{ EmployeeID:emp.EmployeeID, EmployeeName:emp.EmployeeName, Phone:emp.Phone } };
+}
+function driverLogout(b){
+  if (b.token) CacheService.getScriptCache().remove('drv:'+b.token);
+  return { ok:true };
+}
+// helper (ไม่ใช่ action) — คืน EmployeeID จาก token และต่ออายุ session ให้ (sliding expiry)
+function requireDriver(b){
+  const token = b.token;
+  if (!token) throw new Error('ไม่พบ session — กรุณาเข้าสู่ระบบ');
+  const cache = CacheService.getScriptCache();
+  const employeeId = cache.get('drv:'+token);
+  if (!employeeId) throw new Error('เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่');
+  cache.put('drv:'+token, employeeId, DRIVER_SESSION_TTL);
+  return employeeId;
+}
+function getMyRoutes(b){
+  const employeeId = requireDriver(b);
+  return getRoutes({ date:b.date }).filter(function(r){ return String(r.DriverEmployeeID)===String(employeeId); });
+}
+// มี token (เรียกจากหน้าคนขับ) → ต้องเป็นเจ้าของ Route นั้น · ไม่มี token (เรียกจากหน้าแอดมิน) → ปล่อยผ่านเหมือนเดิม
+function assertRouteOwnerIfToken(b){
+  if (!b.token) return;
+  const employeeId = requireDriver(b);
+  const route = readAll('Routes', true).find(function(r){ return String(r.RouteID)===String(b.routeId); });
+  if (route && route.DriverEmployeeID && String(route.DriverEmployeeID)!==String(employeeId)) {
+    throw new Error('Route นี้ไม่ได้มอบหมายให้คุณ');
+  }
+}
+
+/* ==================================================================
+   8. MOBILE / GPS ENDPOINTS
    ================================================================== */
 function logGPS(b){
   return appendRow('GPSLogs', Object.assign({
@@ -744,12 +817,14 @@ function logGPS(b){
   }, b.data));
 }
 function startRoute(b){
+  assertRouteOwnerIfToken(b);
   updateById('Routes', b.routeId, { Status:'In Progress' });
   logGPS({ data:{ RouteID:b.routeId, Latitude:b.lat, Longitude:b.lng, EventType:'START_ROUTE' }});
   logActivity('START_ROUTE', b.routeId, 'เริ่มรอบส่ง', b.user);
   return { ok:true };
 }
 function checkIn(b){
+  assertRouteOwnerIfToken(b);
   logGPS({ data:{ RouteID:b.routeId, DeliveryID:b.deliveryId, Latitude:b.lat,
     Longitude:b.lng, Accuracy:b.accuracy, EventType:'CHECK_IN' }});
   updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data:{
@@ -763,6 +838,7 @@ function proximity(m){
   m=Number(m)||9999; return m<=green?'GREEN':(m<=yellow?'YELLOW':'RED');
 }
 function completeDelivery(b){
+  assertRouteOwnerIfToken(b);
   const cData = { DeliveryCompletedTime:new Date().toISOString(), Status:'Completed' };
   if (b.photoUrl) { ensureColumn('RouteStops','PhotoURL'); cData.PhotoURL = b.photoUrl; }
   updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data: cData });
@@ -773,6 +849,7 @@ function completeDelivery(b){
   return { ok:true };
 }
 function failDelivery(b){
+  assertRouteOwnerIfToken(b);
   const fData = { Status:'Failed' };
   if (b.photoUrl) { ensureColumn('RouteStops','PhotoURL'); fData.PhotoURL = b.photoUrl; }
   updateRouteStop({ routeId:b.routeId, stopOrder:b.stopOrder, data: fData });
@@ -793,6 +870,14 @@ function ensureColumn(name, col){
   if (H.indexOf(col) === -1) {
     sh.getRange(1, last + 1).setValue(col).setFontWeight('bold').setBackground('#0B1220').setFontColor('#FFFFFF');
   }
+}
+// รันครั้งเดียวใน Apps Script editor หลังอัปเดตโค้ด (ระบบล็อกอินคนขับ) — เติมคอลัมน์ใหม่ให้ sheet ที่มีข้อมูลอยู่แล้ว
+// setupDatabase() เดิมจะไม่แตะ header ของชีตที่มีอยู่แล้ว จึงต้องมีฟังก์ชันนี้แยก
+function migrateDriverAuthColumns(){
+  ensureColumn('Employees','Username');
+  ensureColumn('Employees','PINHash');
+  ensureColumn('Routes','DriverEmployeeID');
+  try { SpreadsheetApp.getActiveSpreadsheet().toast('เพิ่มคอลัมน์ระบบล็อกอินคนขับเรียบร้อย'); } catch (e) {}
 }
 function getPODFolder(){
   const name = 'Delivery POD - Gadget Villa';

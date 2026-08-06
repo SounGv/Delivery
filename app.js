@@ -87,6 +87,8 @@ function thDate(iso){ if(!iso) return '—'; const d=new Date(iso+(iso.length<=1
 function timeShort(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return String(iso); return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); }
 function ago(iso){ if(!iso) return '—'; const s=(Date.now()-new Date(iso).getTime())/1000; if(s<60) return `${Math.round(s)} วินาทีที่แล้ว`; if(s<3600) return `${Math.round(s/60)} นาทีที่แล้ว`; return timeShort(iso); }
 function haversine(a,b,c,d){ const R=6371,rad=Math.PI/180; const dLat=(c-a)*rad,dLng=(d-b)*rad; const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2; return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)); }
+// มุม (bearing) จากจุด (a,b) ไปจุด (c,d) — 0..360° ใช้จัดกลุ่มจุดส่งตามพื้นที่ (sweep algorithm)
+function bearing(a,b,c,d){ const rad=Math.PI/180; const y=Math.sin((d-b)*rad)*Math.cos(c*rad); const x=Math.cos(a*rad)*Math.sin(c*rad)-Math.sin(a*rad)*Math.cos(c*rad)*Math.cos((d-b)*rad); return (Math.atan2(y,x)/rad+360)%360; }
 function setting(key,fb){ const rows=Store.data.settings||[]; const r=rows.find(x=>x.Key===key); return r&&r.Value!==''&&r.Value!=null ? r.Value : (fb!==undefined?fb:''); }
 function warehouse(){ return { lat:Number(setting('WAREHOUSE_LAT',13.6900321)), lng:Number(setting('WAREHOUSE_LNG',100.5251873)), name:setting('WAREHOUSE_NAME','คลัง แก็ดเจ็ต วิลล่า (รัชดาฯ)') }; }
 
@@ -120,7 +122,7 @@ const Mock = (() => {
       c('CUS-06','Banana','Mega Bangna','Mega Bangna, บางนา',13.6515,100.6295,'02-600-6000'),
     ],
     employees: [
-      { EmployeeID:'EMP-01', EmployeeName:'นายสมชาย ใจดี', Phone:'081-111-1111', Role:'DRIVER', VehicleID:'V-01', Status:'Active' },
+      { EmployeeID:'EMP-01', EmployeeName:'นายสมชาย ใจดี', Phone:'081-111-1111', Role:'DRIVER', VehicleID:'V-01', Status:'Active', Username:'somchai', PINHash:mockHash('EMP-01','1234') },
       { EmployeeID:'EMP-02', EmployeeName:'นายวิชัย กล้าแกร่ง', Phone:'082-222-2222', Role:'DRIVER', VehicleID:'V-02', Status:'Active' },
       { EmployeeID:'EMP-03', EmployeeName:'นายมานะ อดทน', Phone:'083-333-3333', Role:'DRIVER', VehicleID:'V-03', Status:'Active' },
     ],
@@ -147,7 +149,7 @@ const Mock = (() => {
     ],
     routes: [], routeStops: [], expenses: [], claims: [], gps: [], cartrackVehicles: [],
     activities: [ { LogID:'LOG-0', Action:'SEED', ReferenceID:'-', Description:'โหลดข้อมูลทดลอง', User:'system', Timestamp:now() } ],
-    seq: { DEL:6, CUS:6, V:3, EV:2, ROUTE:0, EXP:0, CLM:0 }
+    seq: { DEL:6, CUS:6, V:3, EV:2, ROUTE:0, EXP:0, CLM:0 }, driverTokens: {}
   };
   function k(K,V,G,L){ return { Key:K, Value:V, Group:G, Label:L, UpdatedAt:now() }; }
   function c(id,name,br,addr,lat,lng,ph){ return { CustomerID:id, CustomerName:name, BranchName:br, Address:addr, Latitude:lat, Longitude:lng, Phone:ph, ContactPerson:'', Status:'Active' }; }
@@ -155,6 +157,20 @@ const Mock = (() => {
   function d(id,cust,br,inv,lat,lng,box,pri){ return { DeliveryID:id, DeliveryDate:DATA_DATE, CustomerName:cust, BranchName:br, InvoiceNo:inv, Address:br, Latitude:lat, Longitude:lng, BoxQty:box, Priority:pri, Note:'', RouteID:'', Status:'Draft', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false }; }
   function nid(pre){ db.seq[pre]=(db.seq[pre]||0)+1; return pre+'-'+String(db.seq[pre]).padStart(3,'0'); }
   function log(a,ref,desc){ db.activities.unshift({ LogID:'LOG-'+Date.now(), Action:a, ReferenceID:ref, Description:desc, User:'ผู้จัดการระบบ', Timestamp:now() }); }
+  // ---- driver auth (mock — ไม่ใช่ hash จริง แค่จำลองให้ทดสอบออฟไลน์ได้) ----
+  function mockHash(id,pin){ return 'H:'+id+':'+pin; }
+  function mockRequireDriver(p){
+    if(!p.token) throw new Error('ไม่พบ session — กรุณาเข้าสู่ระบบ');
+    const empId=db.driverTokens[p.token];
+    if(!empId) throw new Error('เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่');
+    return empId;
+  }
+  function mockAssertOwnerIfToken(p){
+    if(!p.token) return;
+    const empId=mockRequireDriver(p);
+    const route=db.routes.find(x=>x.RouteID===p.routeId);
+    if(route && route.DriverEmployeeID && String(route.DriverEmployeeID)!==String(empId)) throw new Error('Route นี้ไม่ได้มอบหมายให้คุณ');
+  }
 
   function dashboard(date){
     const dels = db.deliveries.filter(x=>x.DeliveryDate===date && !x.IsDeleted);
@@ -241,11 +257,24 @@ const Mock = (() => {
       case 'updateClaim': return patch(db.claims,'ClaimID',p.id,p.data);
       case 'updateSetting': { const s=db.settings.find(x=>x.Key===p.key); if(s){s.Value=p.value;s.UpdatedAt=now();return s;} const rec={Key:p.key,Value:p.value,Group:p.group||'custom',Label:p.label||p.key,UpdatedAt:now()}; db.settings.push(rec); return rec; }
       case 'syncCartrack': { const en=String(setting('CARTRACK_ENABLED','false')).toLowerCase()==='true'; if(!en) return {ok:false,skipped:true,message:'โหมดทดลอง — Cartrack ปิดอยู่'}; return {ok:false,mock:true,message:'โหมดทดลองไม่เชื่อมต่อ Cartrack จริง'}; }
-      case 'startRoute': { patch(db.routes,'RouteID',p.routeId,{Status:'In Progress'}); log('START_ROUTE',p.routeId,'เริ่มรอบส่ง'); return {ok:true}; }
-      case 'checkIn': { const m=Number(p.distanceMeters)||9999; return { proximity: m<=100?'GREEN':(m<=500?'YELLOW':'RED') }; }
+      case 'startRoute': { mockAssertOwnerIfToken(p); patch(db.routes,'RouteID',p.routeId,{Status:'In Progress'}); log('START_ROUTE',p.routeId,'เริ่มรอบส่ง'); return {ok:true}; }
+      case 'checkIn': { mockAssertOwnerIfToken(p); const m=Number(p.distanceMeters)||9999; return { proximity: m<=100?'GREEN':(m<=500?'YELLOW':'RED') }; }
       case 'uploadPOD': return { ok:true, url:p.base64||'', viewUrl:p.base64||'', mock:true };
-      case 'completeDelivery': { if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Completed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Completed';s.DeliveryCompletedTime=now();if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('COMPLETE_DELIVERY',p.deliveryId||p.routeId,'ส่งสินค้าเสร็จ'); return {ok:true}; }
-      case 'failDelivery': { if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Failed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Failed';if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('FAILED_DELIVERY',p.deliveryId||p.routeId,'ส่งไม่สำเร็จ'); return {ok:true}; }
+      case 'completeDelivery': { mockAssertOwnerIfToken(p); if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Completed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Completed';s.DeliveryCompletedTime=now();if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('COMPLETE_DELIVERY',p.deliveryId||p.routeId,'ส่งสินค้าเสร็จ'); return {ok:true}; }
+      case 'failDelivery': { mockAssertOwnerIfToken(p); if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Failed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Failed';if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('FAILED_DELIVERY',p.deliveryId||p.routeId,'ส่งไม่สำเร็จ'); return {ok:true}; }
+      case 'setDriverPin': { const emp=db.employees.find(x=>x.EmployeeID===p.id); if(!emp) throw new Error('ไม่พบพนักงาน');
+        const pin=String(p.pin||''); if(!/^\d{4,6}$/.test(pin)) throw new Error('PIN ต้องเป็นเลข 4-6 หลัก');
+        const username=String(p.username||'').trim(); if(!username) throw new Error('กรอก Username ก่อน');
+        emp.Username=username; emp.PINHash=mockHash(emp.EmployeeID,pin); return emp; }
+      case 'driverLogin': { const uname=String(p.username||'').trim().toLowerCase();
+        const emp=db.employees.find(x=>String(x.Username||'').trim().toLowerCase()===uname);
+        if(!emp) throw new Error('ไม่พบ Username นี้');
+        if(!emp.PINHash || mockHash(emp.EmployeeID,p.pin)!==emp.PINHash) throw new Error('PIN ไม่ถูกต้อง');
+        const token='MOCKTOKEN-'+emp.EmployeeID+'-'+Date.now(); db.driverTokens[token]=emp.EmployeeID;
+        log('DRIVER_LOGIN',emp.EmployeeID,'คนขับเข้าสู่ระบบ');
+        return { token, employee:{ EmployeeID:emp.EmployeeID, EmployeeName:emp.EmployeeName, Phone:emp.Phone } }; }
+      case 'driverLogout': { delete db.driverTokens[p.token]; return {ok:true}; }
+      case 'getMyRoutes': { const empId=mockRequireDriver(p); let r=db.routes.filter(x=>!x.IsDeleted && String(x.DriverEmployeeID)===String(empId)); if(p.date) r=r.filter(x=>x.DeliveryDate===p.date); return r; }
       default: throw new Error('mock: unknown action '+action);
     }
   }
@@ -281,15 +310,22 @@ const API = {
     }
     throw lastErr;
   },
-  // POST เป็น write → ไม่ retry อัตโนมัติ (กันเขียนซ้ำ) แต่ให้ timeout ยาวพอ
+  // POST เป็น write → แนบ requestId คงที่ + retry ได้ 1 ครั้งถ้าเน็ตสะดุด (ไม่เขียนซ้ำ เพราะฝั่งเซิร์ฟเวอร์แคชผลลัพธ์ตาม requestId ไว้ให้)
   async post(action, body={}){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, body)));
-    const res = await fetchWithTimeout(this.url(), { method:'POST', redirect:'follow',
-      headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify(Object.assign({action}, body)) }, 45000);
-    const j = await res.json();
-    if(!j.ok) throw new Error(j.error||'API error');
-    return j.data;
+    const requestId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('r'+Date.now()+Math.random().toString(36).slice(2));
+    const payload = JSON.stringify(Object.assign({action, requestId}, body));
+    let lastErr;
+    for(let i=0;i<=1;i++){
+      try{
+        const res = await fetchWithTimeout(this.url(), { method:'POST', redirect:'follow',
+          headers:{'Content-Type':'text/plain;charset=utf-8'}, body: payload }, 45000);
+        const j = await res.json();
+        if(!j.ok) throw new Error(j.error||'API error');
+        return j.data;
+      }catch(e){ lastErr=e; if(i===0) await new Promise(r=>setTimeout(r,800)); }
+    }
+    throw lastErr;
   }
 };
 function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 60)); }
@@ -368,7 +404,9 @@ function dataSignature(d){
 // ซิงก์ข้อมูลเบื้องหลังอัตโนมัติ — ให้ผู้จ่ายงานเห็นสถานะที่คนขับอัปเดต โดยไม่ต้องรีเฟรชเอง
 const SYNC_PAGES = ['dashboard','deliveries','rounds','vehicles','external','customers','employees','livemap'];
 async function silentSync(){
-  if(!API.configured() || Store.pending || (typeof document!=='undefined' && document.hidden)) return;
+  // Store._syncing กันรอบใหม่ยิงซ้อนรอบเก่าที่ยังไม่ตอบกลับ (Apps Script ตอบช้า 10-30+ วิ ถ้าซ้อนกันจะยิ่งอั้นคิว)
+  if(!API.configured() || Store.pending || Store._syncing || (typeof document!=='undefined' && document.hidden)) return;
+  Store._syncing = true;
   try{
     const data = await API.get('getBootstrap', { date: Store.date }, 0, 45000);
     if(Store.pending) return; // มีการแก้ไขแทรกระหว่างดึงข้อมูล → ทิ้งชุดนี้
@@ -376,6 +414,7 @@ async function silentSync(){
     Store.data = data; Store.live = true; Store.lastSync = new Date().toISOString(); updateSync();
     if(sig !== Store._sig){ Store._sig = sig; if(SYNC_PAGES.includes(Store.page)) render(); }
   }catch(e){ Store.live = false; updateSync(); scheduleReconnect(); }
+  finally{ Store._syncing = false; }
 }
 function createLocal(name, action, data, extra){
   const key = KEY[name], id = tmpId();
@@ -402,6 +441,20 @@ function localAddRoute(r, stops){
   coll('routes').unshift(r);
   (stops||[]).forEach(s=>{ if(s.DeliveryID){ const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID)); if(d){ d.Status='Planned'; d.RouteID=r.RouteID; } } });
   recomputeDashboard();
+}
+// สร้าง Route แบบ optimistic — ขึ้น Route ชั่วคราวในเครื่องทันที (ไม่ต้องรอ POST) แล้วค่อยสลับเป็นของจริงเมื่อเซิร์ฟเวอร์ตอบ
+// ถ้าพลาด optimistic() จะย้อนกลับ (ลบ Route ชั่วคราว + คืนสถานะงานส่ง) ให้เอง
+function createRouteOptimistic(action, data, stops){
+  const tmp = Object.assign({ RouteID: tmpId(), IsDeleted:false, __pending:true }, data);
+  const ids = (stops||[]).map(s=>s.DeliveryID).filter(Boolean);
+  return optimistic(()=>{
+    coll('routes').unshift(tmp);
+    const prev = [];
+    ids.forEach(id=>{ const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(id)); if(d){ prev.push([d,d.Status,d.RouteID]); d.Status='Planned'; d.RouteID=tmp.RouteID; } });
+    return ()=>{ const a=coll('routes'), i=a.indexOf(tmp); if(i>=0) a.splice(i,1); prev.forEach(([d,st,rid])=>{ d.Status=st; d.RouteID=rid; }); };
+  }, action, { data, stops },
+  { reconcile:r=>{ if(!r) return; const a=coll('routes'), i=a.indexOf(tmp); if(i>=0) a[i]=r;
+      ids.forEach(id=>{ const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(id)); if(d && d.RouteID===tmp.RouteID) d.RouteID=r.RouteID; }); } });
 }
 
 /* ================================================================
@@ -732,18 +785,72 @@ const Planner = {
         note:`รองรับงานทั้งหมด — เสริมด้วย ${ext.ProviderName} (${ext.CapacityBox} กล่อง)` });
     }
 
-    // OPTION C — split into 2 routes (company vehicles)
+    // OPTION C — แบ่งเป็นหลาย Route ตามพื้นที่ (sweep) + จับคู่รถอัตโนมัติ ให้ระยะทางรวมสั้นสุด
     if(avail.length>=2){
-      const mid = Math.ceil(seq.length/2);
-      const g1=seq.slice(0,mid), g2=seq.slice(mid);
-      const m1=this.metrics(g1), m2=this.metrics(g2);
-      const c1=this.companyCost(m1.distance,avail[0]), c2=this.companyCost(m2.distance,avail[1]);
-      opts.push({ id:'C', name:'แบ่งเป็น 2 Route', feasible:true, split:[{seq:g1,m:m1,v:avail[0],cost:c1},{seq:g2,m:m2,v:avail[1],cost:c2}],
-        vehicles:[avail[0],avail[1]], distance:+(m1.distance+m2.distance).toFixed(1), duration:Math.max(m1.durationMin,m2.durationMin),
-        boxes:m.boxes, stops:m.stops, cost:{ fuel:+(c1.fuel+c2.fuel).toFixed(2), toll:c1.toll+c2.toll, parking:c1.parking+c2.parking, external:0, other:0, total:+(c1.total+c2.total).toFixed(2) },
-        note:`Route 1: ${g1.length} จุด · Route 2: ${g2.length} จุด (ส่งพร้อมกัน 2 คัน)` });
+      const sortedCap = avail.slice().sort((a,b)=>Number(b.CapacityBox)-Number(a.CapacityBox));
+      // K แนะนำ = จำนวนรถขั้นต่ำที่ความจุรวมพอสำหรับงานทั้งหมด (อย่างน้อย 2, ไม่เกินจำนวนรถว่าง)
+      let kRec=2, cap=0;
+      for(let i=0;i<sortedCap.length;i++){ cap+=Number(sortedCap[i].CapacityBox)||0; kRec=i+1; if(cap>=m.boxes && kRec>=2) break; }
+      kRec = Math.min(Math.max(kRec,2), sortedCap.length);
+      const groups = this.autoSplit(seq, sortedCap.slice(0,kRec));
+      const totalDist = +groups.reduce((n,g)=>n+g.m.distance,0).toFixed(1);
+      const cFuel=groups.reduce((n,g)=>n+g.cost.fuel,0), cToll=groups.reduce((n,g)=>n+g.cost.toll,0), cPark=groups.reduce((n,g)=>n+g.cost.parking,0);
+      opts.push({ id:'C', name:`แบ่งเป็น ${groups.length} Route (ตามพื้นที่)`, feasible:true, kRec, kMax:sortedCap.length, split:groups,
+        vehicles:groups.map(g=>g.v), distance:totalDist, duration:Math.max(...groups.map(g=>g.m.durationMin)),
+        boxes:m.boxes, stops:m.stops,
+        cost:{ fuel:+cFuel.toFixed(2), toll:cToll, parking:cPark, external:0, other:0, total:+(cFuel+cToll+cPark).toFixed(2) },
+        note: groups.map((g,i)=>`Route ${i+1}: ${g.seq.length} จุด · ${num1(g.m.distance)} กม.`).join(' · ') });
     }
     return { metrics:m, options:opts };
+  },
+
+  // แบ่งจุดส่งเป็น K กลุ่มตามพื้นที่ (sweep by bearing จากคลัง) แบบ capacity-greedy
+  // แล้วปรับขอบเขต (border-swap) ให้ระยะทางรวมทุกกลุ่มสั้นที่สุด — คืนกลุ่มละ {seq,m,v,cost}
+  autoSplit(seq, vehicles){
+    const wh = warehouse();
+    if(vehicles.length<=1){ const s=this.order(seq.map(x=>Object.assign({},x))); const mm=this.metrics(s); return [{ seq:s, m:mm, v:vehicles[0], cost:this.companyCost(mm.distance, vehicles[0]) }]; }
+    const K = vehicles.length;
+    const caps = vehicles.map(v=>Number(v.CapacityBox)||9999);
+    const totalCap = caps.reduce((a,b)=>a+b,0) || 1;
+    const totalBoxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
+    const targetBoxes = caps.map(c=>totalBoxes*(c/totalCap));
+
+    // clone แต่ละจุด — กัน order()/metrics() ภายในฟังก์ชันนี้ (ซึ่งแก้ _distPrev ในอ็อบเจกต์) ไปกระทบ seq เดิมที่ใช้แสดงผล Option A/B
+    const pts = seq.map(s=>Object.assign({},s)).sort((a,b)=>bearing(wh.lat,wh.lng,+a.Latitude,+a.Longitude)-bearing(wh.lat,wh.lng,+b.Latitude,+b.Longitude));
+    const groups = Array.from({length:K},()=>[]);
+    let gi=0, acc=0;
+    pts.forEach(p=>{
+      const boxQty = Number(p.BoxQty)||0;
+      if(gi<K-1 && groups[gi].length && acc+boxQty>targetBoxes[gi]){ gi++; acc=0; }
+      groups[gi].push(p); acc+=boxQty;
+    });
+
+    const boxSum = g => g.reduce((n,x)=>n+(Number(x.BoxQty)||0),0);
+    const distOf = g => g.length ? this.metrics(this.order(g)).distance : 0;
+    for(let pass=0; pass<3; pass++){
+      let improved=false;
+      for(let i=0;i<K-1;i++){
+        const A=groups[i], B=groups[i+1];
+        if(!A.length || !B.length) continue;
+        const base = distOf(A)+distOf(B);
+        let bestCand=null, bestDist=base;
+        if(A.length>1 && boxSum(B)+(Number(A[A.length-1].BoxQty)||0)<=caps[i+1]){
+          const A2=A.slice(0,-1), B2=[A[A.length-1],...B];
+          const d=distOf(A2)+distOf(B2); if(d<bestDist-0.05){ bestDist=d; bestCand=[A2,B2]; }
+        }
+        if(B.length>1 && boxSum(A)+(Number(B[0].BoxQty)||0)<=caps[i]){
+          const B2=B.slice(1), A2=[...A,B[0]];
+          const d=distOf(A2)+distOf(B2); if(d<bestDist-0.05){ bestDist=d; bestCand=[A2,B2]; }
+        }
+        if(bestCand){ groups[i]=bestCand[0]; groups[i+1]=bestCand[1]; improved=true; }
+      }
+      if(!improved) break;
+    }
+    return groups.map((g,i)=>{
+      if(!g.length) return null;
+      const s=this.order(g), mm=this.metrics(s), v=vehicles[i];
+      return { seq:s, m:mm, v, cost:this.companyCost(mm.distance, v) };
+    }).filter(Boolean);
   }
 };
 
@@ -919,7 +1026,12 @@ function bindShell(){
   el('backdrop').onclick = ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); };
   el('nav').addEventListener('click', ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); });
   el('dateBtn').onclick = openDatePicker;
-  el('globalSearch').addEventListener('input', e=>{ Store.search=e.target.value.trim().toLowerCase(); if(['deliveries','rounds','customers'].includes(Store.page)) render(); });
+  let _searchT;
+  el('globalSearch').addEventListener('input', e=>{
+    const v = e.target.value.trim().toLowerCase();
+    clearTimeout(_searchT);
+    _searchT = setTimeout(()=>{ Store.search=v; if(['deliveries','rounds','customers'].includes(Store.page)) render(); }, 250);
+  });
 }
 function openDatePicker(){
   const m = modal({ title:'เลือกวันที่', body:`
@@ -952,11 +1064,13 @@ async function init(){
   render();               // แสดงโครงหน้าทันที (ไม่ต้องรอเซิร์ฟเวอร์) ระหว่างกำลังเชื่อมต่อ
   await loadBootstrap();
   render();               // เติมข้อมูลจริงเมื่อเชื่อมต่อสำเร็จ
-  // realtime polling ทุก 10 วิ — หน้าแผนที่/Cartrack ดึงพิกัดสดจาก Cartrack (light) · หน้าอื่นอ่านสรุป
+  // realtime polling ทุก 20 วิ — หน้าแผนที่/Cartrack ดึงพิกัดสดจาก Cartrack (light) · หน้าอื่นอ่านสรุป
+  // Store._polling กันรอบใหม่ยิงซ้อนรอบเก่าที่ยังไม่ตอบกลับ (เหตุผลเดียวกับ silentSync — ยิงซ้อนแล้วเซิร์ฟเวอร์อั้นคิว ยิ่งช้าลงอีก)
   Store.pollTimer = setInterval(async ()=>{
     const p = Store.page;
-    if(!['dashboard','livemap'].includes(p)) return;
+    if(!['dashboard','livemap'].includes(p) || Store._polling) return;
     const ctOn = Store.data.cartrack && Store.data.cartrack.enabled;
+    Store._polling = true;
     try{
       if(p==='livemap' && ctOn && API.configured()){
         // เรียลไทม์: สั่งดึง Cartrack สด (โหมดเบา) แล้วอัปเดตตำแหน่งทันที
@@ -970,9 +1084,10 @@ async function init(){
         Store.data.cartrack=rt.cartrack; Store._live={stops:rt.stops, vehicles:rt.vehicles}; Store.lastSync=new Date().toISOString(); updateSync(); if(window._onRealtime) window._onRealtime(rt);
       }
     }catch(e){}
-  }, 10000);
-  // ซิงก์ข้อมูลทั้งหมดเบื้องหลังทุก 60 วิ — สถานะที่คนขับ/เครื่องอื่นอัปเดต จะขึ้นเองอัตโนมัติ
-  // (getBootstrap ~13 วิ จึงไม่ถี่กว่านี้ เพื่อไม่ให้เซิร์ฟเวอร์ทำงานหนักเกินไป)
-  Store.syncTimer = setInterval(silentSync, 60000);
+    finally{ Store._polling = false; }
+  }, 20000);
+  // ซิงก์ข้อมูลทั้งหมดเบื้องหลังทุก 120 วิ — สถานะที่คนขับ/เครื่องอื่นอัปเดต จะขึ้นเองอัตโนมัติ
+  // (getBootstrap วัดจริงหน้างานช้าได้ถึง 20-35 วิ โดยเฉพาะตอนมีคนเปิดแอปพร้อมกันหลายคน จึงยืดรอบให้ห่างขึ้นเพื่อลดโอกาสซ้อนคิว)
+  Store.syncTimer = setInterval(silentSync, 120000);
 }
 document.addEventListener('DOMContentLoaded', init);

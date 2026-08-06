@@ -144,16 +144,18 @@ function qdRefresh(){ el('qdBody').innerHTML=qdBody(); icons(); qdBind(); }
 async function qdConfirm(){
   const d=QD.d, m=QD.m, isExt=QD.type==='EXTERNAL', v=qdVehicle(), c=qdCost();
   if(!v){ toast('เลือกรถก่อน','warn'); return; }
-  const emp=!isExt&&(Store.data.employees||[]).find(e=>e.VehicleID===v.VehicleID);
+  const driverName=QD.driver||(isExt?v.DriverName:v.CurrentDriver)||'';
+  const emp=!isExt&&((Store.data.employees||[]).find(e=>e.EmployeeName===driverName) || (Store.data.employees||[]).find(e=>e.VehicleID===v.VehicleID));
   const data={ DeliveryDate:Store.date, RouteType:isExt?'EXTERNAL_VEHICLE':'COMPANY_VEHICLE',
-    DriverName:QD.driver||(isExt?v.DriverName:v.CurrentDriver)||'', DriverPhone:(emp&&emp.Phone)||(isExt?v.DriverPhone:'')||'',
+    DriverName:driverName, DriverPhone:(emp&&emp.Phone)||(isExt?v.DriverPhone:'')||'',
+    DriverEmployeeID: isExt?'':(emp?emp.EmployeeID:''),
     VehicleType:v.VehicleType||'', VehicleName:isExt?'':(v.VehicleName||''), LicensePlate:v.LicensePlate||'', ProviderName:isExt?(v.ProviderName||''):'',
     TotalStops:1, TotalBoxes:Number(d.BoxQty)||0, TotalDistance:m.distance, EstimatedDuration:m.durationMin,
     EstimatedFuelCost:c.fuel, EstimatedTollCost:c.toll, EstimatedParkingCost:c.parking, EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
   const stops=[{ DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName, Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty, DistanceFromPrevious:m.distance }];
-  const btn=el('qdSave'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังจ่ายรถ…'; icons();
-  try{ const r=await API.post('confirmRoute',{data,stops}); localAddRoute(r,stops); QD.modal.close(); render(); toast('จ่ายรถแล้ว · '+r.RouteID+' · '+money(c.total)+' ฿','ok','จัดรถด่วนสำเร็จ'); }
-  catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check-circle-2"></i>ยืนยัน & จ่ายรถ'; icons(); }
+  QD.modal.close();
+  toast('กำลังจ่ายรถ · '+money(c.total)+' ฿…','ok','จัดรถด่วนสำเร็จ');
+  createRouteOptimistic('confirmRoute', data, stops).catch(()=>{});
 }
 function deliveryForm(d){
   const custs = Store.data.customers||[];
@@ -198,7 +200,7 @@ function deliveryForm(d){
 /* ================================================================
    ROUTE PLANNING — DECISION CENTER  ★
    ================================================================ */
-const Plan = { selected:new Set(), result:null, chosen:null, sel:{type:'COMPANY',vehId:'',extId:'',driver:''}, map:null, layer:null };
+const Plan = { selected:new Set(), result:null, chosen:null, sel:{type:'COMPANY',vehId:'',extId:'',driver:'',driverEmployeeId:''}, splitSel:[], map:null, layer:null };
 ROUTES.planning = async function(view){
   const pending = (Store.data.deliveries||[]).filter(d=>['Draft','Planned'].includes(d.Status));
   const drafts = pending.filter(d=>d.Latitude && d.Longitude);   // มีพิกัด → จัด Route ได้
@@ -274,18 +276,28 @@ function miniStat(l,v,ic){ return `<div class="flex between aic" style="padding:
   <span class="flex aic gap8"><i data-lucide="${ic}" style="width:18px;height:18px;color:#6B7383"></i><span class="small muted">${l}</span></span>
   <span class="strong tab">${v}</span></div>`; }
 
-function drawPlanMap(selDels, seq){
+const SPLIT_COLORS=['#6f9e0a','#2563EB','#DB2777','#D97706','#7C3AED','#0891B2'];
+function drawPlanMap(selDels, seq, splitGroups){
   if(!Plan.map) return; Plan.layer.clearLayers();
   const wh=warehouse();
   MapUtil.whMarker(Plan.layer, wh);
   (Store.data.vehicles||[]).filter(v=>v.CurrentLatitude).forEach(v=>{ const st=VSTATUS[v.VehicleStatus]||VSTATUS.Unknown; L.marker([+v.CurrentLatitude,+v.CurrentLongitude],{icon:L.divIcon({className:'veh-pin',html:`<div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`,iconSize:[28,28],iconAnchor:[14,14]})}).addTo(Plan.layer).bindPopup(esc(v.VehicleName)); });
-  const list = seq || selDels;
   const pts=[[wh.lat,wh.lng]];
-  list.forEach((d,i)=>{ if(d.Latitude){ MapUtil.stopMarker(Plan.layer,d,i+1,(PRIORITY[d.Priority]||PRIORITY.NORMAL).color); pts.push([+d.Latitude,+d.Longitude]); } });
-  if(seq){
-    const geo = Plan.result && Plan.result.metrics && Plan.result.metrics.geometry;
-    const line = (geo && geo.length) ? geo : [[wh.lat,wh.lng],...seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]];
-    L.polyline(line,{color:'#6f9e0a',weight:4,opacity:.85}).addTo(Plan.layer);
+  if(splitGroups){
+    splitGroups.forEach((g,gi)=>{
+      const color=SPLIT_COLORS[gi%SPLIT_COLORS.length];
+      g.seq.forEach((d,i)=>{ if(d.Latitude){ MapUtil.stopMarker(Plan.layer,d,i+1,color); pts.push([+d.Latitude,+d.Longitude]); } });
+      const line=[[wh.lat,wh.lng],...g.seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]];
+      L.polyline(line,{color,weight:4,opacity:.85}).addTo(Plan.layer);
+    });
+  } else {
+    const list = seq || selDels;
+    list.forEach((d,i)=>{ if(d.Latitude){ MapUtil.stopMarker(Plan.layer,d,i+1,(PRIORITY[d.Priority]||PRIORITY.NORMAL).color); pts.push([+d.Latitude,+d.Longitude]); } });
+    if(seq){
+      const geo = Plan.result && Plan.result.metrics && Plan.result.metrics.geometry;
+      const line = (geo && geo.length) ? geo : [[wh.lat,wh.lng],...seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]];
+      L.polyline(line,{color:'#6f9e0a',weight:4,opacity:.85}).addTo(Plan.layer);
+    }
   }
   if(pts.length>1) Plan.map.fitBounds(pts,{padding:[30,30]});
   icons();
@@ -306,6 +318,7 @@ async function runAutoPlan(){
   const emp = rec && (Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
   Plan.sel = { type:'COMPANY', vehId: rec?rec.VehicleID:'', extId:(Planner.availableExternal()[0]||{}).ExternalVehicleID||'',
     driver: rec?(rec.CurrentDriver || (emp&&emp.EmployeeName) || ''):'',
+    driverEmployeeId: emp ? emp.EmployeeID : empIdByName(rec&&rec.CurrentDriver),
     toll: Planner.toll(), parking: Planner.autoParking(seq) };
   drawPlanMap(null,seq);
   renderDecision();
@@ -315,10 +328,20 @@ function renderDecision(){
   const {seq,metrics:m,options}=Plan.result;
   const rec=Planner.recommendVehicle(m.boxes);
   const wh=warehouse();
-  const seqHtml = seq.map((s,i)=>`<div class="flex aic gap8" style="padding:7px 0;border-bottom:1px solid #F3F5F8">
-    <span class="stop-num" style="width:24px;height:24px;font-size:12px;background:${(PRIORITY[s.Priority]||PRIORITY.NORMAL).color}">${i+1}</span>
-    <span style="flex:1;font-size:13px" class="strong">${esc(s.CustomerName)}</span>
-    <span class="small muted">${num1(s._distPrev||0)} กม.</span><span class="tab small">${int(s.BoxQty)} กล่อง</span></div>`).join('');
+  const isSplit = Plan.chosen==='C';
+  const splitOpt = isSplit ? options.find(o=>o.id==='C') : null;
+  const seqHtml = isSplit
+    ? splitOpt.split.map((g,gi)=>`<div class="strong small" style="margin:10px 0 4px;color:${SPLIT_COLORS[gi%SPLIT_COLORS.length]}">Route ${gi+1} · ${g.seq.length} จุด</div>` +
+        g.seq.map((s,i)=>`<div class="flex aic gap8" style="padding:7px 0;border-bottom:1px solid #F3F5F8">
+          <span class="stop-num" style="width:24px;height:24px;font-size:12px;background:${SPLIT_COLORS[gi%SPLIT_COLORS.length]}">${i+1}</span>
+          <span style="flex:1;font-size:13px" class="strong">${esc(s.CustomerName)}</span>
+          <span class="small muted">${num1(s._distPrev||0)} กม.</span><span class="tab small">${int(s.BoxQty)} กล่อง</span></div>`).join('')).join('')
+    : seq.map((s,i)=>`<div class="flex aic gap8" style="padding:7px 0;border-bottom:1px solid #F3F5F8">
+        <span class="stop-num" style="width:24px;height:24px;font-size:12px;background:${(PRIORITY[s.Priority]||PRIORITY.NORMAL).color}">${i+1}</span>
+        <span style="flex:1;font-size:13px" class="strong">${esc(s.CustomerName)}</span>
+        <span class="small muted">${num1(s._distPrev||0)} กม.</span><span class="tab small">${int(s.BoxQty)} กล่อง</span></div>`).join('');
+
+  if(isSplit) drawPlanMap(null,null,splitOpt.split); else drawPlanMap(null,seq);
 
   dec.innerHTML = `
     <div class="flex between aic mb14"><span class="h-card">ผลการวางแผน</span><button class="btn btn-sm" id="replan"><i data-lucide="rotate-cw"></i>ใหม่</button></div>
@@ -342,10 +365,10 @@ function renderDecision(){
     <div class="strong small muted" style="margin-bottom:8px">ลำดับจุดส่งที่แนะนำ</div>
     <div style="max-height:170px;overflow-y:auto;margin-bottom:12px" class="scrolly">${seqHtml}</div>
 
-    <div id="selFormBox">${selForm()}</div>
-    <div id="costBox">${selCostBox()}</div>
+    <div id="selFormBox">${isSplit ? splitFormAll(splitOpt) : selForm()}</div>
+    <div id="costBox">${isSplit ? splitCostBoxAll(splitOpt) : selCostBox()}</div>
 
-    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>ยืนยันการส่ง</button>
+    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>${isSplit?`ยืนยันการส่งทั้งหมด (${splitOpt.split.length} Route)`:'ยืนยันการส่ง'}</button>
   `;
   icons();
   bindDecisionEvents();
@@ -362,11 +385,18 @@ function optionCard(o){
       <span><i data-lucide="box" style="width:13px;height:13px;vertical-align:-2px"></i> ${int(o.boxes)} กล่อง</span>
     </div>
     ${!o.feasible&&o.shortage?`<div class="mt16" style="margin-top:10px"><div class="progress"><span style="width:${Math.min(100,100* (o.boxes-o.shortage)/o.boxes)}%;background:#2563EB"></span><span style="width:${100*o.shortage/o.boxes}%;background:#EF4444"></span></div><div class="small" style="color:#B91C1C;margin-top:4px">ขาดความจุ ${int(o.shortage)} กล่อง</div></div>`:''}
+    ${o.id==='C'?`<div class="flex aic gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid #F3F5F8">
+      <span class="small muted">จำนวนคัน</span>
+      <button class="btn btn-sm" data-ksplit="-1" type="button">−</button>
+      <span class="strong tab">${o.split.length}</span>
+      <button class="btn btn-sm" data-ksplit="1" type="button">+</button>
+    </div>`:''}
   </div>`;
 }
 /* ---- manual vehicle/driver selection ---- */
 function selForm(){
   const emps=Store.data.employees||[], veh=Store.data.vehicles||[], ext=Store.data.externalVehicles||[];
+  const drivers=emps.filter(x=>x.Role==='DRIVER'&&!x.IsDeleted);
   const isExt=Plan.sel.type==='EXTERNAL';
   return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:12px">
     <div class="strong" style="margin-bottom:10px">รถ & คนขับที่จะใช้</div>
@@ -378,9 +408,14 @@ function selForm(){
         ? `<select class="select" id="selExt">${ext.length?ext.map(v=>`<option value="${esc(v.ExternalVehicleID)}" ${Plan.sel.extId===v.ExternalVehicleID?'selected':''}>${esc(v.ProviderName)} · ${esc(v.LicensePlate)} (${int(v.CapacityBox)} กล่อง · ${money(v.Rate)} ${RATE_TYPE[v.RateType]||''})</option>`).join(''):'<option value="">— ไม่มีรถภายนอก —</option>'}</select>`
         : `<select class="select" id="selVeh">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${Plan.sel.vehId===v.VehicleID?'selected':''}>${esc(v.VehicleName)} · ${esc(v.LicensePlate)} (${int(v.CapacityBox)} กล่อง · ${VSTATUS[v.VehicleStatus]?VSTATUS[v.VehicleStatus].label:''})</option>`).join('')}</select>`}
     </div>
-    <div class="field" style="margin:0"><label class="label">คนขับ</label>
-      <input class="input" id="selDriver" list="empList" value="${esc(Plan.sel.driver)}" placeholder="ชื่อคนขับ">
-      <datalist id="empList">${emps.map(e=>`<option value="${esc(e.EmployeeName)}">`).join('')}</datalist></div>
+    <div class="field" style="margin-bottom:8px"><label class="label">คนขับ (เลือกจากระบบให้เข้าโหมดคนขับได้)</label>
+      <select class="select" id="selDriverEmp">
+        <option value="">— พิมพ์ชื่อเอง / คนขับรถภายนอก —</option>
+        ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${Plan.sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
+      </select></div>
+    <div class="field" style="margin:0">
+      <input class="input" id="selDriver" value="${esc(Plan.sel.driver)}" placeholder="ชื่อคนขับ">
+    </div>
   </div>`;
 }
 function selVehicle(){ return Plan.sel.type==='EXTERNAL'
@@ -427,32 +462,110 @@ function bindCostInputs(){
     if(el('selPerBox'))el('selPerBox').textContent=money(c.total/m.boxes); };
   if(t)t.oninput=upd; if(p)p.oninput=upd;
 }
+/* ---- multi-route (split) vehicle/driver selection — 1 ชุดต่อ Route ---- */
+function splitForm(g, i){
+  const veh=Store.data.vehicles||[], emps=Store.data.employees||[];
+  const drivers=emps.filter(x=>x.Role==='DRIVER'&&!x.IsDeleted);
+  const sel = Plan.splitSel[i] || {};
+  return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:12px;border-left:4px solid ${SPLIT_COLORS[i%SPLIT_COLORS.length]}">
+    <div class="strong" style="margin-bottom:10px">Route ${i+1} · ${g.seq.length} จุด · ${num1(g.m.distance)} กม.</div>
+    <div class="field" style="margin-bottom:10px"><label class="label">เลือกรถ</label>
+      <select class="select" data-splitveh="${i}">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${sel.vehId===v.VehicleID?'selected':''}>${esc(v.VehicleName)} · ${esc(v.LicensePlate)} (${int(v.CapacityBox)} กล่อง · ${VSTATUS[v.VehicleStatus]?VSTATUS[v.VehicleStatus].label:''})</option>`).join('')}</select></div>
+    <div class="field" style="margin-bottom:8px"><label class="label">คนขับ (เลือกจากระบบให้เข้าโหมดคนขับได้)</label>
+      <select class="select" data-splitdrvemp="${i}">
+        <option value="">— พิมพ์ชื่อเอง —</option>
+        ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
+      </select></div>
+    <div class="field" style="margin:0"><input class="input" data-splitdrv="${i}" value="${esc(sel.driver||'')}" placeholder="ชื่อคนขับ"></div>
+  </div>`;
+}
+function splitFormAll(opt){
+  return opt.split.map((g,i)=>splitForm(g,i)).join('');
+}
+function splitCost(g,i){
+  const sel=Plan.splitSel[i]||{};
+  const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===sel.vehId);
+  const fuel=v?Planner.fuelCost(g.m.distance,v):0, toll=Number(sel.toll)||0, parking=Number(sel.parking)||0;
+  return { fuel, toll, parking, total:+(fuel+toll+parking).toFixed(2) };
+}
+function splitCostBoxAll(opt){
+  const rows = opt.split.map((g,i)=>{ const c=splitCost(g,i); return `<div class="flex between" style="padding:5px 0;font-size:13px"><span class="muted">Route ${i+1}</span><span class="tab">${money(c.total)} ฿</span></div>`; }).join('');
+  const total = opt.split.reduce((n,g,i)=>n+splitCost(g,i).total,0);
+  return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
+    <div class="strong mb14">สรุปต้นทุนรวม (${opt.split.length} Route)</div>
+    ${rows}
+    <div class="divider"></div>
+    <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวมทั้งหมด</span><span class="strong tab" style="color:var(--brand-ink)">${money(total)} ฿</span></div>
+  </div>`;
+}
+function empIdByName(name){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeName===name); return emp?emp.EmployeeID:''; }
+function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { vehId:g.v?g.v.VehicleID:'', driver, driverEmployeeId:empIdByName(driver), toll:Planner.toll(), parking:Planner.autoParking(g.seq) }; }
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; render(); };
-  // คลิก Option → เติมค่าในฟอร์มเลือกรถ
+  // คลิก Option → เติมค่าในฟอร์มเลือกรถ (Option C = โหมดแบ่งหลาย Route)
   $$('[data-opt]').forEach(c=>c.onclick=()=>{ const o=Plan.result.options.find(x=>x.id===c.dataset.opt); Plan.chosen=c.dataset.opt;
-    if(o){ if(o.id==='B'&&o.external){ Plan.sel.type='EXTERNAL'; Plan.sel.extId=o.external.ExternalVehicleID; }
+    if(o){ if(o.id==='C'){ Plan.splitSel = o.split.map(splitSelFor); }
+      else if(o.id==='B'&&o.external){ Plan.sel.type='EXTERNAL'; Plan.sel.extId=o.external.ExternalVehicleID; }
       else { Plan.sel.type='COMPANY'; const v=o.vehicles.filter(Boolean)[0]; if(v){ Plan.sel.vehId=v.VehicleID; Plan.sel.driver=v.CurrentDriver||Plan.sel.driver; } } }
     renderDecision(); });
+  // ปุ่ม −/+ จำนวนคันใน Option C — คำนวณกลุ่มใหม่ทันที
+  $$('[data-ksplit]').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    const opt=Plan.result.options.find(o=>o.id==='C'); if(!opt) return;
+    const newK=Math.min(Math.max(opt.split.length+Number(b.dataset.ksplit),1),opt.kMax);
+    if(newK===opt.split.length) return;
+    const vehicles=Planner.availableVehicles().slice().sort((a,b2)=>Number(b2.CapacityBox)-Number(a.CapacityBox)).slice(0,newK);
+    const groups=Planner.autoSplit(Plan.result.seq, vehicles);
+    opt.split=groups; opt.vehicles=groups.map(g=>g.v);
+    opt.distance=+groups.reduce((n,g)=>n+g.m.distance,0).toFixed(1);
+    opt.duration=Math.max(...groups.map(g=>g.m.durationMin));
+    const cFuel=groups.reduce((n,g)=>n+g.cost.fuel,0), cToll=groups.reduce((n,g)=>n+g.cost.toll,0), cPark=groups.reduce((n,g)=>n+g.cost.parking,0);
+    opt.cost={ fuel:+cFuel.toFixed(2), toll:cToll, parking:cPark, external:0, other:0, total:+(cFuel+cToll+cPark).toFixed(2) };
+    opt.name=`แบ่งเป็น ${groups.length} Route (ตามพื้นที่)`;
+    opt.note=groups.map((g,i)=>`Route ${i+1}: ${g.seq.length} จุด · ${num1(g.m.distance)} กม.`).join(' · ');
+    if(Plan.chosen==='C') Plan.splitSel=groups.map(splitSelFor);
+    renderDecision();
+  });
   const st=el('selType'); if(st) $$('#selType button').forEach(b=>b.onclick=()=>{ Plan.sel.type=b.dataset.t;
     if(b.dataset.t==='EXTERNAL' && !Plan.sel.extId){ const e=(Store.data.externalVehicles||[])[0]; Plan.sel.extId=e?e.ExternalVehicleID:''; }
     renderDecision(); });
-  const sv=el('selVeh'); if(sv) sv.onchange=()=>{ Plan.sel.vehId=sv.value; const v=selVehicle(); if(v&&v.CurrentDriver){ Plan.sel.driver=v.CurrentDriver; el('selDriver').value=v.CurrentDriver; } refreshCostBox(); };
-  const se=el('selExt'); if(se) se.onchange=()=>{ Plan.sel.extId=se.value; const v=selVehicle(); if(v&&v.DriverName){ Plan.sel.driver=v.DriverName; el('selDriver').value=v.DriverName; } refreshCostBox(); };
-  const sd=el('selDriver'); if(sd) sd.oninput=()=>{ Plan.sel.driver=sd.value; };
+  const sv=el('selVeh'); if(sv) sv.onchange=()=>{ Plan.sel.vehId=sv.value; const v=selVehicle();
+    if(v&&v.CurrentDriver){ Plan.sel.driver=v.CurrentDriver; Plan.sel.driverEmployeeId=empIdByName(v.CurrentDriver);
+      if(el('selDriver')) el('selDriver').value=v.CurrentDriver; if(el('selDriverEmp')) el('selDriverEmp').value=Plan.sel.driverEmployeeId; }
+    refreshCostBox(); };
+  const se=el('selExt'); if(se) se.onchange=()=>{ Plan.sel.extId=se.value; const v=selVehicle();
+    if(v&&v.DriverName){ Plan.sel.driver=v.DriverName; Plan.sel.driverEmployeeId=''; if(el('selDriver')) el('selDriver').value=v.DriverName; }
+    refreshCostBox(); };
+  const sde=el('selDriverEmp'); if(sde) sde.onchange=()=>{ Plan.sel.driverEmployeeId=sde.value;
+    if(sde.value){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeID===sde.value); Plan.sel.driver=emp?emp.EmployeeName:''; if(el('selDriver')) el('selDriver').value=Plan.sel.driver; } };
+  const sd=el('selDriver'); if(sd) sd.oninput=()=>{ Plan.sel.driver=sd.value; Plan.sel.driverEmployeeId=''; };
   bindCostInputs();
+  // อินพุตรถ/คนขับต่อ Route ในโหมดแบ่งหลาย Route
+  $$('[data-splitveh]').forEach(sel=>sel.onchange=()=>{ const i=Number(sel.dataset.splitveh); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].vehId=sel.value;
+    const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===sel.value);
+    if(v&&v.CurrentDriver){ Plan.splitSel[i].driver=v.CurrentDriver; Plan.splitSel[i].driverEmployeeId=empIdByName(v.CurrentDriver);
+      const de=document.querySelector('[data-splitdrvemp="'+i+'"]'); if(de) de.value=Plan.splitSel[i].driverEmployeeId;
+      const di=document.querySelector('[data-splitdrv="'+i+'"]'); if(di) di.value=v.CurrentDriver; }
+    const cb=el('costBox'); if(cb){ const opt=Plan.result.options.find(o=>o.id==='C'); cb.innerHTML=splitCostBoxAll(opt); icons(); } });
+  $$('[data-splitdrvemp]').forEach(sel=>sel.onchange=()=>{ const i=Number(sel.dataset.splitdrvemp); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].driverEmployeeId=sel.value;
+    if(sel.value){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeID===sel.value); Plan.splitSel[i].driver=emp?emp.EmployeeName:'';
+      const di=document.querySelector('[data-splitdrv="'+i+'"]'); if(di) di.value=Plan.splitSel[i].driver; } });
+  $$('[data-splitdrv]').forEach(inp=>inp.oninput=()=>{ const i=Number(inp.dataset.splitdrv); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].driver=inp.value; Plan.splitSel[i].driverEmployeeId=''; });
   const cr=el('confirmRoute'); if(cr) cr.onclick=confirmRoute;
 }
 async function confirmRoute(){
+  if(Plan.chosen==='C') return confirmSplitRoutes();
   const seq=Plan.result.seq, m=Plan.result.metrics;
   const isExt=Plan.sel.type==='EXTERNAL';
   const v=selVehicle();
   if(!v){ toast('กรุณาเลือกรถก่อน','warn'); return; }
   const c=selCost();
-  const emp=!isExt && (Store.data.employees||[]).find(e=>e.VehicleID===v.VehicleID);
+  const emps=Store.data.employees||[];
+  const emp=!isExt && (emps.find(e=>e.EmployeeID===Plan.sel.driverEmployeeId) || emps.find(e=>e.VehicleID===v.VehicleID));
   const data={ DeliveryDate:Store.date, RouteType:isExt?'EXTERNAL_VEHICLE':'COMPANY_VEHICLE',
     DriverName: Plan.sel.driver || (isExt?v.DriverName:v.CurrentDriver) || '',
     DriverPhone: (emp&&emp.Phone) || (isExt?v.DriverPhone:'') || '',
+    DriverEmployeeID: isExt?'':(Plan.sel.driverEmployeeId||''),
     VehicleType: v.VehicleType||'', VehicleName: isExt?'':(v.VehicleName||''),
     LicensePlate: v.LicensePlate||'', ProviderName: isExt?(v.ProviderName||''):'',
     TotalStops:m.stops, TotalBoxes:m.boxes, TotalDistance:m.distance, EstimatedDuration:m.durationMin,
@@ -460,14 +573,37 @@ async function confirmRoute(){
     EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
   const stops=seq.map(s=>({ DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
     Latitude:s.Latitude, Longitude:s.Longitude, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) }));
-  const btn=el('confirmRoute'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังบันทึก…'; icons();
-  try{
-    const r=await API.post('confirmRoute',{data,stops});
-    localAddRoute(r,stops);
-    toast('สร้าง Route '+r.RouteID+' สำเร็จ · '+m.stops+' จุด','ok','ยืนยัน Route แล้ว');
-    Plan.selected.clear(); Plan.result=null;
-    location.hash='#/rounds';
-  }catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check-circle-2"></i>ยืนยัน Route นี้'; icons(); }
+  Plan.selected.clear(); Plan.result=null;
+  toast('กำลังบันทึก Route · '+m.stops+' จุด…','ok','ยืนยัน Route แล้ว');
+  location.hash='#/rounds';
+  createRouteOptimistic('confirmRoute', data, stops).catch(()=>{});
+}
+async function confirmSplitRoutes(){
+  const opt = Plan.result.options.find(o=>o.id==='C');
+  if(!opt){ toast('ไม่พบแผนแบ่งเส้นทาง','err'); return; }
+  const groups = opt.split;
+  if(!Plan.splitSel.length || Plan.splitSel.some(s=>!s||!s.vehId)){ toast('กรุณาเลือกรถให้ครบทุก Route','warn'); return; }
+  const emps = Store.data.employees||[];
+  const jobs = groups.map((g,i)=>{
+    const sel = Plan.splitSel[i];
+    const v = (Store.data.vehicles||[]).find(x=>x.VehicleID===sel.vehId);
+    const emp = emps.find(e=>e.EmployeeID===sel.driverEmployeeId) || (v && emps.find(e=>e.VehicleID===v.VehicleID));
+    const fuel = v ? Planner.fuelCost(g.m.distance, v) : 0;
+    const toll = Number(sel.toll)||0, parking = Number(sel.parking)||0;
+    const data = { DeliveryDate:Store.date, RouteType:'COMPANY_VEHICLE',
+      DriverName: sel.driver || (v&&v.CurrentDriver) || '', DriverPhone:(emp&&emp.Phone)||'',
+      DriverEmployeeID: sel.driverEmployeeId||'',
+      VehicleType:(v&&v.VehicleType)||'', VehicleName:(v&&v.VehicleName)||'', LicensePlate:(v&&v.LicensePlate)||'',
+      TotalStops:g.m.stops, TotalBoxes:g.m.boxes, TotalDistance:g.m.distance, EstimatedDuration:g.m.durationMin,
+      EstimatedFuelCost:fuel, EstimatedTollCost:toll, EstimatedParkingCost:parking, EstimatedExternalCost:0, EstimatedOtherCost:0, Status:'Planned' };
+    const stops = g.seq.map(s=>({ DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
+      Latitude:s.Latitude, Longitude:s.Longitude, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) }));
+    return { data, stops };
+  });
+  Plan.selected.clear(); Plan.result=null; Plan.splitSel=[];
+  toast('กำลังบันทึก '+jobs.length+' Route…','ok','ยืนยัน Route แล้ว');
+  location.hash='#/rounds';
+  jobs.forEach(j=>createRouteOptimistic('confirmRoute', j.data, j.stops).catch(()=>{}));
 }
 
 /* ================================================================
@@ -587,7 +723,7 @@ ROUTES.tracking = async function(view){
       if(!hits.length){ el('trkResult').innerHTML = emptyState('ไม่พบพัสดุ','ตรวจเลขบิล/PO อีกครั้ง'); icons(); return; }
       const routeIds = [...new Set(hits.map(h=>h.RouteID).filter(Boolean))];
       const stopsByRoute = {};
-      for(const rid of routeIds){ try{ stopsByRoute[rid] = await API.get('getRouteStops',{routeId:rid}); }catch(e){ stopsByRoute[rid]=[]; } }
+      await Promise.all(routeIds.map(rid=>API.get('getRouteStops',{routeId:rid}).then(s=>stopsByRoute[rid]=s).catch(()=>stopsByRoute[rid]=[])));
       const stopFor = d => (stopsByRoute[d.RouteID]||[]).find(s=>String(s.DeliveryID)===String(d.DeliveryID));
       Track.hits = hits; Track.stopFor = stopFor;
       el('trkResult').innerHTML = hits.map(d=>trackCard(d, stopsByRoute[d.RouteID]||[])).join('');
@@ -977,6 +1113,14 @@ function employeeForm(e, veh){
         <option value="Active" ${((e.Status||'Active')==='Active')?'selected':''}>ทำงาน</option>
         <option value="Inactive" ${e.Status==='Inactive'?'selected':''}>พักงาน</option></select></div></div>
     <div class="field"><label class="label">รถประจำ</label><select class="select" id="mpVeh"><option value="">— ไม่ระบุ —</option>${(veh||[]).map(v=>`<option value="${esc(v.VehicleID)}" ${e.VehicleID===v.VehicleID?'selected':''}>${esc(v.VehicleName)} · ${esc(v.LicensePlate)}</option>`).join('')}</select></div>
+    ${isEdit?`<div class="field" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:4px">
+      <div class="strong small" style="margin-bottom:8px">ล็อกอินโหมดคนขับ</div>
+      <div class="field row2" style="margin-bottom:8px">
+        <div><label class="label">Username</label><input class="input" id="mpUser" value="${esc(e.Username||'')}" placeholder="เช่น somchai"></div>
+        <div><label class="label">PIN ใหม่ (4-6 หลัก)</label><input class="input" id="mpPin" type="password" inputmode="numeric" placeholder="เว้นว่างถ้าไม่เปลี่ยน"></div>
+      </div>
+      <button class="btn btn-sm" id="mpSetPin" type="button"><i data-lucide="key-round"></i>บันทึก Username/PIN</button>
+    </div>`:''}
   `, foot:`<button class="btn" id="mpCancel">ยกเลิก</button><button class="btn btn-primary" id="mpSave"><i data-lucide="check"></i>บันทึก</button>`});
   el('mpCancel').onclick=m.close;
   el('mpSave').onclick=async()=>{ const data={ EmployeeName:el('mpName').value.trim(), Phone:el('mpPhone').value.trim(), Role:el('mpRole').value, Status:el('mpStatus').value, VehicleID:el('mpVeh').value };
@@ -984,6 +1128,16 @@ function employeeForm(e, veh){
     m.close();
     if(isEdit) updateLocal('employees','updateEmployee',e.EmployeeID,data).then(()=>toast('บันทึกพนักงานแล้ว','ok')).catch(()=>{});
     else       createLocal('employees','createEmployee',data,{Status:'Active'}).then(()=>toast('เพิ่มพนักงานแล้ว','ok')).catch(()=>{}); };
+  if(isEdit){ const spBtn=el('mpSetPin'); if(spBtn) spBtn.onclick=async()=>{
+    const username=el('mpUser').value.trim(), pin=el('mpPin').value.trim();
+    if(!username){ toast('กรอก Username','warn'); return; }
+    if(!pin){ toast('กรอก PIN ใหม่ก่อนบันทึก','warn'); return; }
+    if(!/^\d{4,6}$/.test(pin)){ toast('PIN ต้องเป็นเลข 4-6 หลัก','warn'); return; }
+    spBtn.disabled=true;
+    try{ await API.post('setDriverPin',{id:e.EmployeeID,username,pin}); toast('บันทึก Username/PIN แล้ว','ok'); }
+    catch(err){ toast(err.message,'err'); }
+    spBtn.disabled=false;
+  }; }
 }
 
 /* ================================================================
@@ -1267,6 +1421,38 @@ function ctStat(l,v,ic,col){ return `<div class="card" style="padding:16px"><div
    DRIVER MOBILE MODE
    ================================================================ */
 const Driver = { routeId:null };
+/* ---- driver login session (localStorage) ---- */
+const DRV_LS_TOKEN='ddc_driver_token', DRV_LS_EMP='ddc_driver_emp';
+function driverSession(){
+  try{ const token=localStorage.getItem(DRV_LS_TOKEN); const emp=JSON.parse(localStorage.getItem(DRV_LS_EMP)||'null');
+    return (token&&emp)?{token,emp}:null; }catch(e){ return null; }
+}
+function driverSetSession(token,emp){ localStorage.setItem(DRV_LS_TOKEN,token); localStorage.setItem(DRV_LS_EMP,JSON.stringify(emp)); }
+function driverClearSession(){ localStorage.removeItem(DRV_LS_TOKEN); localStorage.removeItem(DRV_LS_EMP); Driver.routeId=null; }
+function driverLogoutBtn(){ return `<button class="btn btn-sm" id="drvLogout"><i data-lucide="log-out"></i>ออกจากระบบ</button>`; }
+function bindDriverLogout(sess){
+  const b=el('drvLogout'); if(!b) return;
+  b.onclick=async()=>{ try{ await API.post('driverLogout',{token:sess.token}); }catch(e){} driverClearSession(); render(); };
+}
+function driverLoginForm(view){
+  page(view, `<div class="driver">
+    ${head('โหมดคนขับ · เข้าสู่ระบบ', thDate(Store.date))}
+    <div class="card" style="max-width:360px;margin:0 auto">
+      <div class="field"><label class="label">Username</label><input class="input" id="drvUser" placeholder="Username คนขับ" autocomplete="username"></div>
+      <div class="field" style="margin:0"><label class="label">PIN</label><input class="input" id="drvPin" type="password" inputmode="numeric" placeholder="PIN 4-6 หลัก" autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-block big-btn mt16" id="drvLoginBtn" style="margin-top:14px"><i data-lucide="log-in"></i>เข้าสู่ระบบ</button>
+    </div>
+  </div>`);
+  const go=async()=>{
+    const username=el('drvUser').value.trim(), pin=el('drvPin').value.trim();
+    if(!username||!pin){ toast('กรอก Username และ PIN','warn'); return; }
+    const btn=el('drvLoginBtn'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังเข้าสู่ระบบ…'; icons();
+    try{ const r=await API.post('driverLogin',{username,pin}); driverSetSession(r.token,r.employee); render(); }
+    catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="log-in"></i>เข้าสู่ระบบ'; icons(); }
+  };
+  el('drvLoginBtn').onclick=go;
+  el('drvPin').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+}
 function driverJobCard(r){
   return `<div class="card mb14">
     <div class="flex between aic"><div><div class="mono strong" style="font-size:16px">${esc(r.RouteID)}</div>
@@ -1276,20 +1462,25 @@ function driverJobCard(r){
   </div>`;
 }
 ROUTES.driver = async function(view){
-  const routes = await API.get('getRoutes',{date:Store.date});
+  const sess = driverSession();
+  if(!sess){ driverLoginForm(view); return; }
+  let routes;
+  try{ routes = await API.post('getMyRoutes',{token:sess.token, date:Store.date}); }
+  catch(e){ driverClearSession(); toast('เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่','warn'); driverLoginForm(view); return; }
   let active = routes.find(r=>r.RouteID===Driver.routeId) || routes.find(r=>r.Status==='In Progress');
   if(!active){
-    // หน้ากดรับงาน — คนขับเลือกรอบของตัวเอง
+    // หน้ากดรับงาน — เห็นแต่งานที่มอบหมายให้ตัวเองเท่านั้น
     page(view, `<div class="driver">
-      ${head('โหมดคนขับ · รับงาน', `${thDate(Store.date)} · ${routes.length} รอบ`)}
+      ${head('โหมดคนขับ · รับงาน', `${thDate(Store.date)} · ${sess.emp.EmployeeName} · ${routes.length} รอบ`, driverLogoutBtn())}
       ${routes.length
         ? `<div class="notice info mb14"><i data-lucide="hand"></i><div>เลือกงานของคุณแล้วกด <b>รับงานนี้</b> เพื่อเริ่มส่ง</div></div>` + routes.map(driverJobCard).join('')
-        : emptyState('ยังไม่มีรอบส่งวันนี้','ติดต่อผู้จัดการเพื่อรับงาน หรือให้แอดมินจัด Route ก่อน')}
+        : emptyState('ยังไม่มีรอบส่งมอบหมายให้คุณวันนี้','ติดต่อผู้จัดการเพื่อรับงาน หรือให้แอดมินจัด Route ก่อน')}
     </div>`);
+    bindDriverLogout(sess);
     $$('[data-accept]',view).forEach(b=>b.onclick=async()=>{ const rid=b.dataset.accept; Driver.routeId=rid;
       const rt=routes.find(x=>x.RouteID===rid);
       // รับงาน = เริ่มรอบทันที → อัปเดตสถานะขึ้นเซิร์ฟเวอร์ ให้ผู้จ่ายงานเห็นว่า "กำลังส่ง"
-      if(rt && rt.Status==='Planned'){ try{ await API.post('startRoute',{routeId:rid}); }catch(e){} }
+      if(rt && rt.Status==='Planned'){ try{ await API.post('startRoute',{routeId:rid,token:sess.token}); }catch(e){} }
       render(); toast('รับงาน '+rid+' แล้ว เริ่มส่งได้เลย','ok'); });
     return;
   }
@@ -1299,7 +1490,7 @@ ROUTES.driver = async function(view){
   const cur = stops.find(s=>s.Status!=='Completed');
   page(view, `
     <div class="driver">
-    ${head(active.RouteID,`${active.DriverName||''} · ${active.VehicleName||''}`,`<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>`)}
+    ${head(active.RouteID,`${active.DriverName||''} · ${active.VehicleName||''}`,`<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>${driverLogoutBtn()}`)}
     <div class="card mb14">
       <div class="flex between aic mb14"><span class="h-card">ความคืบหน้ารอบส่ง</span><span class="strong tab">${done}/${stops.length} จุด</span></div>
       <div class="progress" style="height:14px"><span style="width:${pct}%;background:#10B981"></span></div>
@@ -1323,12 +1514,13 @@ ROUTES.driver = async function(view){
         <div style="flex:1"><div class="strong" style="font-size:14px">${esc(s.CustomerName)}</div><div class="small muted">${esc(s.BranchName)} · ${int(s.BoxQty)} กล่อง</div></div></div>`).join('')}
     </div></div>
   `);
+  bindDriverLogout(sess);
   const dch=el('dChange'); if(dch)dch.onclick=()=>{ Driver.routeId=null; render(); };
-  const ds=el('dStart'); if(ds)ds.onclick=async()=>{ ds.disabled=true; try{ await API.post('startRoute',{routeId:active.RouteID}); }catch(e){} render(); toast('เริ่มรอบส่งแล้ว','ok'); };
+  const ds=el('dStart'); if(ds)ds.onclick=async()=>{ ds.disabled=true; try{ await API.post('startRoute',{routeId:active.RouteID,token:sess.token}); }catch(e){} render(); toast('เริ่มรอบส่งแล้ว','ok'); };
   const dm=el('dMap'); if(dm)dm.onclick=()=>{ if(cur&&cur.Latitude) window.open(`https://www.google.com/maps/dir/?api=1&destination=${cur.Latitude},${cur.Longitude}`,'_blank'); };
-  const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur);
-  const dd=el('dDone'); if(dd)dd.onclick=()=>podModal('complete',active,cur);
-  const df=el('dFail'); if(df)df.onclick=()=>podModal('fail',active,cur);
+  const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur,sess.token);
+  const dd=el('dDone'); if(dd)dd.onclick=()=>podModal('complete',active,cur,sess.token);
+  const df=el('dFail'); if(df)df.onclick=()=>podModal('fail',active,cur,sess.token);
 };
 /* ---- ถ่ายรูปหลักฐานการส่ง (POD) ---- */
 function compressImage(file, maxW, q){
@@ -1340,7 +1532,7 @@ function compressImage(file, maxW, q){
     rd.readAsDataURL(file); });
 }
 async function uploadPOD(dataUrl){ const r=await API.post('uploadPOD',{base64:dataUrl,filename:'POD-'+Date.now()+'.jpg'}); return r.url||r.viewUrl||''; }
-function podModal(type, active, cur){
+function podModal(type, active, cur, token){
   const isFail=type==='fail'; let photoData=null;
   const m=modal({ title:(isFail?'บันทึกส่งไม่สำเร็จ':'ยืนยันส่งเสร็จ')+' — '+esc(cur.CustomerName), body:`
     <div class="notice info" style="margin-bottom:12px"><i data-lucide="map-pin"></i><div>${esc(cur.BranchName||'')} · ${int(cur.BoxQty)} กล่อง</div></div>
@@ -1361,19 +1553,19 @@ function podModal(type, active, cur){
     const btn=el('podOk'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังบันทึก…'; icons();
     let photoUrl=''; if(photoData){ try{ photoUrl=await uploadPOD(photoData); }catch(err){ toast('อัปโหลดรูปไม่สำเร็จ ('+err.message+') — บันทึกต่อโดยไม่มีรูป','warn'); } }
     try{
-      if(isFail) await API.post('failDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,reason,photoUrl});
-      else       await API.post('completeDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,photoUrl});
+      if(isFail) await API.post('failDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,reason,photoUrl,token});
+      else       await API.post('completeDelivery',{routeId:active.RouteID,stopOrder:cur.StopOrder,deliveryId:cur.DeliveryID,photoUrl,token});
       m.close(); render(); toast((isFail?'บันทึกส่งไม่สำเร็จ':'บันทึกส่งสำเร็จ')+(photoUrl?' + แนบรูป':''), isFail?'warn':'ok');
     }catch(err){ toast(err.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check"></i>'+(isFail?'บันทึก':'ยืนยันส่งเสร็จ'); icons(); }
   };
 }
-function doCheckin(route, stop){
+function doCheckin(route, stop, token){
   if(!navigator.geolocation){ toast('อุปกรณ์ไม่รองรับ GPS','err'); return; }
   toast('กำลังระบุตำแหน่ง…','info');
   navigator.geolocation.getCurrentPosition(async pos=>{
     const {latitude,longitude,accuracy}=pos.coords;
     const dist = stop.Latitude? haversine(latitude,longitude,+stop.Latitude,+stop.Longitude)*1000 : 9999;
-    const r = await API.post('checkIn',{routeId:route.RouteID,stopOrder:stop.StopOrder,deliveryId:stop.DeliveryID,lat:latitude,lng:longitude,accuracy,distanceMeters:dist});
+    const r = await API.post('checkIn',{routeId:route.RouteID,stopOrder:stop.StopOrder,deliveryId:stop.DeliveryID,lat:latitude,lng:longitude,accuracy,distanceMeters:dist,token});
     const msg = {GREEN:'🟢 ถึงจุดส่งแล้ว',YELLOW:'🟡 ใกล้จุดส่ง',RED:'🔴 ยังไม่ถึงจุดส่ง'}[r.proximity]||'Check-in สำเร็จ';
     toast(msg+' (ห่าง '+Math.round(dist)+' ม.)', r.proximity==='GREEN'?'ok':(r.proximity==='YELLOW'?'warn':'err'));
   }, err=>toast('ระบุตำแหน่งไม่ได้: '+err.message,'err'), {enableHighAccuracy:true,timeout:10000});
