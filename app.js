@@ -118,7 +118,7 @@ function timeShort(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(
 // ดูเหมือนเพิ่งอัปเดตวันนี้ ทำให้เข้าใจผิดว่า "ออนไลน์" ทั้งที่จริงคือสัญญาณขาดไปนานแล้ว
 function ago(iso){
   if(!iso) return '—';
-  const d = new Date(iso); const s = (Date.now()-d.getTime())/1000;
+  const d = new Date(iso); const s = Math.max(0, (Date.now()-d.getTime())/1000);
   if(s<60) return `${Math.round(s)} วินาทีที่แล้ว`;
   if(s<3600) return `${Math.round(s/60)} นาทีที่แล้ว`;
   const sameDay = d.toDateString()===new Date().toDateString();
