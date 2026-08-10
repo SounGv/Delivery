@@ -108,7 +108,17 @@ const icons = () => { if (window.lucide) lucide.createIcons(); };
 const THMONTH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 function thDate(iso){ if(!iso) return '—'; const d=new Date(iso+(iso.length<=10?'T00:00:00':'')); if(isNaN(d)) return iso; return `${d.getDate()} ${THMONTH[d.getMonth()]} ${d.getFullYear()+543}`; }
 function timeShort(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return String(iso); return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); }
-function ago(iso){ if(!iso) return '—'; const s=(Date.now()-new Date(iso).getTime())/1000; if(s<60) return `${Math.round(s)} วินาทีที่แล้ว`; if(s<3600) return `${Math.round(s/60)} นาทีที่แล้ว`; return timeShort(iso); }
+// เกิน 1 ชม. ต้องขึ้นวันที่ด้วยเสมอ — ไม่งั้นสัญญาณเก่าข้ามวัน (เช่น GPS ค้าง 2 วัน) จะโชว์เป็นเวลานาฬิกาเฉยๆ
+// ดูเหมือนเพิ่งอัปเดตวันนี้ ทำให้เข้าใจผิดว่า "ออนไลน์" ทั้งที่จริงคือสัญญาณขาดไปนานแล้ว
+function ago(iso){
+  if(!iso) return '—';
+  const d = new Date(iso); const s = (Date.now()-d.getTime())/1000;
+  if(s<60) return `${Math.round(s)} วินาทีที่แล้ว`;
+  if(s<3600) return `${Math.round(s/60)} นาทีที่แล้ว`;
+  const sameDay = d.toDateString()===new Date().toDateString();
+  if(sameDay && s<86400) return `${Math.round(s/3600)} ชม.ที่แล้ว`;
+  return `${thDate(iso)} ${timeShort(iso)}`;
+}
 function haversine(a,b,c,d){ const R=6371,rad=Math.PI/180; const dLat=(c-a)*rad,dLng=(d-b)*rad; const x=Math.sin(dLat/2)**2+Math.cos(a*rad)*Math.cos(c*rad)*Math.sin(dLng/2)**2; return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)); }
 // มุม (bearing) จากจุด (a,b) ไปจุด (c,d) — 0..360° ใช้จัดกลุ่มจุดส่งตามพื้นที่ (sweep algorithm)
 function bearing(a,b,c,d){ const rad=Math.PI/180; const y=Math.sin((d-b)*rad)*Math.cos(c*rad); const x=Math.cos(a*rad)*Math.sin(c*rad)-Math.sin(a*rad)*Math.cos(c*rad)*Math.cos((d-b)*rad); return (Math.atan2(y,x)/rad+360)%360; }
