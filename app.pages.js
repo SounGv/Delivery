@@ -871,9 +871,10 @@ function gpsSourceLabel(v, ct){
   if(v.lat||v.lng) return '📱 มือถือคนขับ';
   return '⚪ ไม่มีข้อมูล';
 }
-function fleetVehicleCard(v, ct, activeByVeh, stopsByRoute){
+function fleetVehicleCard(v, ct, activeByVeh, stopsByRoute, colorByRoute){
   const st = deriveVehStatus(v);
   const route = activeByVeh[v.VehicleName] || activeByVeh[v.LicensePlate];
+  const lineColor = route ? colorByRoute[route.RouteID] : null;
   let stopLine = '';
   if(route){
     const stops = stopsByRoute[route.RouteID]||[];
@@ -882,9 +883,9 @@ function fleetVehicleCard(v, ct, activeByVeh, stopsByRoute){
     if(cur) stopLine = `<div class="small muted" style="margin-top:4px">📍 ${esc(cur.CustomerName)}${next?' · ถัดไป '+esc(next.CustomerName):''}</div>`;
   }
   const lastT = v.lastPositionTime||v.LastPositionTime||v.LastSyncAt||v.lastSyncAt;
-  return `<div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
+  return `<div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;${lineColor?`border-left:3px solid ${lineColor}`:''}">
     <div class="flex between aic">
-      <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีชื่อคนขับ')}</div></div>
+      <div><div class="strong" style="font-size:13px">${lineColor?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${lineColor};margin-right:6px"></span>`:''}${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีชื่อคนขับ')}</div></div>
       <div style="text-align:right">${vstatusBadge(st)}<div class="small muted tab" style="margin-top:3px">${st==='In Use'?int(v.speed)+' กม./ชม.':''}</div></div>
     </div>
     ${stopLine}
@@ -912,6 +913,8 @@ function renderFleetOverview(view){
   let filter='all';
   const activeRoutes = (Store.data.routes||[]).filter(r=>r.Status==='In Progress');
   const activeByVeh = {}; activeRoutes.forEach(r=>{ if(r.VehicleName) activeByVeh[r.VehicleName]=r; if(r.LicensePlate) activeByVeh[r.LicensePlate]=r; });
+  // คนละสีต่อ Route ที่กำลังวิ่งอยู่ — ให้เส้นทางบนแผนที่และจุดสี/แถบข้างการ์ดรถตรงกัน แยกรถหลายคันออกจากกันได้
+  const colorByRoute = {}; activeRoutes.forEach((r,ri)=>{ colorByRoute[r.RouteID] = SPLIT_COLORS[ri % SPLIT_COLORS.length]; });
   const stopsByRoute = {}; ((Store._live&&Store._live.stops)||[]).forEach(s=>{ (stopsByRoute[s.RouteID]=stopsByRoute[s.RouteID]||[]).push(s); });
   const ensureStops = ()=>{
     const missing = activeRoutes.filter(r=>!stopsByRoute[r.RouteID]);
@@ -922,12 +925,23 @@ function renderFleetOverview(view){
     if(filter==='moving')return st==='In Use'; if(filter==='stopped')return st==='Stopped'; if(filter==='offline')return st==='Offline'; return true; });
   function draw(){
     const list=vehicles();
-    el('vehList').innerHTML = list.length? list.map(v=>fleetVehicleCard(v,ct,activeByVeh,stopsByRoute)).join('') : emptyState('ไม่มีรถตามตัวกรอง');
+    el('vehList').innerHTML = list.length? list.map(v=>fleetVehicleCard(v,ct,activeByVeh,stopsByRoute,colorByRoute)).join('') : emptyState('ไม่มีรถตามตัวกรอง');
     $$('[data-track]',view).forEach(b=>b.onclick=()=>{ const r=activeRoutes.find(x=>x.RouteID===b.dataset.track); if(r) showRouteTrackModal(r); });
     if(liveMapRef){ liveMapRef.remove(); liveMapRef=null; }
     const wh=warehouse(); liveMapRef=MapUtil.make('liveMap',wh); MapUtil.whMarker(liveMapRef,wh);
-    const pts=[[wh.lat,wh.lng]]; list.forEach(v=>{ if(v.lat&&v.lng){MapUtil.vehMarker(liveMapRef,v);pts.push([+v.lat,+v.lng]);} });
-    (Store.data.deliveries||[]).forEach((d,i)=>{ if(d.Latitude){MapUtil.stopMarker(liveMapRef,d,i+1,'#94A3B8');} });
+    const pts=[[wh.lat,wh.lng]];
+    const routedDeliveryIds = new Set();
+    // วาดเส้นทางของรถที่กำลังวิ่งอยู่ — คนละสีต่อคัน (ตาม Route) พร้อมเลขจุดส่งสีเดียวกับเส้น
+    activeRoutes.forEach(r=>{
+      const color = colorByRoute[r.RouteID];
+      const stops = (stopsByRoute[r.RouteID]||[]).filter(s=>s.Latitude&&s.Longitude);
+      if(!stops.length) return;
+      const line=[[wh.lat,wh.lng], ...stops.map(s=>[+s.Latitude,+s.Longitude]), [wh.lat,wh.lng]];
+      L.polyline(line,{color,weight:4,opacity:.85}).addTo(liveMapRef);
+      stops.forEach((s,i)=>{ MapUtil.stopMarker(liveMapRef,s,i+1,color); pts.push([+s.Latitude,+s.Longitude]); if(s.DeliveryID) routedDeliveryIds.add(s.DeliveryID); });
+    });
+    list.forEach(v=>{ if(v.lat&&v.lng){MapUtil.vehMarker(liveMapRef,v);pts.push([+v.lat,+v.lng]);} });
+    (Store.data.deliveries||[]).forEach((d,i)=>{ if(d.Latitude && !routedDeliveryIds.has(d.DeliveryID)){MapUtil.stopMarker(liveMapRef,d,i+1,'#94A3B8');} });
     if(pts.length>1)liveMapRef.fitBounds(pts,{padding:[30,30]}); icons();
   }
   ensureStops().then(draw);
