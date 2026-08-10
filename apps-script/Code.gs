@@ -216,13 +216,37 @@ function doGet(e) {
       getBootstrap, getDashboardData, getDeliveries, getRoutes, getRouteStops,
       getCustomers, getEmployees, getVehicles, getExternalProviders, getExternalVehicles,
       getCartrackVehicles, getLiveVehicleStatus, getExpenses, getClaims, getRouteCosts,
-      getReports, getSettings, getRealtime, getCartrackStatus, geocode, ping
+      getReports, getSettings, getRealtime, getCartrackStatus, geocode, ping,
+      exportAllForMigration
     };
     if (!map[action]) return json({ ok:false, error:'unknown action: '+action });
     return json({ ok:true, data: map[action](e.parameter) });
   } catch (err) {
     return json({ ok:false, error:String(err) });
   }
+}
+
+/* ==================================================================
+   ONE-TIME MIGRATION EXPORT — ใช้ครั้งเดียวตอนย้ายไป Supabase แล้วลบทิ้ง
+   ต่างจาก action อื่นตรงที่ dump ข้อมูลทุกชีตรวม PIN hash ออกมาทั้งหมด
+   จึงต้องล็อกด้วย secret แยก (ไม่ใช่ "Anyone" access เหมือน action อื่น)
+   ตั้งค่าก่อนใช้: PropertiesService.getScriptProperties().setProperty('MIGRATION_EXPORT_SECRET','<สุ่มยาวๆ>')
+   เรียก: GET ?action=exportAllForMigration&secret=<ค่าที่ตั้ง>
+   ================================================================== */
+// รันครั้งเดียวจาก Apps Script editor (เลือกฟังก์ชันนี้ในดรอปดาวน์ด้านบน → Run)
+// เพื่อสุ่ม secret ใหม่ไว้ปลดล็อก exportAllForMigration — ดู Logs (Ctrl+Enter)
+// เพื่อคัดลอกค่าที่พิมพ์ออกมา
+function setMigrationSecret(){
+  PropertiesService.getScriptProperties().setProperty('MIGRATION_EXPORT_SECRET', Utilities.getUuid());
+  Logger.log(PropertiesService.getScriptProperties().getProperty('MIGRATION_EXPORT_SECRET'));
+}
+function exportAllForMigration(p){
+  const expected = secret('MIGRATION_EXPORT_SECRET','');
+  if (!expected) throw new Error('ยังไม่ได้ตั้ง MIGRATION_EXPORT_SECRET ใน Script Properties');
+  if (!p || p.secret !== expected) throw new Error('secret ไม่ถูกต้อง');
+  const out = {};
+  Object.keys(SCHEMA).forEach(function(name){ out[name] = readAll(name, true); });
+  return out;
 }
 
 function doPost(e) {

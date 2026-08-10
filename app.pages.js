@@ -11,6 +11,24 @@ function matchSearch(obj, fields){ if(!Store.search) return true; return fields.
 /* ================================================================
    DASHBOARD
    ================================================================ */
+function vehStatusCard(v){
+  const st = deriveVehStatus(v);
+  const dot = st==='In Use'?'🟢':st==='Stopped'?'🟡':'⚪';
+  const route = (Store.data.routes||[]).find(r=>r.Status==='In Progress' && (r.VehicleName===v.VehicleName||r.LicensePlate===v.LicensePlate));
+  let sub;
+  if(route){
+    const stops = ((Store._live&&Store._live.stops)||[]).filter(s=>s.RouteID===route.RouteID);
+    const cur = stops.find(s=>s.Status!=='Completed');
+    sub = `${esc(route.DriverName||'ไม่มีชื่อคนขับ')} · ${cur?'📍 '+esc(cur.CustomerName):'ส่งครบทุกจุดแล้ว'}`;
+  } else {
+    sub = v.CurrentDriver ? esc(v.CurrentDriver)+' · ยังไม่เริ่มงาน' : 'ยังไม่เริ่มงาน';
+  }
+  return `<div class="flex between aic" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
+    <div class="flex aic gap8"><span style="font-size:16px;line-height:1">${dot}</span>
+      <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted">${sub}</div></div></div>
+    <div class="small muted tab">${st==='In Use'?int(v.speed)+' กม./ชม.':(st==='Stopped'?'จอดอยู่':'')}</div>
+  </div>`;
+}
 ROUTES.dashboard = async function(view){
   const dash = Store.data.dashboard || {};
   const k = dash.kpi || {}; const c = dash.cost || {};
@@ -19,26 +37,37 @@ ROUTES.dashboard = async function(view){
   const pending = Math.max(0, tot - done - failed);
   const dels = Store.data.deliveries || [];
   const todo = dels.filter(d=>['Draft','Planned','Assigned','In Progress'].includes(d.Status));
+  const vehs = liveVehicles().filter(v=>v.VehicleName);
   const stat = (label,val,unit,color,icon,sub)=>`<div class="card" style="padding:18px 20px;display:flex;flex-direction:column;gap:7px">
       <div class="flex aic gap8"><span style="width:38px;height:38px;border-radius:11px;background:${color}1a;color:${color};display:flex;align-items:center;justify-content:center"><i data-lucide="${icon}"></i></span>
         <span class="small muted">${label}</span></div>
       <div style="font-size:30px;font-weight:800;line-height:1.05" class="tab">${val}<span style="font-size:14px;font-weight:600;color:#9AA3B2;margin-left:5px">${unit||''}</span></div>
       ${sub?`<div class="small muted">${sub}</div>`:'<div class="small muted">&nbsp;</div>'}</div>`;
   page(view, `
-    ${head('หน้าหลัก', thDate(Store.date), '<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>')}
+    ${head('วันนี้', thDate(Store.date), `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>
+      <a class="btn btn-primary" href="#/deliveries"><i data-lucide="plus"></i>สร้างงานส่ง</a>`)}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:14px;margin-bottom:18px">
       ${stat('งานวันนี้', int(tot), 'งาน', '#2563EB','package', int((k.total&&k.total.boxes)||0)+' กล่อง')}
       ${stat('ส่งแล้ว', int(done), 'งาน', '#10B981','check-circle-2')}
       ${stat('ค้างส่ง', int(pending), 'งาน', '#F59E0B','clock')}
       ${stat('ค่าใช้จ่ายวันนี้', money(c.total||0), 'บาท', '#7C3AED','wallet')}
     </div>
-    <div class="card">
-      <div class="flex between aic wrap gap8 mb14"><span class="h-card">งานที่ต้องส่งวันนี้ (${todo.length})</span>
-        <a class="btn btn-primary" href="#/planning"><i data-lucide="route"></i>วางแผนส่ง</a></div>
-      <div class="tbl-wrap">
-      ${todo.length? `<table class="tbl"><thead><tr><th>ลูกค้า</th><th>สาขา / ที่อยู่</th><th class="r">กล่อง</th><th>Priority</th><th>สถานะ</th></tr></thead>
-        <tbody>${todo.map(d=>`<tr><td class="strong">${esc(d.CustomerName)}</td><td class="muted small">${esc(d.BranchName||d.Address||'')}</td><td class="r tab">${int(d.BoxQty)}</td><td>${priBadge(d.Priority)}</td><td>${dstatusBadge(d.Status)}</td></tr>`).join('')}</tbody></table>`
-        : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="plus"></i>เพิ่มงานส่ง</a>')}
+    <div class="grid" style="grid-template-columns:1.4fr 1fr;gap:16px;align-items:start">
+      <div class="card">
+        <div class="flex between aic wrap gap8 mb14"><span class="h-card">งานที่ต้องส่งวันนี้ (${todo.length})</span>
+          <a class="btn btn-primary btn-sm" href="#/deliveries"><i data-lucide="route"></i>ไปจัดเส้นทาง</a></div>
+        <div class="tbl-wrap">
+        ${todo.length? `<table class="tbl"><thead><tr><th>ลูกค้า</th><th>สาขา / ที่อยู่</th><th class="r">กล่อง</th><th>Priority</th><th>สถานะ</th></tr></thead>
+          <tbody>${todo.map(d=>`<tr><td class="strong">${esc(d.CustomerName)}</td><td class="muted small">${esc(d.BranchName||d.Address||'')}</td><td class="r tab">${int(d.BoxQty)}</td><td>${priBadge(d.Priority)}</td><td>${dstatusBadge(d.Status)}</td></tr>`).join('')}</tbody></table>`
+          : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="plus"></i>เพิ่มงานส่ง</a>')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="flex between aic wrap gap8 mb14"><span class="h-card">สถานะรถ (${vehs.length})</span>
+          <a class="btn btn-sm" href="#/livemap"><i data-lucide="map-pin"></i>ดูแผนที่</a></div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+        ${vehs.length? vehs.map(vehStatusCard).join('') : emptyState('ยังไม่มีรถในระบบ','เพิ่มรถได้ที่หน้าตั้งค่า')}
+        </div>
       </div>
     </div>
   `);
@@ -49,25 +78,47 @@ function actIcon(a){ return {CREATE_DELIVERY:'package-plus',CREATE_ROUTE:'route'
 /* ================================================================
    DELIVERIES
    ================================================================ */
+// แท็บสถานะ — จัดกลุ่ม 7 สถานะจริงให้เหลือ 4 ขั้นตอนที่ผู้ใช้ต้องเห็น (workflow-first)
+const DTABS = [
+  { key:'Draft',    label:'รอจัดส่ง',   match:s=>s==='Draft' },
+  { key:'Planned',  label:'วางแผนแล้ว', match:s=>s==='Planned' },
+  { key:'Active',   label:'กำลังส่ง',   match:s=>s==='Assigned'||s==='In Progress' },
+  { key:'Done',     label:'เสร็จแล้ว',  match:s=>s==='Completed'||s==='Failed'||s==='Cancelled' },
+];
+let dTab = 'Draft';
+function routeVehicleLabel(routeId){
+  if(!routeId) return '';
+  const r = (Store.data.routes||[]).find(x=>x.RouteID===routeId);
+  if(!r) return routeId;
+  return r.VehicleName || r.LicensePlate || r.ProviderName || r.DriverName || routeId;
+}
 ROUTES.deliveries = async function(view){
-  const rows = (Store.data.deliveries||[]).filter(d=>matchSearch(d,['CustomerName','BranchName','InvoiceNo']));
+  const all = (Store.data.deliveries||[]).filter(d=>matchSearch(d,['CustomerName','BranchName','InvoiceNo']));
+  const counts = {}; DTABS.forEach(t=>counts[t.key]=all.filter(d=>t.match(d.Status)).length);
+  const cur = DTABS.find(t=>t.key===dTab) || DTABS[0];
+  const rows = all.filter(d=>cur.match(d.Status));
+  const autoRouteBanner = dTab==='Draft' && rows.length ? `<div class="notice info mb14" style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <div class="flex aic gap8"><i data-lucide="route"></i><div>เลือกงานที่จะส่งวันนี้ แล้วให้ระบบจัดเส้นทาง/แบ่งรถอัตโนมัติ</div></div>
+      <a class="btn btn-primary btn-sm" href="#/planning"><i data-lucide="route"></i>จัดเส้นทางอัตโนมัติ</a></div>` : '';
   page(view, `
-    ${head('งานส่งสินค้า', `${thDate(Store.date)} · ${int(rows.length)} รายการ`,
+    ${head('งานส่ง', `${thDate(Store.date)} · ${int(all.length)} รายการ`,
       `<button class="btn btn-sm" data-act="csv"><i data-lucide="download"></i>CSV</button>
        <button class="btn btn-primary" data-act="new"><i data-lucide="plus"></i>เพิ่มงานส่ง</button>`)}
+    <div class="seg mb14" id="dTabs">${DTABS.map(t=>`<button class="${t.key===dTab?'on':''}" data-tab="${t.key}">${esc(t.label)} (${int(counts[t.key])})</button>`).join('')}</div>
+    ${autoRouteBanner}
     <div class="card" style="padding:0">
       <div class="tbl-wrap">
-      ${rows.length? `<table class="tbl"><thead><tr><th>Priority</th><th>ลูกค้า</th><th>สาขา</th><th>เลขบิล</th><th class="r">กล่อง</th><th>Route</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead>
+      ${rows.length? `<table class="tbl"><thead><tr><th>Priority</th><th>ลูกค้า</th><th>สาขา</th><th>เลขบิล</th><th class="r">กล่อง</th><th>รถ</th><th>สถานะ</th><th class="r">จัดการ</th></tr></thead>
         <tbody>${rows.map(d=>`<tr>
           <td>${priBadge(d.Priority)}</td><td class="strong">${esc(d.CustomerName)}</td><td class="muted">${esc(d.BranchName)}</td>
           <td class="mono small">${esc(d.InvoiceNo||'—')}</td><td class="r tab">${int(d.BoxQty)}</td>
-          <td>${d.RouteID?`<span class="mono small">${esc(d.RouteID)}</span>`:'<span class="muted small">—</span>'}</td>
+          <td>${d.RouteID?`<span class="small">${esc(routeVehicleLabel(d.RouteID))}</span>`:'<span class="muted small">—</span>'}</td>
           <td>${dstatusBadge(d.Status)}</td>
           <td class="r"><div class="flex gap8" style="justify-content:flex-end">
             ${d.Status==='Draft'?`<button class="btn btn-ghost btn-sm" data-dispatch="${esc(d.DeliveryID)}"><i data-lucide="truck"></i>จัดรถด่วน</button>`:''}
             <button class="btn btn-sm" data-edit="${esc(d.DeliveryID)}"><i data-lucide="pencil"></i></button>
             <button class="btn btn-sm" data-del="${esc(d.DeliveryID)}"><i data-lucide="trash-2"></i></button></div></td></tr>`).join('')}</tbody></table>`
-        : emptyState('ยังไม่มีงานส่งในวันนี้','เพิ่มงานส่งใหม่ หรือเปลี่ยนวันที่','<button class="btn btn-primary" data-act="new2"><i data-lucide="plus"></i>เพิ่มงานส่ง</button>')}
+        : emptyState(dTab==='Draft'?'ยังไม่มีงานรอจัดส่ง':'ไม่มีงานในสถานะนี้','เพิ่มงานส่งใหม่ หรือเปลี่ยนวันที่','<button class="btn btn-primary" data-act="new2"><i data-lucide="plus"></i>เพิ่มงานส่ง</button>')}
       </div>
     </div>
   `);
@@ -75,6 +126,7 @@ ROUTES.deliveries = async function(view){
   view.querySelector('[data-act="new"]').onclick = ()=>openForm(null);
   const n2=view.querySelector('[data-act="new2"]'); if(n2) n2.onclick=()=>openForm(null);
   view.querySelector('[data-act="csv"]').onclick = ()=>Exporter.csv(rows,'deliveries_'+Store.date);
+  $$('[data-tab]',view).forEach(b=>b.onclick=()=>{ dTab=b.dataset.tab; ROUTES.deliveries(view); });
   $$('[data-edit]',view).forEach(b=>b.onclick=()=>openForm((Store.data.deliveries||[]).find(x=>x.DeliveryID===b.dataset.edit)));
   $$('[data-del]',view).forEach(b=>b.onclick=()=>confirmDialog('ลบงานส่งนี้? (ระบบใช้ soft-delete ข้อมูลจริงไม่ถูกลบ)',()=>{ deleteLocal('deliveries','deleteDelivery',b.dataset.del).then(()=>toast('ลบงานส่งแล้ว','ok')).catch(()=>{}); },{danger:true,yes:'ลบ'}));
   $$('[data-dispatch]',view).forEach(b=>b.onclick=()=>quickDispatch((Store.data.deliveries||[]).find(x=>x.DeliveryID===b.dataset.dispatch)));
@@ -310,10 +362,14 @@ async function runAutoPlan(){
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
   Plan.result={seq,...out};
-  // เลือกอัตโนมัติ: รถแนะนำ > Option ที่รองรับได้และถูกที่สุด > ตัวแรก
+  // เลือกอัตโนมัติ: มีรถว่าง ≥2 คัน → เริ่มที่ Option C (แบ่งหลาย Route ตามพื้นที่) เป็นค่าเริ่มต้นเสมอ
+  // เพราะนี่คือสิ่งที่ "จัดเส้นทางอัตโนมัติ" ควรทำเมื่อมีรถหลายคัน — ไม่ใช่ซ่อนไว้ใน Option เพิ่มเติม
+  // ถ้ามีรถว่างคันเดียว (ไม่มี Option C) จึงกลับไปใช้ตรรกะเดิม: รถแนะนำ > Option ที่รองรับได้และถูกที่สุด > ตัวแรก
+  const cOpt = out.options.find(o=>o.id==='C');
   const feasibleCheap = out.options.filter(o=>o.feasible).sort((a,b)=>a.cost.total-b.cost.total)[0];
-  Plan.chosen = (out.options.find(o=>o.recommended) || feasibleCheap || out.options[0]).id;
-  // ค่าเริ่มต้นสำหรับเลือกรถ/คนขับเอง
+  Plan.chosen = cOpt ? 'C' : (out.options.find(o=>o.recommended) || feasibleCheap || out.options[0]).id;
+  if (cOpt) Plan.splitSel = cOpt.split.map(splitSelFor);
+  // ค่าเริ่มต้นสำหรับเลือกรถ/คนขับเอง (ยังต้องมีไว้รองรับ Option A/B ถ้าแอดมินสลับกลับเอง)
   const rec = Planner.recommendVehicle(out.metrics.boxes) || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
   const emp = rec && (Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
   Plan.sel = { type:'COMPANY', vehId: rec?rec.VehicleID:'', extId:(Planner.availableExternal()[0]||{}).ExternalVehicleID||'',
@@ -410,7 +466,7 @@ function selForm(){
     </div>
     <div class="field" style="margin-bottom:8px"><label class="label">คนขับ (เลือกจากระบบให้เข้าโหมดคนขับได้)</label>
       <select class="select" id="selDriverEmp">
-        <option value="">— พิมพ์ชื่อเอง / คนขับรถภายนอก —</option>
+        <option value="">— ไม่ระบุ (คนขับกดรับเองได้) / พิมพ์ชื่อเอง —</option>
         ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${Plan.sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
       </select></div>
     <div class="field" style="margin:0">
@@ -473,7 +529,7 @@ function splitForm(g, i){
       <select class="select" data-splitveh="${i}">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${sel.vehId===v.VehicleID?'selected':''}>${esc(v.VehicleName)} · ${esc(v.LicensePlate)} (${int(v.CapacityBox)} กล่อง · ${VSTATUS[v.VehicleStatus]?VSTATUS[v.VehicleStatus].label:''})</option>`).join('')}</select></div>
     <div class="field" style="margin-bottom:8px"><label class="label">คนขับ (เลือกจากระบบให้เข้าโหมดคนขับได้)</label>
       <select class="select" data-splitdrvemp="${i}">
-        <option value="">— พิมพ์ชื่อเอง —</option>
+        <option value="">— ไม่ระบุ (คนขับกดรับเองได้) —</option>
         ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
       </select></div>
     <div class="field" style="margin:0"><input class="input" data-splitdrv="${i}" value="${esc(sel.driver||'')}" placeholder="ชื่อคนขับ"></div>
@@ -699,9 +755,8 @@ async function openRouteDetail(id){
 /* ================================================================
    PARCEL TRACKING — ค้นด้วยเลขบิล / PO / DeliveryID
    ================================================================ */
-ROUTES.tracking = async function(view){
-  page(view, `
-    ${head('ติดตามพัสดุ', 'ค้นหาด้วยเลขบิล / เลขที่ PO / รหัสงานส่ง → เช็คสถานะ + GPS Check-in')}
+function renderTrackingSearch(view){
+  el('ltBody').innerHTML = `
     <div class="card mb14">
       <div class="flex gap8 wrap aic">
         <div class="search" style="flex:1;max-width:480px;margin:0">
@@ -712,7 +767,8 @@ ROUTES.tracking = async function(view){
       </div>
     </div>
     <div id="trkResult">${emptyState('พิมพ์เลขบิล/PO แล้วกดค้นหา','ระบบจะแสดงสถานะการส่ง ตำแหน่ง GPS และประวัติการเช็คอิน')}</div>
-  `);
+  `;
+  icons();
   const run = async ()=>{
     const q = el('trkQ').value.trim().toLowerCase();
     if(!q){ toast('กรอกเลขบิล/PO ก่อน','warn'); return; }
@@ -729,12 +785,12 @@ ROUTES.tracking = async function(view){
       el('trkResult').innerHTML = hits.map(d=>trackCard(d, stopsByRoute[d.RouteID]||[])).join('');
       $$('[data-print]',view).forEach(b=>b.onclick=()=>{ const d=hits.find(x=>x.DeliveryID===b.dataset.print); Printer.open('ใบติดตามพัสดุ','A5', trkDoc(d, stopFor(d))); });
       icons();
-    }catch(e){ el('trkResult').innerHTML = errorState(e.message,"ROUTES.tracking(document.getElementById('view'))"); icons(); }
+    }catch(e){ el('trkResult').innerHTML = errorState(e.message,"renderLiveTracking(document.getElementById('view'),'search')"); icons(); }
   };
   el('trkGo').onclick = run;
   el('trkQ').addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
   el('trkQ').focus();
-};
+}
 function trackCard(d, stops){
   const stop = stops.find(s=>String(s.DeliveryID)===String(d.DeliveryID));
   const checkedIn = stop && stop.CheckInTime;
@@ -787,43 +843,130 @@ function trkDoc(d, stop){
 /* ================================================================
    LIVE MAP
    ================================================================ */
-let liveMapRef=null;
-ROUTES.livemap = async function(view){
+/* ================================================================
+   ติดตาม — รวม "ภาพรวมรถ" (เดิม livemap) + "ค้นหาพัสดุ" (เดิม tracking)
+   ไว้หน้าเดียว ใต้เมนูเดียว ตาม IA 4 เมนู — คนละแท็บ ไม่ใช่คนละหน้า
+   ================================================================ */
+let liveMapRef=null, liveTab='fleet';
+async function renderLiveTracking(view, forceTab){
+  if(forceTab) liveTab = forceTab;
   const ct=Store.data.cartrack||{};
   page(view, `
-    ${head('แผนที่ติดตาม (Live Fleet Map)', ctStatusLine(ct),
-      `<div class="seg" id="lmFilter">
-        <button class="on" data-f="all">ทั้งหมด</button><button data-f="company">รถบริษัท</button>
-        <button data-f="external">รถภายนอก</button><button data-f="moving">กำลังวิ่ง</button><button data-f="stopped">จอดอยู่</button></div>`)}
+    ${head('ติดตาม', ctStatusLine(ct))}
+    <div class="seg mb14" id="ltTabs">
+      <button class="${liveTab==='fleet'?'on':''}" data-lt="fleet">ภาพรวมรถ</button>
+      <button class="${liveTab==='search'?'on':''}" data-lt="search">ค้นหาพัสดุ</button>
+    </div>
+    <div id="ltBody"></div>
+  `);
+  $$('[data-lt]',view).forEach(b=>b.onclick=()=>{ liveTab=b.dataset.lt; renderLiveTracking(view); });
+  if(liveTab==='search') renderTrackingSearch(view); else renderFleetOverview(view);
+}
+ROUTES.livemap = async function(view){ return renderLiveTracking(view,'fleet'); };
+ROUTES.tracking = async function(view){ return renderLiveTracking(view,'search'); };
+function ctStatusLine(ct){ if(!ct) return ''; if(ct.connected) return `🟢 Cartrack เชื่อมต่อ · พบ ${ct.found} คัน · แมตช์ ${ct.matched} · ${ago(ct.lastSync)}`; if(ct.enabled) return '🔴 Cartrack ออฟไลน์'; return 'โหมดข้อมูลระบบ (ยังไม่เปิด Cartrack)'; }
+// ป้ายบอกแหล่งที่มาพิกัด — Cartrack (มี CartrackVehicleID + เปิดใช้งาน) vs มือถือคนขับ (มีพิกัดแต่ไม่ใช่ Cartrack) vs ไม่มีข้อมูล
+function gpsSourceLabel(v, ct){
+  if(v.CartrackVehicleID && ct && ct.enabled) return '📡 Cartrack';
+  if(v.lat||v.lng) return '📱 มือถือคนขับ';
+  return '⚪ ไม่มีข้อมูล';
+}
+function fleetVehicleCard(v, ct, activeByVeh, stopsByRoute){
+  const st = deriveVehStatus(v);
+  const route = activeByVeh[v.VehicleName] || activeByVeh[v.LicensePlate];
+  let stopLine = '';
+  if(route){
+    const stops = stopsByRoute[route.RouteID]||[];
+    const cur = stops.find(s=>s.Status!=='Completed');
+    const next = cur ? stops.find(s=>s.StopOrder===cur.StopOrder+1) : null;
+    if(cur) stopLine = `<div class="small muted" style="margin-top:4px">📍 ${esc(cur.CustomerName)}${next?' · ถัดไป '+esc(next.CustomerName):''}</div>`;
+  }
+  const lastT = v.lastPositionTime||v.LastPositionTime||v.LastSyncAt||v.lastSyncAt;
+  return `<div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
+    <div class="flex between aic">
+      <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีชื่อคนขับ')}</div></div>
+      <div style="text-align:right">${vstatusBadge(st)}<div class="small muted tab" style="margin-top:3px">${st==='In Use'?int(v.speed)+' กม./ชม.':''}</div></div>
+    </div>
+    ${stopLine}
+    <div class="flex between aic" style="margin-top:6px">
+      <span class="small muted">${gpsSourceLabel(v,ct)} · ${lastT?ago(lastT):'ไม่มีสัญญาณ'}</span>
+      ${route?`<button class="btn btn-sm" data-track="${esc(route.RouteID)}"><i data-lucide="route"></i>เส้นทางจริง</button>`:''}
+    </div>
+  </div>`;
+}
+function renderFleetOverview(view){
+  const ct=Store.data.cartrack||{};
+  el('ltBody').innerHTML = `
     ${ct.stale&&ct.enabled?`<div class="notice warn mb14"><i data-lucide="clock"></i><div>🟡 ข้อมูลอาจไม่ใหม่ล่าสุด — ซิงก์ Cartrack ล่าสุด ${ago(ct.lastSync)}</div></div>`:''}
-    ${!ct.enabled?`<div class="notice info mb14"><i data-lucide="info"></i><div>ยังไม่เปิดใช้งาน Cartrack — แสดงพิกัดจากข้อมูลระบบ ตั้งค่าได้ที่หน้า Cartrack Integration</div></div>`:''}
-    <div class="grid" style="grid-template-columns:1fr 320px;gap:16px;align-items:start">
+    ${!ct.enabled?`<div class="notice info mb14"><i data-lucide="info"></i><div>ยังไม่เปิดใช้งาน Cartrack — แสดงพิกัดจากข้อมูลระบบ (มือถือคนขับ/ค่าที่ตั้งเอง) ตั้งค่าได้ที่หน้า Cartrack Integration</div></div>`:''}
+    <div class="seg mb14" id="lmFilter"><button class="on" data-f="all">ทั้งหมด</button><button data-f="moving">กำลังวิ่ง</button><button data-f="stopped">จอดอยู่</button><button data-f="offline">ออฟไลน์</button></div>
+    <div class="grid" style="grid-template-columns:1fr 340px;gap:16px;align-items:start">
       <div class="card" style="padding:14px"><div id="liveMap" class="map" style="height:560px"></div></div>
       <div class="card" style="padding:14px">
         <div class="h-card mb14">สถานะรถ</div>
         <div id="vehList" style="display:flex;flex-direction:column;gap:8px;max-height:560px;overflow-y:auto" class="scrolly"></div>
       </div>
     </div>
-  `);
+  `;
+  icons();
   let filter='all';
-  const vehicles=()=>(Store._live?Store._live.vehicles:(Store.data.vehicles||[]).map(v=>({VehicleID:v.VehicleID,VehicleName:v.VehicleName,LicensePlate:v.LicensePlate,VehicleType:v.VehicleType,CurrentDriver:v.CurrentDriver,VehicleStatus:v.VehicleStatus,lat:v.CurrentLatitude,lng:v.CurrentLongitude,speed:v.CurrentSpeed}))).filter(v=>{
-    if(filter==='company')return true; if(filter==='moving')return Number(v.speed)>3; if(filter==='stopped')return Number(v.speed)<=3&&v.VehicleStatus!=='Offline'; if(filter==='external')return false; return true; });
+  const activeRoutes = (Store.data.routes||[]).filter(r=>r.Status==='In Progress');
+  const activeByVeh = {}; activeRoutes.forEach(r=>{ if(r.VehicleName) activeByVeh[r.VehicleName]=r; if(r.LicensePlate) activeByVeh[r.LicensePlate]=r; });
+  const stopsByRoute = {}; ((Store._live&&Store._live.stops)||[]).forEach(s=>{ (stopsByRoute[s.RouteID]=stopsByRoute[s.RouteID]||[]).push(s); });
+  const ensureStops = ()=>{
+    const missing = activeRoutes.filter(r=>!stopsByRoute[r.RouteID]);
+    if(!missing.length) return Promise.resolve();
+    return Promise.all(missing.map(r=>API.get('getRouteStops',{routeId:r.RouteID}).then(s=>stopsByRoute[r.RouteID]=s).catch(()=>stopsByRoute[r.RouteID]=[])));
+  };
+  const vehicles=()=>liveVehicles().filter(v=>{ const st=deriveVehStatus(v);
+    if(filter==='moving')return st==='In Use'; if(filter==='stopped')return st==='Stopped'; if(filter==='offline')return st==='Offline'; return true; });
   function draw(){
     const list=vehicles();
-    el('vehList').innerHTML = list.length? list.map(v=>`<div class="flex between aic" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
-      <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted mono">${esc(v.LicensePlate)} · ${esc(v.CurrentDriver||'ไม่มีชื่อคนขับ')}</div></div>
-      <div style="text-align:right">${vstatusBadge(deriveVehStatus(v))}<div class="small muted tab" style="margin-top:3px">${int(v.speed)} กม./ชม.</div></div></div>`).join('') : emptyState('ไม่มีรถตามตัวกรอง');
+    el('vehList').innerHTML = list.length? list.map(v=>fleetVehicleCard(v,ct,activeByVeh,stopsByRoute)).join('') : emptyState('ไม่มีรถตามตัวกรอง');
+    $$('[data-track]',view).forEach(b=>b.onclick=()=>{ const r=activeRoutes.find(x=>x.RouteID===b.dataset.track); if(r) showRouteTrackModal(r); });
     if(liveMapRef){ liveMapRef.remove(); liveMapRef=null; }
     const wh=warehouse(); liveMapRef=MapUtil.make('liveMap',wh); MapUtil.whMarker(liveMapRef,wh);
     const pts=[[wh.lat,wh.lng]]; list.forEach(v=>{ if(v.lat&&v.lng){MapUtil.vehMarker(liveMapRef,v);pts.push([+v.lat,+v.lng]);} });
     (Store.data.deliveries||[]).forEach((d,i)=>{ if(d.Latitude){MapUtil.stopMarker(liveMapRef,d,i+1,'#94A3B8');} });
     if(pts.length>1)liveMapRef.fitBounds(pts,{padding:[30,30]}); icons();
   }
-  setTimeout(draw,60);
+  ensureStops().then(draw);
   $$('#lmFilter button',view).forEach(b=>b.onclick=()=>{ $$('#lmFilter button',view).forEach(x=>x.classList.remove('on')); b.classList.add('on'); filter=b.dataset.f; draw(); });
-  window._onRealtime=()=>{ if(Store.page==='livemap') draw(); };
-};
-function ctStatusLine(ct){ if(!ct) return ''; if(ct.connected) return `🟢 Cartrack เชื่อมต่อ · พบ ${ct.found} คัน · แมตช์ ${ct.matched} · ${ago(ct.lastSync)}`; if(ct.enabled) return '🔴 Cartrack ออฟไลน์'; return 'โหมดข้อมูลระบบ (ยังไม่เปิด Cartrack)'; }
+  window._onRealtime=()=>{ if((Store.page==='livemap'||Store.page==='tracking') && liveTab==='fleet' && el('liveMap')) draw(); };
+}
+// เปรียบเทียบเส้นทางที่วางแผนไว้ (จาก route_stops) กับเส้นทางที่วิ่งจริง (จาก gps_logs) + จุดจอดนาน
+async function showRouteTrackModal(route){
+  const [stops, track] = await Promise.all([
+    API.get('getRouteStops',{routeId:route.RouteID}),
+    API.get('getRouteGpsTrack',{routeId:route.RouteID}),
+  ]);
+  const dwells = deriveDwells(track);
+  const m = modal({ title:'เส้นทางจริง vs วางแผน — '+esc(route.RouteID), body:`
+    <div id="rtMap" class="map" style="height:340px;margin-bottom:12px"></div>
+    <div class="flex gap12 small muted" style="margin-bottom:12px">
+      <span><span style="display:inline-block;width:14px;height:3px;background:#2563EB;vertical-align:middle;margin-right:5px"></span>วางแผน</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:#EF4444;vertical-align:middle;margin-right:5px"></span>วิ่งจริง (GPS)</span>
+    </div>
+    <div class="h-card mb14">จุดที่จอดนิ่งนาน (${dwells.length})</div>
+    ${dwells.length? dwells.map(d=>`<div class="flex between" style="padding:6px 0;border-bottom:1px solid #F3F5F8"><span class="small">${timeShort(d.from)}–${timeShort(d.to)}</span><span class="small strong">จอด ${int(d.minutes)} นาที</span></div>`).join('')
+      : '<div class="small muted">ไม่พบช่วงจอดนิ่งนานเกิน 3 นาที (หรือยังไม่มีข้อมูล GPS ระหว่างทาง)</div>'}
+  `, foot:`<button class="btn" id="rtClose">ปิด</button>` });
+  el('rtClose').onclick=m.close;
+  setTimeout(()=>{
+    if(!el('rtMap')) return;
+    const wh=warehouse();
+    const map=MapUtil.make('rtMap',wh); MapUtil.whMarker(map,wh);
+    const plannedPts=[[wh.lat,wh.lng]];
+    stops.forEach((s,i)=>{ if(s.Latitude){ MapUtil.stopMarker(map,s,i+1,'#2563EB'); plannedPts.push([+s.Latitude,+s.Longitude]); } });
+    plannedPts.push([wh.lat,wh.lng]);
+    L.polyline(plannedPts,{color:'#2563EB',weight:3,dashArray:'6,6'}).addTo(map);
+    const actualPts = track.filter(p=>p.Latitude&&p.Longitude).map(p=>[+p.Latitude,+p.Longitude]);
+    if(actualPts.length>1) L.polyline(actualPts,{color:'#EF4444',weight:3}).addTo(map);
+    const allPts = plannedPts.concat(actualPts);
+    if(allPts.length>1) map.fitBounds(allPts,{padding:[26,26]});
+    icons();
+  },60);
+}
 
 /* ================================================================
    COMPANY VEHICLES
@@ -1199,6 +1342,7 @@ ROUTES.reports = async function(view){
     const type=(el('rType')&&el('rType').value)||'routes';
     el('rDetail').innerHTML = reportDetail(type, last).html; icons();
     $$('[data-note]',view).forEach(b=>b.onclick=()=>printRouteNote((last.routes||[]).find(x=>x.RouteID===b.dataset.note)));
+    $$('[data-track]',view).forEach(b=>b.onclick=()=>{ const r=(last.routes||[]).find(x=>x.RouteID===b.dataset.track); if(r) showRouteTrackModal(r); });
   }
   el('rGo').onclick=build;
   el('rType').onchange=renderDetail;
@@ -1241,9 +1385,10 @@ function reportDetail(type, rep){
       <tfoot><tr><th colspan="3" class="r">รวมทั้งสิ้น</th><th class="r tab">${money(sum('EstimatedFuelCost'))}</th><th class="r tab">${money(sum('EstimatedTollCost'))}</th><th class="r tab">${money(sum('EstimatedParkingCost'))}</th><th class="r tab">${money(sum('EstimatedExternalCost'))}</th><th class="r tab">${money(sum('EstimatedOtherCost'))}</th><th class="r tab">${money(sum('EstimatedTotalCost'))}</th></tr></tfoot></table></div></div>`;
     return { html, rows, filename:'report_expenses', title:'รายงานค่าใช้จ่ายแยกประเภท' };
   }
-  const rows = routes.map(r=>({ Route:r.RouteID, 'วันที่':r.DeliveryDate, 'ประเภท':r.RouteType==='EXTERNAL_VEHICLE'?'รถภายนอก':'รถบริษัท', 'คนขับ':r.DriverName||'', 'จุด':Number(r.TotalStops)||0, 'กล่อง':Number(r.TotalBoxes)||0, 'ระยะทาง':Number(r.TotalDistance)||0, 'ต้นทุน':Number(r.EstimatedTotalCost)||0, 'สถานะ':(DSTATUS[r.Status]||{}).label||r.Status }));
-  const html=`<div class="card mt16"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">ต้นทุน</th><th>สถานะ</th><th class="r">พิมพ์</th></tr></thead>
-    <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td><td class="r tab">${num1(r.TotalDistance)}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td><td class="r"><button class="btn btn-sm" data-note="${esc(r.RouteID)}"><i data-lucide="printer"></i></button></td></tr>`).join('')||`<tr><td colspan="10">${emptyState('ไม่มี Route ในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
+  const rows = routes.map(r=>({ Route:r.RouteID, 'วันที่':r.DeliveryDate, 'ประเภท':r.RouteType==='EXTERNAL_VEHICLE'?'รถภายนอก':'รถบริษัท', 'คนขับ':r.DriverName||'', 'จุด':Number(r.TotalStops)||0, 'กล่อง':Number(r.TotalBoxes)||0, 'ระยะทาง':Number(r.TotalDistance)||0, 'เวลาวิ่ง (นาที)':Number(r.EstimatedDuration)||0, 'ต้นทุน':Number(r.EstimatedTotalCost)||0, 'สถานะ':(DSTATUS[r.Status]||{}).label||r.Status }));
+  const hasTrack = r => r.Status==='In Progress' || r.Status==='Completed';
+  const html=`<div class="card mt16"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">เวลาวิ่ง</th><th class="r">ต้นทุน</th><th>สถานะ</th><th class="r">ดู</th></tr></thead>
+    <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td><td class="r tab">${num1(r.TotalDistance)}</td><td class="r tab">${r.EstimatedDuration?int(r.EstimatedDuration)+' น.':'—'}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td><td class="r"><div class="flex gap8" style="justify-content:flex-end">${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="เส้นทางจริง + เวลาจอด"><i data-lucide="route"></i></button>`:''}<button class="btn btn-sm" data-note="${esc(r.RouteID)}" title="พิมพ์"><i data-lucide="printer"></i></button></div></td></tr>`).join('')||`<tr><td colspan="11">${emptyState('ไม่มี Route ในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
   return { html, rows, filename:'report_routes', title:'รายงาน Route' };
 }
 function rSize(){ return (el('rSize')&&el('rSize').value)||'A4'; }
@@ -1279,9 +1424,9 @@ function printReport(from,to,rep,type){
     <tfoot><tr><th colspan="2" class="r">รวมทั้งสิ้น</th><th class="r">${money(sum(routes,'EstimatedFuelCost'))}</th><th class="r">${money(sum(routes,'EstimatedTollCost'))}</th><th class="r">${money(sum(routes,'EstimatedParkingCost'))}</th><th class="r">${money(sum(routes,'EstimatedExternalCost'))}</th><th class="r">${money(sum(routes,'EstimatedOtherCost'))}</th><th class="r">${money(total)}</th></tr></tfoot></table>`;
   } else {
     tbl=`<div class="sec-title">รายการ Route</div>
-    <table><thead><tr><th class="tl">Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th>จุด</th><th>กล่อง</th><th>ระยะทาง</th><th>ต้นทุน</th><th>สถานะ</th></tr></thead>
-    <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'-')}</td><td class="r">${int(r.TotalStops)}</td><td class="r">${int(r.TotalBoxes)}</td><td class="r">${num1(r.TotalDistance)}</td><td class="r">${money(r.EstimatedTotalCost)}</td><td>${(DSTATUS[r.Status]||{}).label||r.Status}</td></tr>`).join('')||'<tr><td colspan="9" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
-    <tfoot><tr><th colspan="7" class="r">รวมต้นทุน</th><th class="r" colspan="2">${money(total)} บาท</th></tr></tfoot></table>`;
+    <table><thead><tr><th class="tl">Route</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th>จุด</th><th>กล่อง</th><th>ระยะทาง</th><th>เวลาวิ่ง</th><th>ต้นทุน</th><th>สถานะ</th></tr></thead>
+    <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'-')}</td><td class="r">${int(r.TotalStops)}</td><td class="r">${int(r.TotalBoxes)}</td><td class="r">${num1(r.TotalDistance)}</td><td class="r">${r.EstimatedDuration?int(r.EstimatedDuration)+' น.':'-'}</td><td class="r">${money(r.EstimatedTotalCost)}</td><td>${(DSTATUS[r.Status]||{}).label||r.Status}</td></tr>`).join('')||'<tr><td colspan="10" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
+    <tfoot><tr><th colspan="8" class="r">รวมต้นทุน</th><th class="r" colspan="2">${money(total)} บาท</th></tr></tfoot></table>`;
   }
   Printer.open(title, rSize(), head + tbl);
 }
@@ -1316,6 +1461,11 @@ ROUTES.settings = async function(view){
   const grp=(t,items)=>`<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#9AA3B2;font-weight:700;margin:22px 4px 10px">${esc(t)}</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px">${items.join('')}</div>`;
   page(view, `
     ${head('ตั้งค่า', 'ข้อมูลหลัก การเชื่อมต่อ และเมนูขั้นสูง — จัดการที่นี่ที่เดียว')}
+    ${grp('ปฏิบัติการเพิ่มเติม',[
+      item('#/planning','route','วางแผนส่ง','จัดเส้นทางอัตโนมัติ (เข้าได้จากแท็บ "รอจัดส่ง" ด้วย)'),
+      item('#/expenses','wallet','ค่าใช้จ่าย','บันทึก/ตรวจสอบค่าใช้จ่ายแต่ละ Route'),
+      item('#/tracking','package-search','ติดตามพัสดุ','ค้นหาสถานะพัสดุรายบิล'),
+      item('#/driver','smartphone','โหมดคนขับ','หน้าสำหรับคนขับเปิดบนมือถือ')])}
     ${grp('ข้อมูลหลัก',[
       item('#/customers','store','ลูกค้า / สาขา','ร้านค้าปลายทาง + พิกัด GPS'),
       item('#/vehicles','truck','รถบริษัท','ทะเบียน · ความจุ · ค่าน้ำมัน'),
@@ -1420,7 +1570,7 @@ function ctStat(l,v,ic,col){ return `<div class="card" style="padding:16px"><div
 /* ================================================================
    DRIVER MOBILE MODE
    ================================================================ */
-const Driver = { routeId:null };
+const Driver = { routeId:null, tab:'home' };
 /* ---- driver login session (localStorage) ---- */
 const DRV_LS_TOKEN='ddc_driver_token', DRV_LS_EMP='ddc_driver_emp';
 function driverSession(){
@@ -1428,30 +1578,47 @@ function driverSession(){
     return (token&&emp)?{token,emp}:null; }catch(e){ return null; }
 }
 function driverSetSession(token,emp){ localStorage.setItem(DRV_LS_TOKEN,token); localStorage.setItem(DRV_LS_EMP,JSON.stringify(emp)); }
-function driverClearSession(){ localStorage.removeItem(DRV_LS_TOKEN); localStorage.removeItem(DRV_LS_EMP); Driver.routeId=null; }
-function driverLogoutBtn(){ return `<button class="btn btn-sm" id="drvLogout"><i data-lucide="log-out"></i>ออกจากระบบ</button>`; }
+function driverClearSession(){ localStorage.removeItem(DRV_LS_TOKEN); localStorage.removeItem(DRV_LS_EMP); Driver.routeId=null; Driver.tab='home'; stopDriverBeacon(); }
+/* ---- ส่งพิกัดต่อเนื่องระหว่างวิ่งงาน (ทุก 25 วิ) — แทนการยิง GPS แค่ตอน check-in/ส่งเสร็จ
+   ให้หน้าติดตามเห็นตำแหน่งสดของรถที่ไม่มี Cartrack ได้จริง (ผ่าน driverPing → อัปเดต vehicles) ---- */
+let driverBeaconTimer=null, driverBeaconRouteId=null;
+function stopDriverBeacon(){ if(driverBeaconTimer){ clearInterval(driverBeaconTimer); driverBeaconTimer=null; } driverBeaconRouteId=null; }
+function startDriverBeacon(routeId, token){
+  if(driverBeaconRouteId===routeId && driverBeaconTimer) return;
+  stopDriverBeacon();
+  driverBeaconRouteId=routeId;
+  if(!navigator.geolocation) return;
+  const ping=()=>{
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const {latitude,longitude,speed,heading,accuracy}=pos.coords;
+      API.post('driverPing',{routeId, lat:latitude, lng:longitude, speed:speed||0, heading, accuracy, token}).catch(()=>{});
+    }, ()=>{}, {enableHighAccuracy:true, timeout:15000, maximumAge:10000});
+  };
+  ping(); driverBeaconTimer=setInterval(ping,25000);
+}
 function bindDriverLogout(sess){
   const b=el('drvLogout'); if(!b) return;
   b.onclick=async()=>{ try{ await API.post('driverLogout',{token:sess.token}); }catch(e){} driverClearSession(); render(); };
 }
 function driverLoginForm(view){
+  // ไม่ต้องใส่รหัส — งานถูกระบบคำนวณ+มอบหมายไว้อยู่แล้ว แค่แตะเลือกว่าเป็นใคร
+  // เพื่อให้แยก "งานของฉัน" ได้ และรู้ว่าใครเช็คอิน/ส่งสำเร็จจริง (ไม่ใช่การล็อกอินเพื่อกันคนนอก)
+  const drivers = (Store.data.employees||[]).filter(e=>!e.IsDeleted && e.Role==='DRIVER' && e.Status==='Active');
   page(view, `<div class="driver">
-    ${head('โหมดคนขับ · เข้าสู่ระบบ', thDate(Store.date))}
-    <div class="card" style="max-width:360px;margin:0 auto">
-      <div class="field"><label class="label">Username</label><input class="input" id="drvUser" placeholder="Username คนขับ" autocomplete="username"></div>
-      <div class="field" style="margin:0"><label class="label">PIN</label><input class="input" id="drvPin" type="password" inputmode="numeric" placeholder="PIN 4-6 หลัก" autocomplete="current-password"></div>
-      <button class="btn btn-primary btn-block big-btn mt16" id="drvLoginBtn" style="margin-top:14px"><i data-lucide="log-in"></i>เข้าสู่ระบบ</button>
-    </div>
+    ${head('โหมดคนขับ', thDate(Store.date))}
+    <div class="strong small muted mb14" style="text-align:center">แตะชื่อของคุณเพื่อเข้าใช้งาน</div>
+    ${drivers.length? drivers.map(e=>`<button class="btn btn-block big-btn mb14" data-pick="${esc(e.EmployeeID)}" style="justify-content:flex-start;gap:12px">
+        <span class="avatar" style="width:36px;height:36px;flex-shrink:0"><i data-lucide="user"></i></span>
+        <span style="flex:1;text-align:left">${esc(e.EmployeeName)}</span>
+        <i data-lucide="chevron-right"></i>
+      </button>`).join('')
+      : emptyState('ยังไม่มีรายชื่อคนขับ','เพิ่มคนขับได้ที่หน้าตั้งค่า → พนักงานส่งสินค้า')}
   </div>`);
-  const go=async()=>{
-    const username=el('drvUser').value.trim(), pin=el('drvPin').value.trim();
-    if(!username||!pin){ toast('กรอก Username และ PIN','warn'); return; }
-    const btn=el('drvLoginBtn'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังเข้าสู่ระบบ…'; icons();
-    try{ const r=await API.post('driverLogin',{username,pin}); driverSetSession(r.token,r.employee); render(); }
-    catch(e){ toast(e.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="log-in"></i>เข้าสู่ระบบ'; icons(); }
-  };
-  el('drvLoginBtn').onclick=go;
-  el('drvPin').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+  $$('[data-pick]',view).forEach(b=>b.onclick=async()=>{
+    const orig=b.innerHTML; b.disabled=true; b.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังเข้าสู่ระบบ…'; icons();
+    try{ const r=await API.post('driverSelect',{employeeId:b.dataset.pick}); driverSetSession(r.token,r.employee); render(); }
+    catch(e){ toast(e.message,'err'); b.disabled=false; b.innerHTML=orig; icons(); }
+  });
 }
 function driverJobCard(r){
   return `<div class="card mb14">
@@ -1461,67 +1628,159 @@ function driverJobCard(r){
     <button class="btn btn-primary btn-block big-btn" data-accept="${esc(r.RouteID)}"><i data-lucide="hand"></i>รับงานนี้</button>
   </div>`;
 }
+/* ---- Driver-mode chrome: dnav (🏠 วันนี้ / 🚚 งาน / 👤 ฉัน) replaces the admin sidebar/topbar (see body.driver-mode in styles.css) ---- */
+function buildDriverNav(){
+  const nav = el('dnav');
+  const items=[{k:'home',icon:'home',label:'วันนี้'},{k:'jobs',icon:'truck',label:'งาน'},{k:'me',icon:'user',label:'ฉัน'}];
+  nav.innerHTML = items.map(it=>`<button data-dtab="${it.k}" class="${Driver.tab===it.k?'active':''}"><i data-lucide="${it.icon}"></i>${it.label}</button>`).join('');
+  $$('[data-dtab]',nav).forEach(b=>b.onclick=()=>{ Driver.tab=b.dataset.dtab; render(); });
+  icons();
+}
 ROUTES.driver = async function(view){
   const sess = driverSession();
-  if(!sess){ driverLoginForm(view); return; }
-  let routes;
-  try{ routes = await API.post('getMyRoutes',{token:sess.token, date:Store.date}); }
-  catch(e){ driverClearSession(); toast('เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่','warn'); driverLoginForm(view); return; }
-  let active = routes.find(r=>r.RouteID===Driver.routeId) || routes.find(r=>r.Status==='In Progress');
+  if(!sess){ el('dnav').innerHTML=''; driverLoginForm(view); return; }
+  let routes, pool;
+  try{
+    routes = await API.post('getMyRoutes',{token:sess.token, date:Store.date});
+    pool = await API.post('getAvailableRoutes',{token:sess.token, date:Store.date});
+  }
+  catch(e){ driverClearSession(); el('dnav').innerHTML=''; toast('เซสชันหมดอายุ — กรุณาเข้าสู่ระบบใหม่','warn'); driverLoginForm(view); return; }
+  const active = routes.find(r=>r.RouteID===Driver.routeId) || routes.find(r=>r.Status==='In Progress');
+  const stops = active ? await API.get('getRouteStops',{routeId:active.RouteID}) : [];
+  if(active && active.Status==='In Progress') startDriverBeacon(active.RouteID, sess.token); else stopDriverBeacon();
+  buildDriverNav();
+  if(Driver.tab==='jobs') return driverJobsView(view, sess, routes, pool, active, stops);
+  if(Driver.tab==='me') return driverMeView(view, sess, active);
+  return driverHomeView(view, sess, pool, active, stops);
+};
+/* ---- 🏠 วันนี้ — จุดโฟกัสเดียว: รอบที่กำลังส่งอยู่ + จุดถัดไป ---- */
+let driverMapRef=null;
+function drawDriverMap(cur){
+  if(!el('driverMap')) return;
+  if(driverMapRef){ driverMapRef.remove(); driverMapRef=null; }
+  const wh=warehouse();
+  driverMapRef=MapUtil.make('driverMap',{lat:+cur.Latitude,lng:+cur.Longitude});
+  MapUtil.whMarker(driverMapRef,wh);
+  MapUtil.stopMarker(driverMapRef,cur,cur.StopOrder,'#2563EB');
+  driverMapRef.fitBounds([[wh.lat,wh.lng],[+cur.Latitude,+cur.Longitude]],{padding:[26,26]});
+}
+function driverHomeView(view, sess, pool, active, stops){
   if(!active){
-    // หน้ากดรับงาน — เห็นแต่งานที่มอบหมายให้ตัวเองเท่านั้น
     page(view, `<div class="driver">
-      ${head('โหมดคนขับ · รับงาน', `${thDate(Store.date)} · ${sess.emp.EmployeeName} · ${routes.length} รอบ`, driverLogoutBtn())}
-      ${routes.length
-        ? `<div class="notice info mb14"><i data-lucide="hand"></i><div>เลือกงานของคุณแล้วกด <b>รับงานนี้</b> เพื่อเริ่มส่ง</div></div>` + routes.map(driverJobCard).join('')
-        : emptyState('ยังไม่มีรอบส่งมอบหมายให้คุณวันนี้','ติดต่อผู้จัดการเพื่อรับงาน หรือให้แอดมินจัด Route ก่อน')}
+      ${head('วันนี้', `${thDate(Store.date)} · สวัสดี ${esc(sess.emp.EmployeeName)}`)}
+      <div class="notice info mb14"><i data-lucide="info"></i><div>ยังไม่มีรอบส่งที่เริ่ม — ไปที่แท็บ <b>งาน</b> เพื่อรับงาน${pool.length?` (มีงานรอรับ ${int(pool.length)} งาน)`:''}</div></div>
+      ${emptyState('พร้อมทำงานเมื่อไหร่ก็รับงานได้เลย','')}
     </div>`);
-    bindDriverLogout(sess);
-    $$('[data-accept]',view).forEach(b=>b.onclick=async()=>{ const rid=b.dataset.accept; Driver.routeId=rid;
-      const rt=routes.find(x=>x.RouteID===rid);
-      // รับงาน = เริ่มรอบทันที → อัปเดตสถานะขึ้นเซิร์ฟเวอร์ ให้ผู้จ่ายงานเห็นว่า "กำลังส่ง"
-      if(rt && rt.Status==='Planned'){ try{ await API.post('startRoute',{routeId:rid,token:sess.token}); }catch(e){} }
-      render(); toast('รับงาน '+rid+' แล้ว เริ่มส่งได้เลย','ok'); });
     return;
   }
-  const stops = await API.get('getRouteStops',{routeId:active.RouteID});
   const done = stops.filter(s=>s.Status==='Completed').length;
   const pct = stops.length? Math.round(done/stops.length*100):0;
   const cur = stops.find(s=>s.Status!=='Completed');
-  page(view, `
-    <div class="driver">
-    ${head(active.RouteID,`${active.DriverName||''} · ${active.VehicleName||''}`,`<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>${driverLogoutBtn()}`)}
+  page(view, `<div class="driver">
+    ${head('วันนี้', `${esc(sess.emp.EmployeeName)} · ${esc(active.VehicleName||active.ProviderName||'')}`, `<span class="mono small muted">${esc(active.RouteID)}</span>`)}
     <div class="card mb14">
       <div class="flex between aic mb14"><span class="h-card">ความคืบหน้ารอบส่ง</span><span class="strong tab">${done}/${stops.length} จุด</span></div>
       <div class="progress" style="height:14px"><span style="width:${pct}%;background:#10B981"></span></div>
-      <div class="flex between mt16" style="margin-top:8px"><span class="small muted">${int(active.TotalBoxes)} กล่อง · ${num1(active.TotalDistance)} กม.</span><span class="small strong">${pct}%</span></div>
+      <div class="flex between" style="margin-top:8px"><span class="small muted">${int(active.TotalBoxes)} กล่อง · ${num1(active.TotalDistance)} กม.</span><span class="small strong">${pct}%</span></div>
     </div>
     ${active.Status==='Planned'?`<button class="btn btn-primary btn-block big-btn mb14" id="dStart"><i data-lucide="play"></i>เริ่มรอบส่ง</button>`:''}
     ${cur?`<div class="card mb14" style="border:2px solid #2563EB">
       <div class="small muted">จุดส่งปัจจุบัน (ลำดับ ${cur.StopOrder})</div>
       <div class="strong" style="font-size:19px;margin:4px 0">${esc(cur.CustomerName)}</div>
       <div class="muted">${esc(cur.BranchName)} · ${int(cur.BoxQty)} กล่อง</div>
+      ${cur.Latitude?`<div id="driverMap" class="map" style="height:180px;margin-top:12px"></div>`:''}
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
         <button class="btn big-btn" id="dMap"><i data-lucide="map"></i>เปิดแผนที่</button>
         <button class="btn big-btn" id="dCheckin"><i data-lucide="map-pin"></i>Check-in</button>
         <button class="btn btn-primary big-btn" id="dDone"><i data-lucide="check-circle-2"></i>ส่งเสร็จ</button>
         <button class="btn btn-danger big-btn" id="dFail"><i data-lucide="x-circle"></i>ส่งไม่สำเร็จ</button>
       </div></div>`:`<div class="notice ok mb14"><i data-lucide="party-popper"></i><div>ส่งครบทุกจุดแล้ว! 🎉</div></div>`}
-    <div class="card">
-      <div class="h-card mb14">รายการจุดส่ง</div>
-      ${stops.map(s=>`<div class="flex aic gap8" style="padding:11px 0;border-bottom:1px solid #F3F5F8">
-        <span class="stop-num" style="width:28px;height:28px;font-size:12px;background:${s.Status==='Completed'?'#10B981':(s.Status==='Failed'?'#EF4444':'#94A3B8')}">${s.Status==='Completed'?'✓':s.StopOrder}</span>
-        <div style="flex:1"><div class="strong" style="font-size:14px">${esc(s.CustomerName)}</div><div class="small muted">${esc(s.BranchName)} · ${int(s.BoxQty)} กล่อง</div></div></div>`).join('')}
-    </div></div>
-  `);
-  bindDriverLogout(sess);
-  const dch=el('dChange'); if(dch)dch.onclick=()=>{ Driver.routeId=null; render(); };
+  </div>`);
   const ds=el('dStart'); if(ds)ds.onclick=async()=>{ ds.disabled=true; try{ await API.post('startRoute',{routeId:active.RouteID,token:sess.token}); }catch(e){} render(); toast('เริ่มรอบส่งแล้ว','ok'); };
   const dm=el('dMap'); if(dm)dm.onclick=()=>{ if(cur&&cur.Latitude) window.open(`https://www.google.com/maps/dir/?api=1&destination=${cur.Latitude},${cur.Longitude}`,'_blank'); };
   const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur,sess.token);
   const dd=el('dDone'); if(dd)dd.onclick=()=>podModal('complete',active,cur,sess.token);
   const df=el('dFail'); if(df)df.onclick=()=>podModal('fail',active,cur,sess.token);
-};
+  if(cur&&cur.Latitude) setTimeout(()=>drawDriverMap(cur),60);
+}
+/* ---- 🚚 งาน — รับงาน (ของฉัน + พูลรอรับ) หรือรายการจุดส่งทั้งหมดของรอบที่กำลังทำ ---- */
+function driverJobsView(view, sess, routes, pool, active, stops){
+  if(!active){
+    page(view, `<div class="driver">
+      ${head('งาน', thDate(Store.date))}
+      <div class="strong small muted mb14">งานของฉัน (${routes.length})</div>
+      ${routes.length
+        ? `<div class="notice info mb14"><i data-lucide="hand"></i><div>เลือกงานของคุณแล้วกด <b>รับงานนี้</b> เพื่อเริ่มส่ง</div></div>` + routes.map(driverJobCard).join('')
+        : emptyState('ยังไม่มีรอบส่งมอบหมายให้คุณวันนี้','')}
+      <div class="strong small muted mb14" style="margin-top:20px">งานที่รอรับ (${pool.length})</div>
+      ${pool.length
+        ? pool.map(driverJobCard).join('')
+        : emptyState('ไม่มีงานรอรับตอนนี้','')}
+    </div>`);
+    $$('[data-accept]',view).forEach(b=>b.onclick=async()=>{ const rid=b.dataset.accept;
+      const isPool = pool.some(x=>x.RouteID===rid);
+      Driver.routeId=rid;
+      // รับงาน = อ้างสิทธิ์ (ถ้าเป็นงานในพูล) + เริ่มรอบทันที → อัปเดตสถานะขึ้นเซิร์ฟเวอร์ ให้ผู้จ่ายงานเห็นว่า "กำลังส่ง"
+      try{ await API.post(isPool?'claimRoute':'startRoute',{routeId:rid,token:sess.token}); }
+      catch(e){ toast(e.message,'err'); Driver.routeId=null; return; }
+      Driver.tab='home'; render(); toast('รับงาน '+rid+' แล้ว เริ่มส่งได้เลย','ok'); });
+    return;
+  }
+  page(view, `<div class="driver">
+    ${head(active.RouteID, `${active.DriverName||''} · ${active.VehicleName||''}`, `<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>`)}
+    <div class="card">
+      <div class="h-card mb14">รายการจุดส่ง</div>
+      ${stops.map(s=>`<div class="flex aic gap8" style="padding:11px 0;border-bottom:1px solid #F3F5F8">
+        <span class="stop-num" style="width:28px;height:28px;font-size:12px;background:${s.Status==='Completed'?'#10B981':(s.Status==='Failed'?'#EF4444':'#94A3B8')}">${s.Status==='Completed'?'✓':s.StopOrder}</span>
+        <div style="flex:1"><div class="strong" style="font-size:14px">${esc(s.CustomerName)}</div><div class="small muted">${esc(s.BranchName)} · ${int(s.BoxQty)} กล่อง</div></div></div>`).join('')}
+    </div>
+  </div>`);
+  const dch=el('dChange'); if(dch)dch.onclick=()=>{ Driver.routeId=null; render(); };
+}
+/* ---- 👤 ฉัน — โปรไฟล์คนขับ, ออกจากระบบ, บันทึกค่าใช้จ่าย ---- */
+function driverMeView(view, sess, active){
+  page(view, `<div class="driver">
+    ${head('ฉัน', thDate(Store.date))}
+    <div class="card mb14" style="text-align:center;padding:26px 20px">
+      <div class="avatar" style="width:64px;height:64px;margin:0 auto 12px"><i data-lucide="user" style="width:30px;height:30px"></i></div>
+      <div class="strong" style="font-size:18px">${esc(sess.emp.EmployeeName)}</div>
+      <div class="small muted">${esc(sess.emp.Phone||'')}${active?' · '+esc(active.VehicleName||active.ProviderName||''):''}</div>
+    </div>
+    <button class="btn btn-block big-btn mb14" id="dExpense"><i data-lucide="receipt"></i>บันทึกค่าใช้จ่าย</button>
+    <button class="btn btn-block big-btn" id="drvLogout"><i data-lucide="log-out"></i>ออกจากระบบ</button>
+  </div>`);
+  el('dExpense').onclick=()=>driverExpenseModal(active, sess);
+  bindDriverLogout(sess);
+}
+/* ---- บันทึกค่าใช้จ่ายจากมือถือคนขับ — ใช้ action เดิม (createExpense) ที่ไม่มี auth gate อยู่แล้ว ---- */
+function driverExpenseModal(active, sess){
+  const EXTYPE={FUEL:'ค่าน้ำมัน',TOLL:'ค่าทางด่วน',PARKING:'ค่าจอดรถ',OTHER:'อื่นๆ'};
+  let photoData=null;
+  const m=modal({ title:'บันทึกค่าใช้จ่าย', body:`
+    ${active?`<div class="notice info mb14"><i data-lucide="route"></i><div>Route: <b>${esc(active.RouteID)}</b></div></div>`:''}
+    <div class="field"><label class="label">ประเภท</label><select class="select" id="deType">${Object.keys(EXTYPE).map(k=>`<option value="${k}">${EXTYPE[k]}</option>`).join('')}</select></div>
+    <div class="field"><label class="label">จำนวนเงิน (บาท)</label><input class="input" id="deAmt" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="field"><label class="label">หมายเหตุ</label><input class="input" id="deNote" placeholder="เช่น เติมน้ำมัน 7-Eleven"></div>
+    <div class="field" style="margin:0"><label class="label">รูปใบเสร็จ (ถ้ามี)</label>
+      <input type="file" accept="image/*" capture="environment" id="dePhoto" style="display:none">
+      <button class="btn btn-block" id="dePick" type="button"><i data-lucide="camera"></i>ถ่าย / เลือกรูป</button>
+      <div id="dePrev" style="margin-top:10px"></div></div>
+  `, foot:`<button class="btn" id="deCancel">ยกเลิก</button><button class="btn btn-primary" id="deSave"><i data-lucide="check"></i>บันทึก</button>` });
+  el('dePick').onclick=()=>el('dePhoto').click();
+  el('dePhoto').onchange=async e=>{ const f=e.target.files[0]; if(!f)return; el('dePrev').innerHTML='<span class="small muted">กำลังย่อรูป…</span>';
+    photoData=await compressImage(f,1024,0.7);
+    el('dePrev').innerHTML=`<img src="${photoData}" style="width:100%;max-height:220px;object-fit:contain;border-radius:10px;border:1px solid var(--border)"><button class="btn btn-sm" id="deClr" style="margin-top:6px"><i data-lucide="x"></i>เอารูปออก</button>`; icons();
+    el('deClr').onclick=()=>{ photoData=null; el('dePhoto').value=''; el('dePrev').innerHTML=''; }; };
+  el('deCancel').onclick=m.close;
+  el('deSave').onclick=async()=>{
+    const amount=+el('deAmt').value||0; if(!amount){ toast('กรอกจำนวนเงิน','warn'); return; }
+    const btn=el('deSave'); btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังบันทึก…'; icons();
+    let photoUrl=''; if(photoData){ try{ photoUrl=await uploadPOD(photoData); }catch(err){ toast('อัปโหลดรูปไม่สำเร็จ ('+err.message+') — บันทึกต่อโดยไม่มีรูป','warn'); } }
+    const data={ RouteID:active?active.RouteID:'', ExpenseType:el('deType').value, Amount:amount, Description:el('deNote').value.trim(), ExpenseDate:Store.date, ReceiptImageURL:photoUrl };
+    try{ await API.post('createExpense',{data,user:sess.emp.EmployeeName}); m.close(); toast('บันทึกค่าใช้จ่ายแล้ว','ok'); }
+    catch(err){ toast(err.message,'err'); btn.disabled=false; btn.innerHTML='<i data-lucide="check"></i>บันทึก'; icons(); }
+  };
+}
 /* ---- ถ่ายรูปหลักฐานการส่ง (POD) ---- */
 function compressImage(file, maxW, q){
   return new Promise(res=>{ const rd=new FileReader();

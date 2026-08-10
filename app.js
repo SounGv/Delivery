@@ -7,6 +7,10 @@
 /* ---------------- CONSTANTS ---------------- */
 const LS_URL = 'ddc_api_url';
 // URL เริ่มต้น — เชื่อม Google Sheet ของจริงอัตโนมัติ (เปิดเว็บก็ใช้ข้อมูลจริงเลย)
+// TODO(migration cutover): เปลี่ยนเป็น '/api/gas' (same-origin — ดู
+// functions/api/gas.js) เมื่อทดสอบผ่าน ?api=/api/gas ครบตามแผนใน
+// CLOUDFLARE_SETUP.md แล้วเท่านั้น — ยังไม่เปลี่ยนตรงนี้ตอนนี้เพราะเว็บจริงยังใช้
+// backend เดิมอยู่ (เปลี่ยนก่อนเวลาจะทำเว็บจริงพังทันที เพราะ D1 ฝั่งนั้นยังไม่มีข้อมูล)
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwwUY8D8aKdoSJSZwBirfevlE4UoM9nj-JsyC_5eQo573qhpMDRlDN1pdsuHp4bDjIe/exec';
 const DATA_DATE = '2026-07-20';           // วันที่ของชุดข้อมูลทดลอง (ใช้เฉพาะโหมด Mock)
 
@@ -32,27 +36,46 @@ const VSTATUS = {
   Unknown:  { label:'ไม่ทราบ',     cls:'b-gray',  dot:'#9AA3B2' }
 };
 // สถานะรถอัตโนมัติจากความเร็ว: มีพิกัด + วิ่ง(>3)=กำลังวิ่ง · หยุด=จอดอยู่ · ไม่มีพิกัด=ออฟไลน์
+const GPS_STALE_MIN = 10; // ไม่โชว์ "กำลังวิ่ง/จอดอยู่" ถ้าไม่มีอัปเดต GPS จริงในช่วงนี้ — ต้องเป็นออฟไลน์
 function deriveVehStatus(v){
   const sp = Number(v.speed!=null?v.speed:v.CurrentSpeed) || 0;
-  const hasPos = (v.lat||v.lng||v.CurrentLatitude||v.CurrentLongitude) || v.lastPositionTime || v.LastPositionTime || v.LastSyncAt || v.lastSyncAt;
-  if(!hasPos) return 'Offline';
+  const hasCoord = !!(v.lat||v.lng||v.CurrentLatitude||v.CurrentLongitude);
+  const lastT = v.lastPositionTime||v.LastPositionTime||v.LastSyncAt||v.lastSyncAt;
+  if(!hasCoord || !lastT) return 'Offline';
+  const ageMin = (Date.now()-new Date(lastT).getTime())/60000;
+  if(!(ageMin>=0) || ageMin > GPS_STALE_MIN) return 'Offline';
   return sp > 3 ? 'In Use' : 'Stopped';
+}
+// ช่วงที่รถ/คนขับหยุดนิ่ง (จุดจอด) จากพิกัด GPS ต่อเนื่อง — ไม่ต้องพึ่งความเร็วที่บันทึกไว้
+// (gps_logs ไม่มีคอลัมน์ speed) ใช้ระยะห่างระหว่างจุดใกล้เคียงแทน
+function deriveDwells(points, minMinutes, radiusM){
+  minMinutes = minMinutes || 3; radiusM = radiusM || 60;
+  const pts = (points||[]).filter(p=>p.Latitude&&p.Longitude).slice().sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
+  const dwells = []; let i=0;
+  while(i<pts.length){
+    let j=i+1;
+    while(j<pts.length && haversine(+pts[i].Latitude,+pts[i].Longitude,+pts[j].Latitude,+pts[j].Longitude)*1000 < radiusM) j++;
+    const durMin = (new Date(pts[j-1].Timestamp)-new Date(pts[i].Timestamp))/60000;
+    if(j-1>i && durMin>=minMinutes) dwells.push({ from:pts[i].Timestamp, to:pts[j-1].Timestamp, minutes:Math.round(durMin) });
+    i = j>i ? j : i+1;
+  }
+  return dwells;
+}
+// รายชื่อรถ+พิกัดปัจจุบัน ใช้ร่วมกันทั้งหน้า "วันนี้" และ "ติดตาม" — Store._live ถ้ามี (polling) ไม่งั้น fallback จาก bootstrap
+function liveVehicles(){
+  return Store._live ? Store._live.vehicles : (Store.data.vehicles||[]).map(v=>({VehicleID:v.VehicleID,VehicleName:v.VehicleName,LicensePlate:v.LicensePlate,VehicleType:v.VehicleType,CurrentDriver:v.CurrentDriver,VehicleStatus:v.VehicleStatus,CartrackVehicleID:v.CartrackVehicleID,lat:v.CurrentLatitude,lng:v.CurrentLongitude,speed:v.CurrentSpeed,heading:v.CurrentHeading,lastPositionTime:v.LastPositionTime,lastSyncAt:v.LastSyncAt}));
 }
 const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อกิโลเมตร', PER_DAY:'ต่อวัน', CUSTOM:'กำหนดเอง' };
 
-// MVP — 5 เมนูหลัก (workflow-first) + กลุ่มติดตามที่ใช้บ่อย · เมนูขั้นสูงอื่น ๆ อยู่ในหน้า "ตั้งค่า"
+// 4 เมนูหลักเท่านั้น (workflow-first) — วางแผนส่ง/ค่าใช้จ่าย/โหมดคนขับ/ติดตามพัสดุ
+// ยังเป็น route ที่เข้าได้ตามปกติ แต่เข้าถึงผ่านปุ่ม/ลิงก์ในหน้างานหรือหน้าตั้งค่าแทน
+// การอยู่ใน sidebar ตรงๆ (ดู ROUTES.deliveries แท็บ "รอจัดส่ง" และ ROUTES.settings กลุ่ม "ปฏิบัติการ")
 const NAV = [
   { group:'', items:[
-    { id:'dashboard',  label:'หน้าหลัก',      icon:'home' },
-    { id:'deliveries', label:'งานส่งสินค้า',  icon:'package' },
-    { id:'planning',   label:'วางแผนส่ง',     icon:'route' },
-    { id:'expenses',   label:'ค่าใช้จ่าย',     icon:'wallet' },
-    { id:'reports',    label:'รายงาน',        icon:'bar-chart-3' },
-  ]},
-  { group:'ติดตาม', items:[
-    { id:'tracking', label:'ติดตามพัสดุ',    icon:'package-search' },
-    { id:'livemap',  label:'แผนที่ติดตามรถ', icon:'map-pin' },
-    { id:'driver',   label:'โหมดคนขับ',      icon:'smartphone' },
+    { id:'dashboard',  label:'วันนี้',    icon:'home' },
+    { id:'deliveries', label:'งานส่ง',    icon:'package' },
+    { id:'livemap',    label:'ติดตาม',    icon:'map-pin' },
+    { id:'reports',    label:'รายงาน',    icon:'bar-chart-3' },
   ]},
 ];
 const NAV_FOOT = [
@@ -214,6 +237,7 @@ const Mock = (() => {
       case 'getDeliveries': { let r=db.deliveries.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); if(p.status)r=r.filter(x=>x.Status===p.status); return r; }
       case 'getRoutes': { let r=db.routes.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); return r; }
       case 'getRouteStops': return db.routeStops.filter(s=>!p.routeId||s.RouteID===p.routeId).sort((a,b)=>a.StopOrder-b.StopOrder);
+      case 'getRouteGpsTrack': return db.gps.filter(g=>g.RouteID===p.routeId).sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
       case 'getCustomers': return live(db.customers);
       case 'getEmployees': return live(db.employees);
       case 'getVehicles': return live(db.vehicles);
@@ -273,8 +297,18 @@ const Mock = (() => {
         const token='MOCKTOKEN-'+emp.EmployeeID+'-'+Date.now(); db.driverTokens[token]=emp.EmployeeID;
         log('DRIVER_LOGIN',emp.EmployeeID,'คนขับเข้าสู่ระบบ');
         return { token, employee:{ EmployeeID:emp.EmployeeID, EmployeeName:emp.EmployeeName, Phone:emp.Phone } }; }
+      case 'driverSelect': { const emp=db.employees.find(x=>x.EmployeeID===p.employeeId && !x.IsDeleted);
+        if(!emp) throw new Error('ไม่พบพนักงาน');
+        const token='MOCKTOKEN-'+emp.EmployeeID+'-'+Date.now(); db.driverTokens[token]=emp.EmployeeID;
+        log('DRIVER_LOGIN',emp.EmployeeID,'คนขับเข้าสู่ระบบ (เลือกชื่อ)');
+        return { token, employee:{ EmployeeID:emp.EmployeeID, EmployeeName:emp.EmployeeName, Phone:emp.Phone } }; }
       case 'driverLogout': { delete db.driverTokens[p.token]; return {ok:true}; }
       case 'getMyRoutes': { const empId=mockRequireDriver(p); let r=db.routes.filter(x=>!x.IsDeleted && String(x.DriverEmployeeID)===String(empId)); if(p.date) r=r.filter(x=>x.DeliveryDate===p.date); return r; }
+      case 'getAvailableRoutes': { mockRequireDriver(p); let r=db.routes.filter(x=>!x.IsDeleted && x.RouteType==='COMPANY_VEHICLE' && x.Status==='Planned' && !x.DriverEmployeeID); if(p.date) r=r.filter(x=>x.DeliveryDate===p.date); return r; }
+      case 'claimRoute': { const empId=mockRequireDriver(p); const r=db.routes.find(x=>x.RouteID===p.routeId); if(!r) throw new Error('ไม่พบ Route นี้'); if(r.DriverEmployeeID) throw new Error('งานนี้มีคนขับแล้ว'); r.DriverEmployeeID=empId; patch(db.routes,'RouteID',p.routeId,{Status:'In Progress'}); log('START_ROUTE',p.routeId,'เริ่มรอบส่ง'); return {ok:true}; }
+      case 'driverPing': { const empId=mockRequireDriver(p); db.gps.push({RouteID:p.routeId||'',DeliveryID:'',Latitude:p.lat||'',Longitude:p.lng||'',Accuracy:p.accuracy||'',Timestamp:now(),EventType:'BEACON'});
+        const emp=db.employees.find(x=>x.EmployeeID===empId); if(emp&&emp.VehicleID) patch(db.vehicles,'VehicleID',emp.VehicleID,{CurrentLatitude:p.lat||'',CurrentLongitude:p.lng||'',CurrentSpeed:p.speed||0,LastPositionTime:now()});
+        return {ok:true}; }
       default: throw new Error('mock: unknown action '+action);
     }
   }
@@ -294,6 +328,9 @@ const API = {
   configured(){ return !!this.url(); },
   // GET เป็น idempotent → retry ได้ปลอดภัย (ช่วยตอน Apps Script cold-start / เน็ตสะดุด)
   // หมายเหตุ: getBootstrap อ่านหลายชีต ใช้เวลา ~13 วิเป็นปกติ → ตั้ง timeout เผื่อไว้เยอะ
+  // TODO(migration cutover): ค่า timeout/retry นี้ตั้งเผื่อความช้าของ Apps Script โดยเฉพาะ
+  // พอย้ายไป Vercel+Postgres (ที่ควรตอบใน <1 วิ) ให้ลดลง (เช่น 10000ms, retry 1 ครั้ง)
+  // เพื่อให้ error จริงโผล่เร็วขึ้น และลดช่วงเวลาที่ user อาจกดซ้ำจนข้อมูลซ้ำ
   async get(action, params={}, tries, timeoutMs){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, params)));
     const q = new URLSearchParams(Object.assign({action}, params)).toString();
@@ -311,6 +348,7 @@ const API = {
     throw lastErr;
   },
   // POST เป็น write → แนบ requestId คงที่ + retry ได้ 1 ครั้งถ้าเน็ตสะดุด (ไม่เขียนซ้ำ เพราะฝั่งเซิร์ฟเวอร์แคชผลลัพธ์ตาม requestId ไว้ให้)
+  // TODO(migration cutover): 45000ms timeout ตั้งเผื่อ Apps Script โดยเฉพาะ — ลดลงพร้อมกับ GET ด้านบน
   async post(action, body={}){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, body)));
     const requestId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('r'+Date.now()+Math.random().toString(36).slice(2));
@@ -387,7 +425,14 @@ async function optimistic(apply, action, body, opts){
   }catch(e){
     if(typeof undo==='function') undo();
     recomputeDashboard(); render();
-    toast('บันทึกไม่สำเร็จ: '+(e&&e.message||e)+' — ย้อนข้อมูลกลับแล้ว','err');
+    // timeout/network (AbortError, "Failed to fetch") ≠ server ปฏิเสธ — เซิร์ฟเวอร์อาจบันทึกสำเร็จไปแล้ว แค่ตอบช้ากว่า timeout
+    // เตือนให้รีเฟรชเช็คก่อน ไม่ใช่บอกว่า "ไม่สำเร็จ" เฉยๆ เพราะจะชวนให้กดซ้ำจนข้อมูลซ้ำ (เจอเคสจริงกับหน้าพนักงาน)
+    const isTimeout = e && (e.name==='AbortError' || /failed to fetch|network/i.test(e.message||''));
+    if(isTimeout){
+      toast('เซิร์ฟเวอร์ตอบช้าเกินไป (ไม่แน่ใจว่าบันทึกสำเร็จหรือไม่) — กด Ctrl+Shift+R รีเฟรชเช็คก่อนบันทึกซ้ำ','warn','ยังไม่ยืนยันผล', 15000);
+    } else {
+      toast('บันทึกไม่สำเร็จ: '+(e&&e.message||e)+' — ย้อนข้อมูลกลับแล้ว','err');
+    }
     throw e;
   }finally{
     Store.pending = Math.max(0, (Store.pending||1) - 1);
@@ -507,14 +552,16 @@ const Geo = {
 /* ================================================================
    UI PRIMITIVES — toast / modal / states
    ================================================================ */
-function toast(msg, type='info', title){
+function toast(msg, type='info', title, durationMs){
   const wrap = el('toasts');
   const t = document.createElement('div');
   t.className = 'toast '+type;
   const ic = {ok:'check-circle-2',err:'x-circle',warn:'alert-triangle',info:'info'}[type]||'info';
-  t.innerHTML = `<i data-lucide="${ic}"></i><div><div class="t-title">${esc(title|| ({ok:'สำเร็จ',err:'เกิดข้อผิดพลาด',warn:'แจ้งเตือน',info:'ข้อมูล'}[type]))}</div><div class="t-msg">${esc(msg)}</div></div>`;
+  t.innerHTML = `<i data-lucide="${ic}"></i><div><div class="t-title">${esc(title|| ({ok:'สำเร็จ',err:'เกิดข้อผิดพลาด',warn:'แจ้งเตือน',info:'ข้อมูล'}[type]))}</div><div class="t-msg">${esc(msg)}</div></div><button class="toast-close" aria-label="ปิด" style="background:none;border:0;cursor:pointer;color:inherit;opacity:.6;flex-shrink:0"><i data-lucide="x" style="width:15px;height:15px"></i></button>`;
   wrap.appendChild(t); icons();
-  setTimeout(()=>{ t.style.transition='opacity .3s,transform .3s'; t.style.opacity='0'; t.style.transform='translateX(20px)'; setTimeout(()=>t.remove(),300); }, 3400);
+  const dismiss = ()=>{ t.style.transition='opacity .3s,transform .3s'; t.style.opacity='0'; t.style.transform='translateX(20px)'; setTimeout(()=>t.remove(),300); };
+  const timer = setTimeout(dismiss, durationMs||3400);
+  t.querySelector('.toast-close').onclick = ()=>{ clearTimeout(timer); dismiss(); };
 }
 function modal({title, body, foot, wide}){
   const root = el('modalRoot');
@@ -563,8 +610,8 @@ function buildNav(){
   } else { $('#footLinks').innerHTML = NAV_FOOT.map(navLink).join(''); }
   // mobile bottom nav
   const m = el('mnav');
-  const mItems = [ {id:'dashboard',icon:'home',label:'หน้าหลัก'},{id:'deliveries',icon:'package',label:'งานส่ง'},
-    {id:'planning',icon:'route',label:'วางแผน'},{id:'expenses',icon:'wallet',label:'ค่าใช้จ่าย'},{id:'reports',icon:'bar-chart-3',label:'รายงาน'} ];
+  const mItems = [ {id:'dashboard',icon:'home',label:'วันนี้'},{id:'deliveries',icon:'package',label:'งานส่ง'},
+    {id:'livemap',icon:'map-pin',label:'ติดตาม'},{id:'reports',icon:'bar-chart-3',label:'รายงาน'} ];
   m.innerHTML = mItems.map(it=>`<a href="#/${it.id}" class="${Store.page===it.id?'active':''}"><i data-lucide="${it.icon}"></i>${it.label}</a>`).join('');
   icons();
 }
@@ -640,7 +687,8 @@ async function render(){
   Store.page = page;
   buildNav(); setDateLabel(); updateSync();
   const view = el('view');
-  if(page==='driver'){ view.classList.add('driver'); } else { view.classList.remove('driver'); }
+  document.body.classList.toggle('driver-mode', page==='driver');
+  if(page==='driver'){ view.classList.add('driver'); } else { view.classList.remove('driver'); el('dnav').innerHTML=''; }
   const fn = ROUTES[page] || ROUTES.dashboard;
   view.innerHTML = loadingState();
   try{

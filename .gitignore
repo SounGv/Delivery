@@ -5,6 +5,7 @@ Thumbs.db
 # local
 .netlify/
 node_modules/
+.claude/
 deliveries_import.json
 import2022.json
 customers200.json

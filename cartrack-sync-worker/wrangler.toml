@@ -1,0 +1,22 @@
+# Standalone Worker: syncs Cartrack fleet positions into D1 once a minute.
+# Same D1 database as the Pages project (../wrangler.toml) — bindings are
+# account-level resources, so both projects can bind the same database_id.
+# Deploy with: npx wrangler deploy   (run from inside this folder)
+# Secrets (set once, interactively — never typed into this file):
+#   npx wrangler secret put CARTRACK_USERNAME
+#   npx wrangler secret put CARTRACK_API_TOKEN
+
+name = "gadgetvilla-cartrack-sync"
+main = "index.js"
+compatibility_date = "2026-08-07"
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dispatch-center-db"
+database_id = "d52ede73-0cec-4539-9aaa-a7973c489d0d"
+
+[vars]
+CARTRACK_BASE_URL = "https://fleetapi-th.cartrack.com/rest"

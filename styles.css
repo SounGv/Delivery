@@ -43,8 +43,8 @@ input,select,textarea{font-family:inherit;}
 .brand-sub{font-size:11px;font-weight:600;color:#7E8AA3;letter-spacing:.08em;}
 /* Gadget Villa logo brand */
 .brand{flex-direction:column;align-items:stretch;gap:9px;}
-.brand-logo-wrap{background:#fff;border-radius:12px;padding:10px 12px;display:flex;align-items:center;justify-content:center;}
-.brand-logo{height:44px;width:auto;max-width:100%;display:block;}
+.brand-logo-wrap{display:flex;align-items:center;justify-content:center;padding:4px 0;}
+.brand-logo{height:46px;width:auto;max-width:100%;display:block;}
 .brand-cap{font-size:10px;font-weight:600;letter-spacing:.14em;color:#7E8AA3;text-align:center;}
 .brand-fallback{display:none;align-items:center;gap:11px;}
 .brand-fallback .gv{width:48px;height:42px;border-radius:10px;background:#C4E600;color:#0B1220;display:flex;align-items:center;justify-content:center;font-weight:800;font-style:italic;font-size:21px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3);}
@@ -293,6 +293,17 @@ table.tbl{width:100%;border-collapse:collapse;}
 /* Driver mobile mode full screen */
 .driver{max-width:520px;margin:0 auto;}
 .driver .big-btn{height:60px;font-size:17px;border-radius:14px;}
+
+/* Driver-only shell — own chrome (bottom tab bar), not the admin sidebar/topbar/mnav,
+   at any viewport width (driver mode is mobile-first regardless of device). */
+body.driver-mode .sidebar,body.driver-mode .topbar,body.driver-mode .hintbar,body.driver-mode .mnav{display:none !important;}
+body.driver-mode .view{padding:16px 14px 90px;}
+.dnav{display:none;}
+body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;height:64px;background:#fff;
+  border-top:1px solid var(--border);z-index:70;justify-content:space-around;align-items:center;box-shadow:0 -2px 10px rgba(0,0,0,.05);}
+.dnav button{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11px;
+  font-weight:600;flex:1;height:100%;background:none;border:none;}
+.dnav button i{width:22px;height:22px;} .dnav button.active{color:var(--brand-ink);}
 
 /* ============================================================
    GADGET VILLA BRAND THEME — lime green (#B4DC00) + black

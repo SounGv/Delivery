@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
 <body>
   <div class="app">
@@ -18,8 +21,7 @@
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="gv-mark">GV</div>
-        <div class="gv-word">GADGET VILLA</div>
+        <div class="brand-logo-wrap"><img class="brand-logo" src="logo-dark.png" alt="GV Dispatch"></div>
         <div class="brand-cap">DISPATCH &amp; ROUTE CONTROL</div>
       </div>
       <nav class="nav scrolly" id="nav"><!-- built by JS --></nav>
@@ -62,6 +64,8 @@
 
     <!-- MOBILE BOTTOM NAV -->
     <nav class="mnav" id="mnav"></nav>
+    <!-- DRIVER MODE BOTTOM NAV — shown instead of the sidebar/topbar/mnav above when body.driver-mode -->
+    <nav class="dnav" id="dnav"></nav>
   </div>
 
   <div class="toast-wrap" id="toasts"></div>

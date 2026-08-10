@@ -22,9 +22,13 @@ if (-not $env:CLOUDFLARE_API_TOKEN) { Write-Error "ยังไม่ได้�
 Write-Host "Deploying dispatch-center -> Cloudflare Pages project 'gadgetvilla-delivery' ..." -ForegroundColor Green
 
 # --project-name จะสร้าง project ให้อัตโนมัติถ้ายังไม่มี
+# --branch ต้องตรงกับ "Production branch" ที่ตั้งไว้ในโปรเจกต์ Cloudflare Pages
+# (เช็คได้ที่ Settings > Builds) ไม่ใช่แค่ branch จริงใน git — ถ้าไม่ตรงกัน
+# deployment นี้จะถูกจัดเป็น Preview แทน Production และจะมองไม่เห็น
+# environment variables/secrets ที่ตั้งไว้สำหรับ Production (เช่น APPS_SCRIPT_POD_URL)
 npx --yes wrangler@latest pages deploy . `
   --project-name=gadgetvilla-delivery `
-  --branch=main `
+  --branch=dispatch-center `
   --commit-dirty=true
 
 Write-Host "`nเสร็จแล้ว — เปิด URL *.pages.dev ที่ Wrangler แสดง แล้วต่อท้ายด้วย:" -ForegroundColor Green
