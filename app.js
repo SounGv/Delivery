@@ -33,18 +33,23 @@ const VSTATUS = {
   Available:{ label:'พร้อมใช้งาน', cls:'b-green', dot:'#10B981' },
   'In Use': { label:'กำลังวิ่ง',   cls:'b-blue',  dot:'#2563EB' },
   Stopped:  { label:'จอดอยู่',     cls:'b-amber', dot:'#F59E0B' },
+  // "เชื่อมต่อ Cartrack/มือถือได้อยู่ แต่พิกัดล่าสุดเก่าเกินไป" — ตั้งใจแยกออกจาก
+  // Offline (ไม่มีข้อมูลเลย/ไม่เคยเชื่อมต่อ) เพราะเดิมใช้ป้าย "ออฟไลน์" ร่วมกันทั้ง 2
+  // แบบ ทำให้ดูขัดกับสถานะ "Cartrack เชื่อมต่อ" ที่โชว์อยู่ด้านบนพร้อมกัน
+  Stale:    { label:'สัญญาณขาด',   cls:'b-red',   dot:'#F97316' },
   Offline:  { label:'ออฟไลน์',     cls:'b-gray',  dot:'#9AA3B2' },
   Unknown:  { label:'ไม่ทราบ',     cls:'b-gray',  dot:'#9AA3B2' }
 };
-// สถานะรถอัตโนมัติจากความเร็ว: มีพิกัด + วิ่ง(>3)=กำลังวิ่ง · หยุด=จอดอยู่ · ไม่มีพิกัด=ออฟไลน์
-const GPS_STALE_MIN = 10; // ไม่โชว์ "กำลังวิ่ง/จอดอยู่" ถ้าไม่มีอัปเดต GPS จริงในช่วงนี้ — ต้องเป็นออฟไลน์
+// สถานะรถอัตโนมัติจากความเร็ว: มีพิกัด + วิ่ง(>3)=กำลังวิ่ง · หยุด=จอดอยู่ · ไม่มีพิกัดเลย=ออฟไลน์
+// มีพิกัดแต่เก่าเกิน GPS_STALE_MIN = สัญญาณขาด (ต่างจากออฟไลน์ตรงที่ "เคย" เชื่อมต่อได้)
+const GPS_STALE_MIN = 10;
 function deriveVehStatus(v){
   const sp = Number(v.speed!=null?v.speed:v.CurrentSpeed) || 0;
   const hasCoord = !!(v.lat||v.lng||v.CurrentLatitude||v.CurrentLongitude);
   const lastT = v.lastPositionTime||v.LastPositionTime||v.LastSyncAt||v.lastSyncAt;
   if(!hasCoord || !lastT) return 'Offline';
   const ageMin = (Date.now()-new Date(lastT).getTime())/60000;
-  if(!(ageMin>=0) || ageMin > GPS_STALE_MIN) return 'Offline';
+  if(!(ageMin>=0) || ageMin > GPS_STALE_MIN) return 'Stale';
   return sp > 3 ? 'In Use' : 'Stopped';
 }
 // ช่วงที่รถ/คนขับหยุดนิ่ง (จุดจอด) จากพิกัด GPS ต่อเนื่อง — ไม่ต้องพึ่งความเร็วที่บันทึกไว้

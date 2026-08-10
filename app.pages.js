@@ -13,7 +13,7 @@ function matchSearch(obj, fields){ if(!Store.search) return true; return fields.
    ================================================================ */
 function vehStatusCard(v){
   const st = deriveVehStatus(v);
-  const dot = st==='In Use'?'🟢':st==='Stopped'?'🟡':'⚪';
+  const dot = st==='In Use'?'🟢':st==='Stopped'?'🟡':st==='Stale'?'🟠':'⚪';
   const route = (Store.data.routes||[]).find(r=>r.Status==='In Progress' && (r.VehicleName===v.VehicleName||r.LicensePlate===v.LicensePlate));
   let sub;
   if(route){
@@ -26,7 +26,7 @@ function vehStatusCard(v){
   return `<div class="flex between aic" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px">
     <div class="flex aic gap8"><span style="font-size:16px;line-height:1">${dot}</span>
       <div><div class="strong" style="font-size:13px">${esc(v.VehicleName)}</div><div class="small muted">${sub}</div></div></div>
-    <div class="small muted tab">${st==='In Use'?int(v.speed)+' กม./ชม.':(st==='Stopped'?'จอดอยู่':'')}</div>
+    <div class="small muted tab">${st==='In Use'?int(v.speed)+' กม./ชม.':(st==='Stopped'?'จอดอยู่':(st==='Stale'?'สัญญาณขาด':''))}</div>
   </div>`;
 }
 ROUTES.dashboard = async function(view){
@@ -900,7 +900,7 @@ function renderFleetOverview(view){
   el('ltBody').innerHTML = `
     ${ct.stale&&ct.enabled?`<div class="notice warn mb14"><i data-lucide="clock"></i><div>🟡 ข้อมูลอาจไม่ใหม่ล่าสุด — ซิงก์ Cartrack ล่าสุด ${ago(ct.lastSync)}</div></div>`:''}
     ${!ct.enabled?`<div class="notice info mb14"><i data-lucide="info"></i><div>ยังไม่เปิดใช้งาน Cartrack — แสดงพิกัดจากข้อมูลระบบ (มือถือคนขับ/ค่าที่ตั้งเอง) ตั้งค่าได้ที่หน้า Cartrack Integration</div></div>`:''}
-    <div class="seg mb14" id="lmFilter"><button class="on" data-f="all">ทั้งหมด</button><button data-f="moving">กำลังวิ่ง</button><button data-f="stopped">จอดอยู่</button><button data-f="offline">ออฟไลน์</button></div>
+    <div class="seg mb14" id="lmFilter"><button class="on" data-f="all">ทั้งหมด</button><button data-f="moving">กำลังวิ่ง</button><button data-f="stopped">จอดอยู่</button><button data-f="stale">สัญญาณขาด</button><button data-f="offline">ออฟไลน์</button></div>
     <div class="grid" style="grid-template-columns:1fr 340px;gap:16px;align-items:start">
       <div class="card" style="padding:14px"><div id="liveMap" class="map" style="height:560px"></div></div>
       <div class="card" style="padding:14px">
@@ -922,7 +922,7 @@ function renderFleetOverview(view){
     return Promise.all(missing.map(r=>API.get('getRouteStops',{routeId:r.RouteID}).then(s=>stopsByRoute[r.RouteID]=s).catch(()=>stopsByRoute[r.RouteID]=[])));
   };
   const vehicles=()=>liveVehicles().filter(v=>{ const st=deriveVehStatus(v);
-    if(filter==='moving')return st==='In Use'; if(filter==='stopped')return st==='Stopped'; if(filter==='offline')return st==='Offline'; return true; });
+    if(filter==='moving')return st==='In Use'; if(filter==='stopped')return st==='Stopped'; if(filter==='stale')return st==='Stale'; if(filter==='offline')return st==='Offline'; return true; });
   function draw(){
     const list=vehicles();
     el('vehList').innerHTML = list.length? list.map(v=>fleetVehicleCard(v,ct,activeByVeh,stopsByRoute,colorByRoute)).join('') : emptyState('ไม่มีรถตามตัวกรอง');
@@ -1545,7 +1545,7 @@ ROUTES.cartrack = async function(view){
     <div class="notice ${ct.connected?'ok':(ct.enabled?'warn':'info')} mb14"><i data-lucide="${ct.connected?'wifi':(ct.enabled?'wifi-off':'info')}"></i>
       <div><b>${ct.connected?'🟢 Connected':(ct.enabled?'🔴 Disconnected':'⚪ ยังไม่เปิดใช้งาน')}</b> ·
       ${ct.hasCredentials?'มี credentials':'ยังไม่ได้ตั้งค่า credentials'} · Worker ซิงก์ล่าสุด ${ct.lastSync?ago(ct.lastSync):'—'}${ct.mock?' · (โหมดทดลอง)':''}</div></div>
-    <div class="notice info mb14"><i data-lucide="info"></i><div>"Worker ซิงก์ล่าสุด" คือเวลาที่ระบบ<b>ถาม</b> Cartrack ล่าสุด ไม่ใช่เวลาที่รถแต่ละคันมีพิกัดใหม่จริง — ถ้ารถคันไหนจอดหรืออุปกรณ์ไม่ส่งพิกัดมานาน สถานะจะขึ้น "ออฟไลน์" แม้ Worker จะซิงก์สำเร็จทุกนาทีก็ตาม (ดูคอลัมน์ "อัปเดตพิกัดล่าสุด" ต่อคันด้านล่าง)</div></div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div>"Worker ซิงก์ล่าสุด" คือเวลาที่ระบบ<b>ถาม</b> Cartrack ล่าสุด ไม่ใช่เวลาที่รถแต่ละคันมีพิกัดใหม่จริง — ถ้ารถคันไหนจอดหรืออุปกรณ์ไม่ส่งพิกัดมานานเกิน 10 นาที สถานะจะขึ้น <b>🟠 สัญญาณขาด</b> (ไม่ใช่ "ออฟไลน์" — คนละความหมาย: สัญญาณขาด = เคยเชื่อมต่อได้ แต่พิกัดล่าสุดเก่าไปแล้ว ส่วนออฟไลน์ = ไม่มีพิกัดเลยตั้งแต่แรก) แม้ Worker จะซิงก์สำเร็จทุกนาทีก็ตาม (ดูคอลัมน์ "อัปเดตพิกัดล่าสุด" ต่อคันด้านล่าง)</div></div>
 
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:16px" class="mb14">
       ${ctStat('สถานะ',ct.connected?'เชื่อมต่อ':'ไม่เชื่อมต่อ','satellite-dish',ct.connected?'#10B981':'#EF4444')}
