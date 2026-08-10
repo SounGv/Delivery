@@ -386,7 +386,8 @@ function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 60)); }
 function fetchWithTimeout(url, opts, ms){
   const ctrl = new AbortController();
   const t = setTimeout(()=>ctrl.abort(), ms||45000);
-  return fetch(url, Object.assign({ signal:ctrl.signal }, opts)).finally(()=>clearTimeout(t));
+  // cache:'no-store' บังคับเบราว์เซอร์ไม่ใช้ของแคชเก่าที่อาจค้างมาจากก่อนแก้ (ป้องกันเห็นพิกัด/สถานะเก่าเป็นวัน)
+  return fetch(url, Object.assign({ signal:ctrl.signal, cache:'no-store' }, opts)).finally(()=>clearTimeout(t));
 }
 
 /* ================================================================
