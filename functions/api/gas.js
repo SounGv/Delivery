@@ -92,7 +92,7 @@ const POST_ACTIONS = {
 const NO_CACHE_BUST = { checkIn: 1, logGPS: 1, driverPing: 1, driverLogin: 1, driverSelect: 1, driverLogout: 1, getMyRoutes: 1 };
 
 function json(obj) {
-  return new Response(JSON.stringify(obj), { headers: { 'content-type': 'application/json' } });
+  return new Response(JSON.stringify(obj), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
 
 export async function onRequestGet(context) {
