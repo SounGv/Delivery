@@ -1505,21 +1505,17 @@ ROUTES.config = async function(view){
   const group=(g)=>settings.filter(s=>s.Group===g);
   const fieldFor=(s)=>`<div class="field"><label class="label">${esc(s.Label||s.Key)} <span class="mono small muted">(${esc(s.Key)})</span></label><input class="input" data-skey="${esc(s.Key)}" value="${esc(s.Value)}"></div>`;
   page(view, `
-    ${head('ตั้งค่าระบบ', 'คลัง · ต้นทุน · เชื่อมต่อ Google Apps Script', '<a class="btn btn-sm" href="#/settings"><i data-lucide="arrow-left"></i>กลับหน้าตั้งค่า</a>')}
+    ${head('ตั้งค่าระบบ', 'คลัง · ต้นทุน · การเชื่อมต่อ Backend', '<a class="btn btn-sm" href="#/settings"><i data-lucide="arrow-left"></i>กลับหน้าตั้งค่า</a>')}
     <div class="card mb14">
       <div class="flex aic gap12 mb14"><div style="width:40px;height:40px;border-radius:11px;background:#EFF4FF;color:#2563EB;display:flex;align-items:center;justify-content:center"><i data-lucide="database"></i></div>
-        <div><div class="h-card">แหล่งข้อมูล — Google Apps Script Web App URL</div><div class="small muted">Frontend เรียก API ผ่าน URL นี้เท่านั้น (Sheets ไม่ถูกเรียกตรง)</div></div></div>
-      <div class="field"><input class="input" id="apiUrl" placeholder="https://script.google.com/macros/s/XXXX/exec" value="${esc(url)}"></div>
+        <div><div class="h-card">แหล่งข้อมูล — API Backend URL</div><div class="small muted">ค่าเริ่มต้นต่อกับ Cloudflare (D1) อยู่แล้วในตัว — ไม่ต้องตั้งอะไรเพิ่ม ช่องนี้มีไว้เผื่อทดสอบ/สลับ backend เท่านั้น</div></div></div>
+      <div class="field"><input class="input" id="apiUrl" placeholder="/api/gas" value="${esc(url)}"></div>
       <div class="flex gap8 wrap">
         <button class="btn btn-primary" id="apiSave"><i data-lucide="plug"></i>เชื่อมต่อ & โหลดข้อมูล</button>
         <button class="btn" id="apiTest"><i data-lucide="activity"></i>ทดสอบการเชื่อมต่อ</button>
         <button class="btn" id="apiMock"><i data-lucide="flask-conical"></i>ใช้ข้อมูลทดลอง (Mock)</button>
         <span class="flex aic gap8" style="margin-left:auto"><span class="sync-dot" style="background:${Store.live?'#10B981':'#F59E0B'}"></span><span class="small strong">${Store.live?'เชื่อมต่อแล้ว':'โหมดทดลอง'}</span></span>
       </div>
-      <div class="notice info" style="margin-top:14px"><i data-lucide="list-ordered"></i><div>
-        1) เปิด Google Sheet → Extensions → Apps Script วางไฟล์ <b>Code.gs</b> แล้วรัน <b>setupDatabase()</b> ครั้งเดียว<br>
-        2) Deploy → New deployment → Web app · Execute as <b>Me</b> · Who has access <b>Anyone</b><br>
-        3) คัดลอก Web app URL มาวางด้านบน แล้วกด "เชื่อมต่อ & โหลดข้อมูล"</div></div>
     </div>
 
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
@@ -1527,11 +1523,11 @@ ROUTES.config = async function(view){
       <div class="card"><div class="h-card mb14">พารามิเตอร์ต้นทุน</div>${group('cost').map(fieldFor).join('')}</div>
       <div class="card"><div class="h-card mb14">การติดตาม (GPS Check-in)</div>${group('tracking').map(fieldFor).join('')}</div>
       <div class="card"><div class="h-card mb14">บันทึกค่าทั้งหมด</div>
-        <p class="small muted">แก้ไขค่าในช่องด้านซ้าย แล้วกดบันทึกเพื่อเขียนกลับไปยัง Google Sheets (ชีต Settings)</p>
+        <p class="small muted">แก้ไขค่าในช่องด้านซ้าย แล้วกดบันทึกเพื่อบันทึกลงระบบทันที</p>
         <button class="btn btn-primary btn-block mt16" id="setSave"><i data-lucide="save"></i>บันทึกการตั้งค่าทั้งหมด</button></div>
     </div>
   `);
-  el('apiSave').onclick=async()=>{ API.setUrl(el('apiUrl').value.trim()); await loadBootstrap(); render(); toast(Store.live?'เชื่อมต่อ Apps Script สำเร็จ':'บันทึก URL แล้ว','ok'); };
+  el('apiSave').onclick=async()=>{ API.setUrl(el('apiUrl').value.trim()); await loadBootstrap(); render(); toast(Store.live?'เชื่อมต่อสำเร็จ':'บันทึก URL แล้ว','ok'); };
   el('apiTest').onclick=async()=>{ const u=el('apiUrl').value.trim(); if(!u){toast('กรอก URL ก่อน','warn');return;} try{ const r=await fetch(u+'?action=ping'); const j=await r.json(); toast(j.ok?'เชื่อมต่อสำเร็จ ✓ server time '+(j.data&&j.data.time||''):'ตอบกลับผิดพลาด','ok'); }catch(e){ toast('เชื่อมต่อไม่ได้: '+e.message,'err'); } };
   el('apiMock').onclick=async()=>{ API.useMock(); await loadBootstrap(); render(); toast('สลับเป็นข้อมูลทดลอง (Mock)','info'); };
   el('setSave').onclick=async()=>{ const inputs=$$('[data-skey]',view); el('setSave').disabled=true; try{ for(const i of inputs){ await API.post('updateSetting',{key:i.dataset.skey,value:i.value}); } await loadBootstrap(); toast('บันทึกการตั้งค่าแล้ว','ok'); }catch(e){toast(e.message,'err');} el('setSave').disabled=false; };

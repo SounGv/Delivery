@@ -31,5 +31,5 @@ npx --yes wrangler@latest pages deploy . `
   --branch=dispatch-center `
   --commit-dirty=true
 
-Write-Host "`nเสร็จแล้ว — เปิด URL *.pages.dev ที่ Wrangler แสดง แล้วต่อท้ายด้วย:" -ForegroundColor Green
-Write-Host '  /?api=https://script.google.com/macros/s/AKfycbwwUY8D8aKdoSJSZwBirfevlE4UoM9nj-JsyC_5eQo573qhpMDRlDN1pdsuHp4bDjIe/exec' -ForegroundColor Yellow
+Write-Host "`nเสร็จแล้ว — เปิด URL *.pages.dev ที่ Wrangler แสดงได้เลย" -ForegroundColor Green
+Write-Host "  เว็บต่อกับ Cloudflare D1 (/api/gas) เป็นค่าเริ่มต้นอยู่แล้ว ไม่ต้องต่อท้าย ?api= อะไรเพิ่ม" -ForegroundColor Green

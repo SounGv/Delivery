@@ -1,17 +1,18 @@
 /* ================================================================
    DELIVERY DISPATCH & ROUTE CONTROL CENTER — Frontend App (vanilla)
-   Frontend → Google Apps Script → Google Sheets   |  Mock fallback
+   Frontend → Cloudflare Pages Functions (/api/gas) → D1   |  Mock fallback
+   (POD photo upload + geocoding still proxy through the old Apps Script
+   deployment on purpose — see lib/actions/pod.js / reads.js — to avoid
+   new billing on R2 / Google Maps Geocoding API, not part of this URL)
    ================================================================ */
 'use strict';
 
 /* ---------------- CONSTANTS ---------------- */
 const LS_URL = 'ddc_api_url';
-// URL เริ่มต้น — เชื่อม Google Sheet ของจริงอัตโนมัติ (เปิดเว็บก็ใช้ข้อมูลจริงเลย)
-// TODO(migration cutover): เปลี่ยนเป็น '/api/gas' (same-origin — ดู
-// functions/api/gas.js) เมื่อทดสอบผ่าน ?api=/api/gas ครบตามแผนใน
-// CLOUDFLARE_SETUP.md แล้วเท่านั้น — ยังไม่เปลี่ยนตรงนี้ตอนนี้เพราะเว็บจริงยังใช้
-// backend เดิมอยู่ (เปลี่ยนก่อนเวลาจะทำเว็บจริงพังทันที เพราะ D1 ฝั่งนั้นยังไม่มีข้อมูล)
-const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwwUY8D8aKdoSJSZwBirfevlE4UoM9nj-JsyC_5eQo573qhpMDRlDN1pdsuHp4bDjIe/exec';
+// Same-origin Cloudflare Pages Function — see functions/api/gas.js.
+// Migrated off the old Google Apps Script + Sheets backend (that's what
+// caused the multi-second lag); D1 answers in well under a second.
+const DEFAULT_API_URL = '/api/gas';
 const DATA_DATE = '2026-07-20';           // วันที่ของชุดข้อมูลทดลอง (ใช้เฉพาะโหมด Mock)
 
 const PRIORITY = {
