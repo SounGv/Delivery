@@ -1545,35 +1545,37 @@ ROUTES.cartrack = async function(view){
   const veh = await API.get('getVehicles');
   const matched = veh.filter(v=>v.CartrackRegistration);
   page(view, `
-    ${head('Cartrack Fleet Integration', 'ติดตามรถ GPS สดผ่าน Google Apps Script (backend)')}
+    ${head('Cartrack Fleet Integration', 'ติดตามรถ GPS สดผ่าน Cloudflare Worker (ซิงก์ทุก 1 นาที) — รถที่ไม่ได้ผูก Cartrack ใช้สัญญาณมือถือคนขับแทน')}
     <div class="notice ${ct.connected?'ok':(ct.enabled?'warn':'info')} mb14"><i data-lucide="${ct.connected?'wifi':(ct.enabled?'wifi-off':'info')}"></i>
       <div><b>${ct.connected?'🟢 Connected':(ct.enabled?'🔴 Disconnected':'⚪ ยังไม่เปิดใช้งาน')}</b> ·
-      ${ct.hasCredentials?'มี credentials':'ยังไม่ได้ตั้งค่า credentials'} · ซิงก์ล่าสุด ${ct.lastSync?ago(ct.lastSync):'—'}${ct.mock?' · (โหมดทดลอง)':''}</div></div>
+      ${ct.hasCredentials?'มี credentials':'ยังไม่ได้ตั้งค่า credentials'} · Worker ซิงก์ล่าสุด ${ct.lastSync?ago(ct.lastSync):'—'}${ct.mock?' · (โหมดทดลอง)':''}</div></div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div>"Worker ซิงก์ล่าสุด" คือเวลาที่ระบบ<b>ถาม</b> Cartrack ล่าสุด ไม่ใช่เวลาที่รถแต่ละคันมีพิกัดใหม่จริง — ถ้ารถคันไหนจอดหรืออุปกรณ์ไม่ส่งพิกัดมานาน สถานะจะขึ้น "ออฟไลน์" แม้ Worker จะซิงก์สำเร็จทุกนาทีก็ตาม (ดูคอลัมน์ "อัปเดตพิกัดล่าสุด" ต่อคันด้านล่าง)</div></div>
 
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:16px" class="mb14">
       ${ctStat('สถานะ',ct.connected?'เชื่อมต่อ':'ไม่เชื่อมต่อ','satellite-dish',ct.connected?'#10B981':'#EF4444')}
-      ${ctStat('ซิงก์ล่าสุด',ct.lastSync?ago(ct.lastSync):'—','clock','#2563EB')}
+      ${ctStat('Worker ซิงก์ล่าสุด',ct.lastSync?ago(ct.lastSync):'—','clock','#2563EB')}
       ${ctStat('รถที่พบ',int(ct.found)+' คัน','truck','#7C3AED')}
       ${ctStat('รถที่จับคู่',int(ct.matched)+' คัน','link','#0891B2')}
     </div>
 
     <div class="card mt16">
-      <div class="notice warn mb14"><i data-lucide="shield-check"></i><div><b>ความปลอดภัย:</b> Cartrack Username / Password / API Token ถูกเก็บใน <b>Google Apps Script — PropertiesService</b> เท่านั้น ไม่เก็บใน Frontend / HTML / LocalStorage และ Apps Script เป็นผู้เรียก Cartrack API (เลี่ยง CORS + ปลอดภัยกว่า)</div></div>
+      <div class="notice warn mb14"><i data-lucide="shield-check"></i><div><b>ความปลอดภัย:</b> Cartrack Username / API Token ถูกเก็บเป็น secret ใน Cloudflare (Worker/Pages) เท่านั้น ไม่เก็บใน Frontend / HTML / LocalStorage — ตัว Worker เป็นผู้เรียก Cartrack API โดยตรง</div></div>
       <div class="flex gap8 wrap">
         <button class="btn btn-primary" id="ctTest"><i data-lucide="activity"></i>ทดสอบการเชื่อมต่อ</button>
         <button class="btn" id="ctSync"><i data-lucide="refresh-cw"></i>Sync รถทั้งหมด</button>
       </div>
       <div class="notice info" style="margin-top:14px"><i data-lucide="terminal"></i><div>
-        ตั้งค่า credentials ใน Apps Script (ครั้งเดียว): แก้ค่าในฟังก์ชัน <b>setupCartrackCredentials()</b> แล้วรัน ·
-        ดึงอัตโนมัติ: รัน <b>installCartrackTrigger()</b> (ทุก 1 นาที) · Frontend รีเฟรชทุก 8 วินาที</div></div>
+        ดึงพิกัดอัตโนมัติทุก 1 นาทีผ่าน Cloudflare Worker (cron trigger) · ตั้งค่า/แก้ credentials ได้ที่ Cloudflare Pages/Worker secrets เท่านั้น (ไม่ใส่ในเว็บ)</div></div>
     </div>
 
     <div class="card mt16"><div class="h-card mb14">การจับคู่รถบริษัท ↔ Cartrack</div><div class="tbl-wrap">
-      <table class="tbl"><thead><tr><th>รถบริษัท</th><th>ทะเบียน</th><th>Cartrack Reg.</th><th>ตำแหน่งล่าสุด</th><th>ความเร็ว</th><th>สถานะ</th></tr></thead>
+      <table class="tbl"><thead><tr><th>รถบริษัท</th><th>ทะเบียน</th><th>Cartrack Reg.</th><th>ตำแหน่งล่าสุด</th><th>ความเร็ว</th><th>อัปเดตพิกัดล่าสุด</th><th>สถานะ</th></tr></thead>
       <tbody>${veh.map(v=>`<tr><td class="strong">${esc(v.VehicleName)}</td><td class="mono small">${esc(v.LicensePlate)}</td>
         <td class="mono small">${v.CartrackRegistration?esc(v.CartrackRegistration):'<span class="badge b-gray">ยังไม่จับคู่</span>'}</td>
         <td class="small muted">${v.CurrentLatitude?num1(v.CurrentLatitude)+', '+num1(v.CurrentLongitude):'—'}</td>
-        <td class="tab">${int(v.CurrentSpeed)} กม./ชม.</td><td>${vstatusBadge(deriveVehStatus(v))}</td></tr>`).join('')}</tbody></table>
+        <td class="tab">${int(v.CurrentSpeed)} กม./ชม.</td>
+        <td class="small muted">${v.LastPositionTime?ago(v.LastPositionTime):(v.LastSyncAt?ago(v.LastSyncAt):'ไม่มีสัญญาณ')}</td>
+        <td>${vstatusBadge(deriveVehStatus(v))}</td></tr>`).join('')}</tbody></table>
     </div></div>
   `);
   el('ctTest').onclick=async()=>{ try{ const r=await API.post('syncCartrack',{}); toast(r.ok?('เชื่อมต่อสำเร็จ · '+r.fetched+' คัน'):(r.message||'ทดสอบเสร็จ'), r.ok?'ok':'warn'); }catch(e){toast(e.message,'err');} };
