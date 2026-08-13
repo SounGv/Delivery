@@ -17,6 +17,7 @@ import {
   PackageOpen,
   ShoppingCart,
   Wrench,
+  ClipboardList,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSettings } from "@/lib/settingsContext"
@@ -34,7 +35,7 @@ export interface NavGroup {
   items: NavItem[]
 }
 
-// Exact mandated structure — 11 items in 5 groups. Merged pages (KPI & Ranking,
+// Sidebar groups. Merged pages (KPI & Ranking,
 // Productivity, OT & HR, Work & Attendance) each compose previously-separate
 // pages via tabs, so there are no duplicate menu entries.
 export const NAV_GROUPS: NavGroup[] = [
@@ -51,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "employees", label: "Employees", icon: Users, enabled: true },
       { key: "work-attendance", label: "Work & Attendance", icon: UserCheck, enabled: true },
       { key: "receiving-warehouse", label: "รับเข้า / คลัง", icon: PackageOpen, enabled: true },
+      { key: "claims", label: "ลงทะเบียนเคลม", icon: ClipboardList, enabled: true },
       { key: "work-issues", label: "ปัญหาหน้างาน", icon: Wrench, enabled: true },
     ],
   },

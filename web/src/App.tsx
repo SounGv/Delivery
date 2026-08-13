@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AppShell } from "@/components/layout/AppShell"
 import { Dashboard } from "@/pages/Dashboard"
 import { Employees } from "@/pages/Employees"
@@ -13,10 +13,13 @@ import { ReceivingWarehouse } from "@/pages/ReceivingWarehouse"
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
 import { PayrollPage } from "@/pages/DataPendingPage"
+import { ClaimsAdmin } from "@/pages/ClaimsAdmin"
+import { ClaimRegister } from "@/pages/ClaimRegister"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
+import { isPublicPage, navigateHash, readHashPage } from "@/lib/hashRoute"
 
-// The 9 canonical routes match the sidebar exactly. Legacy keys are aliased to
+// Canonical routes match the sidebar. Legacy keys are aliased to
 // their merged home so any old bookmark/deep-link still resolves (no 404).
 const PAGES: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
@@ -29,6 +32,7 @@ const PAGES: Record<string, React.ComponentType> = {
   "receiving-warehouse": ReceivingWarehouse,
   "sales-summary": SalesSummary,
   "work-issues": WorkIssues,
+  claims: ClaimsAdmin,
   "ot-hr": OtHr,
   payroll: PayrollPage,
   settings: Settings,
@@ -43,10 +47,14 @@ const PAGES: Record<string, React.ComponentType> = {
   "ot-report": OtHr,
 }
 
-function App() {
+function StaffApp({
+  page,
+  onNavigate,
+}: {
+  page: string
+  onNavigate: (key: string) => void
+}) {
   const { data, isFetching, isError, refetch } = useDashboardQuery()
-  const [page, setPage] = useState("dashboard")
-
   const PageComponent = PAGES[page] ?? Dashboard
 
   return (
@@ -56,11 +64,32 @@ function App() {
       lastUpdated={data ? formatDateTime(data.generatedAt) : null}
       onRefresh={() => refetch()}
       activePage={page}
-      onNavigate={setPage}
+      onNavigate={onNavigate}
     >
       <PageComponent />
     </AppShell>
   )
+}
+
+function App() {
+  const [page, setPage] = useState(readHashPage)
+
+  useEffect(() => {
+    const onHash = () => setPage(readHashPage())
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [])
+
+  const navigate = (key: string) => {
+    navigateHash(key)
+    setPage(key)
+  }
+
+  if (isPublicPage(page)) {
+    return <ClaimRegister />
+  }
+
+  return <StaffApp page={page} onNavigate={navigate} />
 }
 
 export default App
