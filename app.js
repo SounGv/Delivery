@@ -21,11 +21,11 @@ const PRIORITY = {
   LOW:    { label:'ไม่เร่งด่วน',  cls:'b-green', rank:2, w:1.35, color:'#10B981' }
 };
 const DSTATUS = {
-  Draft:        { label:'ร่าง',        cls:'b-gray'   },
+  Draft:        { label:'ยังไม่จัดรถ',  cls:'b-blue'   },
   Planned:      { label:'วางแผนแล้ว',  cls:'b-violet' },
   Assigned:     { label:'มอบหมายแล้ว', cls:'b-blue'   },
   'In Progress':{ label:'กำลังส่ง',    cls:'b-blue'   },
-  Completed:    { label:'ส่งสำเร็จ',   cls:'b-green'  },
+  Completed:    { label:'ส่งแล้ว',     cls:'b-green'  },
   Failed:       { label:'ไม่สำเร็จ',   cls:'b-red'    },
   Cancelled:    { label:'ยกเลิก',      cls:'b-gray'   }
 };
@@ -41,15 +41,37 @@ const VSTATUS = {
   Unknown:  { label:'ไม่ทราบ',     cls:'b-gray',  dot:'#9AA3B2' }
 };
 // สถานะรถอัตโนมัติจากความเร็ว: มีพิกัด + วิ่ง(>3)=กำลังวิ่ง · หยุด=จอดอยู่ · ไม่มีพิกัดเลย=ออฟไลน์
-// มีพิกัดแต่เก่าเกิน GPS_STALE_MIN = สัญญาณขาด (ต่างจากออฟไลน์ตรงที่ "เคย" เชื่อมต่อได้)
+// มีพิกัดแต่เก่าเกิน GPS_STALE_MIN = สัญญาณขาด — แต่ถ้ารถจอดและ Worker ยังซิงก์คันนี้สำเร็จอยู่
+// (lastSyncAt สด) ไม่ถือว่าสัญญาณขาด เพราะอุปกรณ์ Cartrack มักไม่อัปเดตพิกัดตอนจอดนิ่ง
 const GPS_STALE_MIN = 10;
+const WORKER_FRESH_MIN = 3;
+function parseTs(t){
+  if(!t) return NaN;
+  const s = String(t).trim();
+  let d = new Date(s);
+  if(!isNaN(d.getTime())) return d.getTime();
+  // Cartrack-style "YYYY-MM-DD HH:mm:ss+07"
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})([+-]\d{2})(:?\d{2})?$/);
+  if(m){
+    const tz = m[3] + (m[4] ? (m[4].startsWith(':') ? m[4] : ':' + m[4]) : ':00');
+    d = new Date(`${m[1]}T${m[2]}${tz}`);
+    return d.getTime();
+  }
+  return NaN;
+}
 function deriveVehStatus(v){
   const sp = Number(v.speed!=null?v.speed:v.CurrentSpeed) || 0;
   const hasCoord = !!(v.lat||v.lng||v.CurrentLatitude||v.CurrentLongitude);
-  const lastT = v.lastPositionTime||v.LastPositionTime||v.LastSyncAt||v.lastSyncAt;
-  if(!hasCoord || !lastT) return 'Offline';
-  const ageMin = (Date.now()-new Date(lastT).getTime())/60000;
-  if(!(ageMin>=0) || ageMin > GPS_STALE_MIN) return 'Stale';
+  const posMs = parseTs(v.lastPositionTime||v.LastPositionTime);
+  const syncMs = parseTs(v.lastSyncAt||v.LastSyncAt);
+  const lastMs = !isNaN(posMs) ? posMs : syncMs;
+  if(!hasCoord || isNaN(lastMs)) return 'Offline';
+  const posAgeMin = isNaN(posMs) ? Infinity : (Date.now()-posMs)/60000;
+  const syncAgeMin = isNaN(syncMs) ? Infinity : (Date.now()-syncMs)/60000;
+  if(sp > 3 && posAgeMin <= GPS_STALE_MIN) return 'In Use';
+  // Worker ยังดึงคันนี้สำเร็จ → ถือว่าจอดอยู่ (ไม่ใช่สัญญาณขาด) แม้พิกัดจากเครื่องจะไม่อัปเดต
+  if(syncAgeMin <= WORKER_FRESH_MIN) return sp > 3 ? 'In Use' : 'Stopped';
+  if(posAgeMin > GPS_STALE_MIN) return 'Stale';
   return sp > 3 ? 'In Use' : 'Stopped';
 }
 // ช่วงที่รถ/คนขับหยุดนิ่ง (จุดจอด) จากพิกัด GPS ต่อเนื่อง — ไม่ต้องพึ่งความเร็วที่บันทึกไว้
@@ -73,19 +95,19 @@ function liveVehicles(){
 }
 const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อกิโลเมตร', PER_DAY:'ต่อวัน', CUSTOM:'กำหนดเอง' };
 
-// 4 เมนูหลักเท่านั้น (workflow-first) — วางแผนส่ง/ค่าใช้จ่าย/โหมดคนขับ/ติดตามพัสดุ
-// ยังเป็น route ที่เข้าได้ตามปกติ แต่เข้าถึงผ่านปุ่ม/ลิงก์ในหน้างานหรือหน้าตั้งค่าแทน
-// การอยู่ใน sidebar ตรงๆ (ดู ROUTES.deliveries แท็บ "รอจัดส่ง" และ ROUTES.settings กลุ่ม "ปฏิบัติการ")
+// เมนูหลัก + โหมดคนขับไว้ในแถบข้าง (คนขับไม่ต้องเข้าตั้งค่าเพื่อหาลิงก์)
 const NAV = [
   { group:'', items:[
-    { id:'dashboard',  label:'วันนี้',    icon:'home' },
-    { id:'deliveries', label:'งานส่ง',    icon:'package' },
-    { id:'livemap',    label:'ติดตาม',    icon:'map-pin' },
-    { id:'reports',    label:'รายงาน',    icon:'bar-chart-3' },
+    { id:'dashboard',  label:'วันนี้',   icon:'home' },
+    { id:'deliveries', label:'งานส่ง',   icon:'package' },
+    { id:'planning',   label:'จัดรถ',   icon:'route' },
+    { id:'livemap',    label:'ติดตาม',   icon:'map-pin' },
   ]},
 ];
 const NAV_FOOT = [
+  { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
   { id:'settings', label:'ตั้งค่า', icon:'settings' },
+  { id:'guide',    label:'คู่มือ',  icon:'book-open', href:'user-guide.html', external:true },
 ];
 
 /* ---------------- STATE ---------------- */
@@ -147,6 +169,8 @@ const Mock = (() => {
       k('AVG_SPEED_KMH','30','cost','ความเร็วเฉลี่ย (กม./ชม.)'),
       k('DEFAULT_TOLL','300','cost','ค่าทางด่วนเริ่มต้น (บาท)'),
       k('DEFAULT_PARKING','130','cost','ค่าจอดรถเริ่มต้น (บาท)'),
+      k('WORK_START_HOUR','9','cost','เริ่มงาน (ชั่วโมง 0–23) เช่น 9 = 09:00'),
+      k('WORK_END_HOUR','18','cost','เลิกงาน (ชั่วโมง 0–23) เช่น 18 = 18:00'),
       k('PROXIMITY_GREEN_M','100','tracking','ระยะ Check-in สีเขียว (เมตร)'),
       k('PROXIMITY_YELLOW_M','500','tracking','ระยะ Check-in สีเหลือง (เมตร)'),
       k('CARTRACK_ENABLED','false','cartrack','เปิดใช้งานการซิงก์ Cartrack'),
@@ -211,8 +235,26 @@ const Mock = (() => {
     if(route && route.DriverEmployeeID && String(route.DriverEmployeeID)!==String(empId)) throw new Error('Route นี้ไม่ได้มอบหมายให้คุณ');
   }
 
+  const OPEN_WORK = ['Draft','Pending','Planned','Assigned','In Progress'];
+  function deliveriesForWorkDateMock(date, promoteDraft){
+    const from = new Date(date+'T12:00:00'); from.setDate(from.getDate()-14);
+    const fromIso = from.toISOString().slice(0,10);
+    const rows = db.deliveries.filter(x=>{
+      if(x.IsDeleted) return false;
+      if(x.DeliveryDate===date) return true;
+      return x.DeliveryDate < date && x.DeliveryDate >= fromIso && OPEN_WORK.includes(x.Status);
+    });
+    if(promoteDraft){
+      rows.forEach(x=>{
+        if((x.Status==='Draft'||x.Status==='Pending'||!x.Status) && !x.RouteID && x.DeliveryDate < date){
+          x.DeliveryDate = date; x.UpdatedAt = now();
+        }
+      });
+    }
+    return rows;
+  }
   function dashboard(date){
-    const dels = db.deliveries.filter(x=>x.DeliveryDate===date && !x.IsDeleted);
+    const dels = deliveriesForWorkDateMock(date, false);
     const routes = db.routes.filter(x=>x.DeliveryDate===date && !x.IsDeleted);
     const boxes = l => l.reduce((n,x)=>n+(Number(x.BoxQty)||0),0);
     const by = s => dels.filter(x=>x.Status===s);
@@ -245,12 +287,21 @@ const Mock = (() => {
     const date = p.date || Store.date;
     switch(action){
       case 'ping': return { pong:true, time:now(), mock:true };
-      case 'getBootstrap': return { serverTime:now(), date, settings:db.settings, customers:live(db.customers),
-        employees:live(db.employees), vehicles:live(db.vehicles), externalProviders:live(db.externalProviders),
-        externalVehicles:live(db.externalVehicles), dashboard:dashboard(date),
-        deliveries:db.deliveries.filter(x=>x.DeliveryDate===date&&!x.IsDeleted), routes:db.routes.filter(x=>x.DeliveryDate===date&&!x.IsDeleted), cartrack:cartrackStatus() };
+      case 'getBootstrap': {
+        const dels = deliveriesForWorkDateMock(date, true);
+        return { serverTime:now(), date, settings:db.settings, customers:live(db.customers),
+          employees:live(db.employees), vehicles:live(db.vehicles), externalProviders:live(db.externalProviders),
+          externalVehicles:live(db.externalVehicles), dashboard:dashboard(date),
+          deliveries:dels, routes:db.routes.filter(x=>x.DeliveryDate===date&&!x.IsDeleted), cartrack:cartrackStatus() };
+      }
       case 'getDashboardData': return dashboard(date);
-      case 'getDeliveries': { let r=db.deliveries.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); if(p.status)r=r.filter(x=>x.Status===p.status); return r; }
+      case 'getDeliveries': {
+        let r;
+        if(p.date && !p.routeId && !p.exactDate) r = deliveriesForWorkDateMock(p.date, p.promoteDraft!==false);
+        else { r=db.deliveries.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); }
+        if(p.status)r=r.filter(x=>x.Status===p.status);
+        return r;
+      }
       case 'getRoutes': { let r=db.routes.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); return r; }
       case 'getRouteStops': return db.routeStops.filter(s=>!p.routeId||s.RouteID===p.routeId).sort((a,b)=>a.StopOrder-b.StopOrder);
       case 'getRouteGpsTrack': return db.gps.filter(g=>g.RouteID===p.routeId).sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
@@ -264,8 +315,20 @@ const Mock = (() => {
       case 'getExpenses': { let r=db.expenses.filter(x=>!x.IsDeleted); if(p.routeId)r=r.filter(x=>x.RouteID===p.routeId); if(p.date)r=r.filter(x=>x.ExpenseDate===p.date); return r; }
       case 'getClaims': return db.claims.filter(x=>!x.IsDeleted);
       case 'getRouteCosts': return db.routes.filter(x=>!x.IsDeleted && (!p.date||x.DeliveryDate===p.date));
-      case 'getReports': { const f=p.from,t=p.to,inR=x=>(!f||x>=f)&&(!t||x<=t);
-        return { deliveries:db.deliveries.filter(x=>!x.IsDeleted&&inR(x.DeliveryDate)), routes:db.routes.filter(x=>!x.IsDeleted&&inR(x.DeliveryDate)), expenses:db.expenses.filter(x=>!x.IsDeleted&&inR(x.ExpenseDate)) }; }
+      case 'getReports': {
+        const f=p.from,t=p.to,inR=x=>(!f||x>=f)&&(!t||x<=t);
+        let deliveries=db.deliveries.filter(x=>!x.IsDeleted&&inR(x.DeliveryDate));
+        if(t){
+          const carry=deliveriesForWorkDateMock(t,false);
+          const seen=new Set(deliveries.map(d=>d.DeliveryID));
+          carry.forEach(d=>{
+            if(seen.has(d.DeliveryID)) return;
+            if(f && d.DeliveryDate>=f) return;
+            deliveries.push(d); seen.add(d.DeliveryID);
+          });
+        }
+        return { deliveries, routes:db.routes.filter(x=>!x.IsDeleted&&inR(x.DeliveryDate)), expenses:db.expenses.filter(x=>!x.IsDeleted&&inR(x.ExpenseDate)) };
+      }
       case 'getSettings': return p.group?db.settings.filter(s=>s.Group===p.group):db.settings;
       case 'getCartrackStatus': return cartrackStatus();
       case 'getRealtime': { const dd=dashboard(date); const rs=db.routes.filter(x=>x.DeliveryDate===date&&!x.IsDeleted);
@@ -356,33 +419,45 @@ const API = {
     for(let i=0;i<=n;i++){
       try{
         const res = await fetchWithTimeout(this.url()+'?'+q, { method:'GET', redirect:'follow' }, ms);
-        const j = await res.json();
-        if(!j.ok) throw new Error(j.error||'API error');
-        return j.data;
+        return await parseApiResponse(res);
       }catch(e){ lastErr=e; if(i<n) await new Promise(r=>setTimeout(r, 800*(i+1))); }
     }
     throw lastErr;
   },
   // POST เป็น write → แนบ requestId คงที่ + retry ได้ 1 ครั้งถ้าเน็ตสะดุด (ไม่เขียนซ้ำ เพราะฝั่งเซิร์ฟเวอร์แคชผลลัพธ์ตาม requestId ไว้ให้)
-  // TODO(migration cutover): 45000ms timeout ตั้งเผื่อ Apps Script โดยเฉพาะ — ลดลงพร้อมกับ GET ด้านบน
-  async post(action, body={}){
+  async post(action, body={}, timeoutMs){
     if(!this.configured()) return simulate(()=>Mock.handle(action, Object.assign({date:Store.date}, body)));
     const requestId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('r'+Date.now()+Math.random().toString(36).slice(2));
     const payload = JSON.stringify(Object.assign({action, requestId}, body));
+    const ms = timeoutMs || (action === 'syncTrcloudOrders' ? 90000 : 45000);
     let lastErr;
     for(let i=0;i<=1;i++){
       try{
         const res = await fetchWithTimeout(this.url(), { method:'POST', redirect:'follow',
-          headers:{'Content-Type':'text/plain;charset=utf-8'}, body: payload }, 45000);
-        const j = await res.json();
-        if(!j.ok) throw new Error(j.error||'API error');
-        return j.data;
+          headers:{'Content-Type':'text/plain;charset=utf-8'}, body: payload }, ms);
+        return await parseApiResponse(res);
       }catch(e){ lastErr=e; if(i===0) await new Promise(r=>setTimeout(r,800)); }
     }
     throw lastErr;
   }
 };
 function simulate(fn){ return new Promise(r=>setTimeout(()=>r(fn()), 60)); }
+async function parseApiResponse(res){
+  const text = await res.text();
+  let j;
+  try { j = JSON.parse(text); }
+  catch (e) {
+    if (res.status === 503 || res.status === 502 || res.status === 504) {
+      throw new Error('เซิร์ฟเวอร์ไม่ว่างชั่วคราว (รหัส ' + res.status + ') — ลองกดอีกครั้งใน 10 วินาที');
+    }
+    if (res.status >= 400) {
+      throw new Error('เซิร์ฟเวอร์ตอบผิดพลาด (รหัส ' + res.status + ')');
+    }
+    throw new Error('เซิร์ฟเวอร์ตอบไม่เป็น JSON — ลองรีเฟรชหน้า');
+  }
+  if (!j || j.ok === false) throw new Error((j && j.error) || ('API error ' + res.status));
+  return j.data;
+}
 function fetchWithTimeout(url, opts, ms){
   const ctrl = new AbortController();
   const t = setTimeout(()=>ctrl.abort(), ms||45000);
@@ -607,6 +682,44 @@ function priBadge(p){ return badge(PRIORITY,p); }
 function dstatusBadge(s){ return badge(DSTATUS,s); }
 function vstatusBadge(s){ const m=VSTATUS[s]||VSTATUS.Unknown; return `<span class="badge ${m.cls}"><span class="dot" style="background:${m.dot}"></span>${esc(m.label)}</span>`; }
 
+/** แสดงชื่อรถสั้น — ทะเบียนเป็นหลัก (รุ่นรถเป็นรอง) */
+function vehicleShortName(v){
+  if(!v) return '—';
+  const plate = v.LicensePlate || v.license_plate || '';
+  const name = v.VehicleName || v.vehicle_name || '';
+  return plate || name || '—';
+}
+function vehicleOptionLabel(v){
+  if(!v) return '—';
+  const plate = v.LicensePlate || '';
+  const name = v.VehicleName || '';
+  if(plate && name && name !== plate) return `${plate} · ${name}`;
+  return plate || name || '—';
+}
+/** Tooltip สั้น — hover/focus */
+function tip(text, inner){
+  return `<span class="tip" tabindex="0"><span class="tip-trigger">${inner||'<i data-lucide="help-circle" style="width:14px;height:14px"></i>'}</span><span class="tip-bubble" role="tooltip">${esc(text)}</span></span>`;
+}
+function openDriverAccessModal(){
+  const driverUrl = location.origin + location.pathname.replace(/\/?$/,'/') + '#/driver';
+  const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(driverUrl);
+  const m = modal({
+    title: 'โหมดคนขับ',
+    body: `<p class="small muted" style="margin:0 0 14px;line-height:1.55">ให้คนขับสแกน QR หรือเปิดลิงก์บนมือถือ แล้วแตะชื่อตัวเองเพื่อรับงาน</p>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px;background:var(--bg,#FAFBFC);border-radius:14px;border:1px solid var(--border)">
+        <img src="${qr}" alt="QR โหมดคนขับ" width="200" height="200" style="border-radius:10px;background:#fff;padding:8px">
+        <code class="small" style="word-break:break-all;text-align:center">${esc(driverUrl)}</code>
+      </div>`,
+    foot: `<button class="btn" id="drvQrCopy"><i data-lucide="copy"></i>คัดลอกลิงก์</button>
+      <a class="btn btn-primary" href="#/driver" id="drvQrOpen"><i data-lucide="smartphone"></i>เปิดโหมดคนขับ</a>`
+  });
+  el('drvQrCopy').onclick = async ()=>{
+    try{ await navigator.clipboard.writeText(driverUrl); toast('คัดลอกลิงก์แล้ว','ok'); }
+    catch(e){ toast('คัดลอกไม่สำเร็จ — เปิดโหมดคนขับแทนได้','warn'); }
+  };
+  el('drvQrOpen').onclick = ()=> m.close();
+}
+
 /* ================================================================
    SHELL — sidebar / topbar / sync
    ================================================================ */
@@ -627,12 +740,21 @@ function buildNav(){
   } else { $('#footLinks').innerHTML = NAV_FOOT.map(navLink).join(''); }
   // mobile bottom nav
   const m = el('mnav');
-  const mItems = [ {id:'dashboard',icon:'home',label:'วันนี้'},{id:'deliveries',icon:'package',label:'งานส่ง'},
-    {id:'livemap',icon:'map-pin',label:'ติดตาม'},{id:'reports',icon:'bar-chart-3',label:'รายงาน'} ];
+  const mItems = [
+    {id:'dashboard',icon:'home',label:'วันนี้'},
+    {id:'deliveries',icon:'package',label:'งานส่ง'},
+    {id:'planning',icon:'route',label:'จัดรถ'},
+    {id:'livemap',icon:'map-pin',label:'ติดตาม'},
+  ];
   m.innerHTML = mItems.map(it=>`<a href="#/${it.id}" class="${Store.page===it.id?'active':''}"><i data-lucide="${it.icon}"></i>${it.label}</a>`).join('');
   icons();
 }
-function navLink(it){ return `<a href="#/${it.id}" class="nav-item ${Store.page===it.id?'active':''}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`; }
+function navLink(it){
+  if (it.external || it.href) {
+    return `<a href="${esc(it.href || it.id)}" class="nav-item" target="_blank" rel="noopener"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`;
+  }
+  return `<a href="#/${it.id}" class="nav-item ${Store.page===it.id?'active':''}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`;
+}
 
 function updateSync(){
   const live = API.configured() && Store.live;
@@ -663,6 +785,9 @@ async function loadBootstrap(){
     Store.lastSync = new Date().toISOString();
     Store._sig = dataSignature(data);
     Store.error = null;
+    if (data.carriedOver > 0) {
+      toast('ดึงงานค้าง ' + data.carriedOver + ' รายการมาวันที่ ' + thDate(Store.date) + ' แล้ว (รายงานวันนี้นับรวมด้วย)', 'ok');
+    }
   }catch(e){
     Store.live = false; Store.error = e.message;
     // ยังไม่มีข้อมูลเลย → ใช้ข้อมูลทดลองไปก่อนให้แอปใช้งานได้ แล้วลองเชื่อมใหม่อัตโนมัติ
@@ -727,6 +852,20 @@ const Planner = {
   speed(){ return Number(setting('AVG_SPEED_KMH',30)); },
   toll(){ return Number(setting('DEFAULT_TOLL',300)); },
   parking(){ return Number(setting('DEFAULT_PARKING',130)); },
+  // เวลาทำงานจริง 09:00–18:00 (540 นาที) — ใช้คำนวณจำนวนรถที่ต้องแบ่ง
+  workStartHour(){ return Number(setting('WORK_START_HOUR',9)); },
+  workEndHour(){ return Number(setting('WORK_END_HOUR',18)); },
+  workDayMin(){ return Math.max(60, (this.workEndHour()-this.workStartHour())*60); },
+  fmtDur(min){ min=Math.max(0,Math.round(min||0)); return Math.floor(min/60)+':'+String(min%60).padStart(2,'0')+' ชม.'; },
+  // ทิศทางเฉลี่ยของกลุ่มจุด (จากคลัง) — ใช้ติดป้ายซ้าย/ขวา/ทิศ
+  sectorLabel(seq){
+    const wh=warehouse(); if(!seq||!seq.length) return '—';
+    let sx=0,sy=0;
+    seq.forEach(s=>{ const b=bearing(wh.lat,wh.lng,+s.Latitude,+s.Longitude)*Math.PI/180; sx+=Math.sin(b); sy+=Math.cos(b); });
+    let deg=Math.atan2(sx,sy)*180/Math.PI; if(deg<0) deg+=360;
+    const dirs=['เหนือ','ตะวันออกเฉียงเหนือ','ตะวันออก','ตะวันออกเฉียงใต้','ใต้','ตะวันตกเฉียงใต้','ตะวันตก','ตะวันตกเฉียงเหนือ'];
+    return dirs[Math.round(deg/45)%8];
+  },
   // ปลายทางเป็นห้าง/ศูนย์การค้า (มีค่าจอด) หรือไม่ — ตรวจจากชื่อ
   MALL_KW:['ห้าง','เซ็นทรัล','central','เดอะมอลล์','the mall','themall','เมกา','mega bangna','ซีคอน','seacon','เทอร์มินอล','terminal 21','terminal21','พารากอน','paragon','ไอคอนสยาม','iconsiam','เอ็มควอเทียร์','emquartier','เอ็มโพเรียม','emporium','ฟิวเจอร์','future park','futurepark','โรบินสัน','robinson','เกตเวย์','gateway','เมญ่า','maya','สเปลล์','spell','โชว์ ดีซี','show dc','ยูเนี่ยน','union mall'],
   isMall(s){ const t=((s.CustomerName||'')+' '+(s.BranchName||'')+' '+(s.Address||'')).toLowerCase(); return this.MALL_KW.some(k=>t.indexOf(k.toLowerCase())>-1); },
@@ -734,6 +873,11 @@ const Planner = {
   autoParking(stops){ return (stops||[]).filter(s=>this.isMall(s)).length * this.parking(); },
   fuelCost(distanceKm, vehicle){ const rate=vehicle&&vehicle.FuelCostPerKm?Number(vehicle.FuelCostPerKm):this.fuelPerKm(); return +(distanceKm*rate).toFixed(2); },
   extAmount(v, distanceKm){ const rate=Number(v&&v.Rate)||0; return v&&v.RateType==='PER_KM' ? +(rate*distanceKm).toFixed(2) : +rate; },
+  // เรียงรถว่างใกล้คลังก่อน (ไม่ใช้ความจุกล่อง)
+  sortByWh(list){
+    const wh=warehouse();
+    return (list||[]).slice().sort((a,b)=>haversine(wh.lat,wh.lng,+a.CurrentLatitude||wh.lat,+a.CurrentLongitude||wh.lng)-haversine(wh.lat,wh.lng,+b.CurrentLatitude||wh.lat,+b.CurrentLongitude||wh.lng));
+  },
 
   // nearest-neighbour with priority weighting, starting from warehouse
   order(stops, start){
@@ -794,49 +938,49 @@ const Planner = {
   availableVehicles(){ return (Store.data.vehicles||[]).filter(v=>v.VehicleStatus==='Available'); },
   availableExternal(){ return (Store.data.externalVehicles||[]).filter(v=>v.Status==='Available'); },
 
-  // recommend single best company vehicle that fits all boxes & is nearest to warehouse
-  recommendVehicle(totalBoxes){
+  // รถบริษัทที่ว่าง + ใกล้คลังที่สุด (ไม่เช็กความจุกล่อง)
+  recommendVehicle(){
     const wh = warehouse();
-    const fit = this.availableVehicles().filter(v=>Number(v.CapacityBox)>=totalBoxes)
-      .sort((a,b)=> (Number(a.CapacityBox)-Number(b.CapacityBox)) ||
-        (haversine(wh.lat,wh.lng,+a.CurrentLatitude,+a.CurrentLongitude)-haversine(wh.lat,wh.lng,+b.CurrentLatitude,+b.CurrentLongitude)));
-    if(fit.length){ const v=fit[0]; v._distWh=+haversine(wh.lat,wh.lng,+v.CurrentLatitude,+v.CurrentLongitude).toFixed(1); return v; }
+    const fit = this.sortByWh(this.availableVehicles());
+    if(fit.length){ const v=fit[0]; v._distWh=+haversine(wh.lat,wh.lng,+v.CurrentLatitude||wh.lat,+v.CurrentLongitude||wh.lng).toFixed(1); return v; }
     return null;
   },
 
-  // build 3 options
+  // จำนวนคันแนะนำจากเวลาทำงานจริง (09:00–18:00) + จำนวนจุด
+  suggestK(seq, metrics, availN){
+    const work = this.workDayMin();
+    const byTime = Math.max(1, Math.ceil((metrics.durationMin||0) / work));
+    // อย่างน้อย 1 จุดต่อคัน — ไม่แบ่งเกินจำนวนจุดหรือจำนวนรถว่าง
+    const k = Math.min(availN, Math.max(byTime, seq.length>=2 && availN>=2 ? 2 : 1), seq.length||1);
+    return Math.max(1, k);
+  },
+
+  // build options — แบ่งตามเขต/ทิศทาง + เวลาทำงาน (ไม่ใช้ความจุกล่อง)
   options(seq, override){
     const m = this.metrics(seq);
     if(override){ m.distance=override.distance; m.durationMin=override.durationMin; m.geometry=override.geometry; m.source=override.source; }
-    const wh = warehouse();
-    const avail = this.availableVehicles();
-    const totalCap = avail.reduce((n,v)=>n+(Number(v.CapacityBox)||0),0);
+    const avail = this.sortByWh(this.availableVehicles());
+    const work = this.workDayMin();
+    const workLbl = String(this.workStartHour()).padStart(2,'0')+':00–'+String(this.workEndHour()).padStart(2,'0')+':00';
     const opts = [];
 
-    // OPTION A — company only
-    const rec = this.recommendVehicle(m.boxes);
+    // OPTION A — รถบริษัทคันเดียว
+    const rec = this.recommendVehicle();
     if(rec){
       const cost = this.companyCost(m.distance, rec);
-      opts.push({ id:'A', name:'รถบริษัทเท่านั้น', feasible:true, recommended:true,
-        vehicles:[rec], distance:m.distance, duration:m.durationMin, boxes:m.boxes, stops:m.stops, cost,
-        note:`ใช้ ${rec.VehicleName} (${rec.CapacityBox} กล่อง) เพียงคันเดียว` });
-    } else if(totalCap>=m.boxes && avail.length>=2){
-      // combine company vehicles
-      const sorted = avail.slice().sort((a,b)=>Number(b.CapacityBox)-Number(a.CapacityBox));
-      const use=[]; let cap=0; for(const v of sorted){ use.push(v); cap+=Number(v.CapacityBox)||0; if(cap>=m.boxes)break; }
-      const cost = this.companyCost(m.distance*1.05, use[0]);
-      cost.total = +(cost.fuel+cost.toll*use.length+cost.parking).toFixed(2); cost.toll=cost.toll*use.length;
-      opts.push({ id:'A', name:'รถบริษัทหลายคัน', feasible:true, recommended:true, vehicles:use,
-        distance:m.distance, duration:m.durationMin, boxes:m.boxes, stops:m.stops, cost, note:`รวม ${use.length} คัน · ความจุ ${cap} กล่อง` });
+      const over = m.durationMin > work;
+      opts.push({ id:'A', name:'รถบริษัทคันเดียว', feasible:true, recommended:!over || avail.length<2,
+        vehicles:[rec], distance:m.distance, duration:m.durationMin, boxes:m.boxes, stops:m.stops, cost, overtime:over,
+        note: over
+          ? `เวลาประมาณ ${this.fmtDur(m.durationMin)} เกินเวลาทำงาน ${workLbl} — แนะนำแบ่งหลายคัน`
+          : `ใช้ ${vehicleShortName(rec)} · ใช้เวลา ~${this.fmtDur(m.durationMin)} (ภายใน ${workLbl})` });
     } else {
-      const short = m.boxes - totalCap;
-      opts.push({ id:'A', name:'รถบริษัทเท่านั้น', feasible:false, vehicles:avail,
+      opts.push({ id:'A', name:'รถบริษัทคันเดียว', feasible:false, vehicles:[],
         distance:m.distance, duration:m.durationMin, boxes:m.boxes, stops:m.stops,
-        cost:this.companyCost(m.distance), shortage:short,
-        note:`ความจุรวม ${totalCap} กล่อง · งาน ${m.boxes} กล่อง · ขาด ${short} กล่อง` });
+        cost:this.companyCost(m.distance), note:'ไม่มีรถบริษัทว่าง' });
     }
 
-    // OPTION B — company + external
+    // OPTION B — รถบริษัท + รถภายนอก
     const ext = this.availableExternal()[0];
     if(ext){
       const compVeh = avail[0];
@@ -847,63 +991,63 @@ const Planner = {
         vehicles:[compVeh,ext].filter(Boolean), external:ext,
         distance:m.distance, duration:m.durationMin, boxes:m.boxes, stops:m.stops,
         cost:{ fuel:cCost.fuel, toll:cCost.toll+eCost.toll, parking:cCost.parking+eCost.parking, external:eCost.external, other:0, total },
-        note:`รองรับงานทั้งหมด — เสริมด้วย ${ext.ProviderName} (${ext.CapacityBox} กล่อง)` });
+        note:`เสริมด้วย ${ext.ProviderName} · ${ext.LicensePlate||''}` });
     }
 
-    // OPTION C — แบ่งเป็นหลาย Route ตามพื้นที่ (sweep) + จับคู่รถอัตโนมัติ ให้ระยะทางรวมสั้นสุด
-    if(avail.length>=2){
-      const sortedCap = avail.slice().sort((a,b)=>Number(b.CapacityBox)-Number(a.CapacityBox));
-      // K แนะนำ = จำนวนรถขั้นต่ำที่ความจุรวมพอสำหรับงานทั้งหมด (อย่างน้อย 2, ไม่เกินจำนวนรถว่าง)
-      let kRec=2, cap=0;
-      for(let i=0;i<sortedCap.length;i++){ cap+=Number(sortedCap[i].CapacityBox)||0; kRec=i+1; if(cap>=m.boxes && kRec>=2) break; }
-      kRec = Math.min(Math.max(kRec,2), sortedCap.length);
-      const groups = this.autoSplit(seq, sortedCap.slice(0,kRec));
+    // OPTION C — แบ่งตามเขต/ทิศทาง (ซ้าย–ขวา) + จับคู่รถ ตามเวลาทำงาน
+    if(avail.length>=2 && seq.length>=2){
+      let kRec = this.suggestK(seq, m, avail.length);
+      if(kRec<2) kRec=2; // มี ≥2 คันและ ≥2 จุด → อย่างน้อยแบ่ง 2 ทิศ
+      kRec = Math.min(kRec, avail.length, seq.length);
+      const groups = this.autoSplit(seq, avail.slice(0,kRec));
       const totalDist = +groups.reduce((n,g)=>n+g.m.distance,0).toFixed(1);
       const cFuel=groups.reduce((n,g)=>n+g.cost.fuel,0), cToll=groups.reduce((n,g)=>n+g.cost.toll,0), cPark=groups.reduce((n,g)=>n+g.cost.parking,0);
-      opts.push({ id:'C', name:`แบ่งเป็น ${groups.length} Route (ตามพื้นที่)`, feasible:true, kRec, kMax:sortedCap.length, split:groups,
+      const anyOver = groups.some(g=>g.overtime);
+      opts.push({ id:'C', name:`แบ่งตามเขต ${groups.length} คัน (ทิศทาง)`, feasible:true, recommended:m.durationMin>work || avail.length>=2,
+        kRec, kMax:Math.min(avail.length, seq.length), split:groups,
         vehicles:groups.map(g=>g.v), distance:totalDist, duration:Math.max(...groups.map(g=>g.m.durationMin)),
-        boxes:m.boxes, stops:m.stops,
+        boxes:m.boxes, stops:m.stops, overtime:anyOver,
         cost:{ fuel:+cFuel.toFixed(2), toll:cToll, parking:cPark, external:0, other:0, total:+(cFuel+cToll+cPark).toFixed(2) },
-        note: groups.map((g,i)=>`Route ${i+1}: ${g.seq.length} จุด · ${num1(g.m.distance)} กม.`).join(' · ') });
+        note: groups.map((g,i)=>`คัน ${i+1} ทิศ${g.sector}: ${g.seq.length} จุด · ${this.fmtDur(g.m.durationMin)}`).join(' · ') });
     }
-    return { metrics:m, options:opts };
+    return { metrics:m, options:opts, workDayMin:work, workLabel:workLbl };
   },
 
-  // แบ่งจุดส่งเป็น K กลุ่มตามพื้นที่ (sweep by bearing จากคลัง) แบบ capacity-greedy
-  // แล้วปรับขอบเขต (border-swap) ให้ระยะทางรวมทุกกลุ่มสั้นที่สุด — คืนกลุ่มละ {seq,m,v,cost}
+  // แบ่งจุดส่งเป็น K กลุ่มตามทิศทาง (sweep bearing จากคลัง) — เท่า ๆ กันตามจำนวนจุด
+  // แล้วปรับขอบเขตให้ระยะรวมสั้น — คืน {seq,m,v,cost,sector,overtime,bills}
   autoSplit(seq, vehicles){
     const wh = warehouse();
-    if(vehicles.length<=1){ const s=this.order(seq.map(x=>Object.assign({},x))); const mm=this.metrics(s); return [{ seq:s, m:mm, v:vehicles[0], cost:this.companyCost(mm.distance, vehicles[0]) }]; }
+    const work = this.workDayMin();
+    if(vehicles.length<=1){
+      const s=this.order(seq.map(x=>Object.assign({},x))); const mm=this.metrics(s);
+      return [{ seq:s, m:mm, v:vehicles[0], cost:this.companyCost(mm.distance, vehicles[0]),
+        sector:this.sectorLabel(s), overtime:mm.durationMin>work, bills:s.map(x=>({invoice:x.InvoiceNo||'', customer:x.CustomerName||'', branch:x.BranchName||'', boxes:Number(x.BoxQty)||0, id:x.DeliveryID})) }];
+    }
     const K = vehicles.length;
-    const caps = vehicles.map(v=>Number(v.CapacityBox)||9999);
-    const totalCap = caps.reduce((a,b)=>a+b,0) || 1;
-    const totalBoxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
-    const targetBoxes = caps.map(c=>totalBoxes*(c/totalCap));
-
-    // clone แต่ละจุด — กัน order()/metrics() ภายในฟังก์ชันนี้ (ซึ่งแก้ _distPrev ในอ็อบเจกต์) ไปกระทบ seq เดิมที่ใช้แสดงผล Option A/B
+    // clone + เรียงตามมุมจากคลัง → กลุ่มติดกันเป็น “ซ้าย/ขวา” ตามพื้นที่
     const pts = seq.map(s=>Object.assign({},s)).sort((a,b)=>bearing(wh.lat,wh.lng,+a.Latitude,+a.Longitude)-bearing(wh.lat,wh.lng,+b.Latitude,+b.Longitude));
     const groups = Array.from({length:K},()=>[]);
-    let gi=0, acc=0;
-    pts.forEach(p=>{
-      const boxQty = Number(p.BoxQty)||0;
-      if(gi<K-1 && groups[gi].length && acc+boxQty>targetBoxes[gi]){ gi++; acc=0; }
-      groups[gi].push(p); acc+=boxQty;
-    });
+    // แบ่งจำนวนจุดให้ใกล้เคียงกัน (ไม่ใช้ความจุกล่อง)
+    const base = Math.floor(pts.length / K), rem = pts.length % K;
+    let idx=0;
+    for(let gi=0; gi<K; gi++){
+      const take = base + (gi < rem ? 1 : 0);
+      for(let t=0; t<take && idx<pts.length; t++) groups[gi].push(pts[idx++]);
+    }
 
-    const boxSum = g => g.reduce((n,x)=>n+(Number(x.BoxQty)||0),0);
-    const distOf = g => g.length ? this.metrics(this.order(g)).distance : 0;
-    for(let pass=0; pass<3; pass++){
+    const distOf = g => g.length ? this.metrics(this.order(g.map(x=>Object.assign({},x)))).distance : 0;
+    for(let pass=0; pass<4; pass++){
       let improved=false;
       for(let i=0;i<K-1;i++){
         const A=groups[i], B=groups[i+1];
         if(!A.length || !B.length) continue;
-        const base = distOf(A)+distOf(B);
-        let bestCand=null, bestDist=base;
-        if(A.length>1 && boxSum(B)+(Number(A[A.length-1].BoxQty)||0)<=caps[i+1]){
+        const baseD = distOf(A)+distOf(B);
+        let bestCand=null, bestDist=baseD;
+        if(A.length>1){
           const A2=A.slice(0,-1), B2=[A[A.length-1],...B];
           const d=distOf(A2)+distOf(B2); if(d<bestDist-0.05){ bestDist=d; bestCand=[A2,B2]; }
         }
-        if(B.length>1 && boxSum(A)+(Number(B[0].BoxQty)||0)<=caps[i]){
+        if(B.length>1){
           const B2=B.slice(1), A2=[...A,B[0]];
           const d=distOf(A2)+distOf(B2); if(d<bestDist-0.05){ bestDist=d; bestCand=[A2,B2]; }
         }
@@ -914,7 +1058,11 @@ const Planner = {
     return groups.map((g,i)=>{
       if(!g.length) return null;
       const s=this.order(g), mm=this.metrics(s), v=vehicles[i];
-      return { seq:s, m:mm, v, cost:this.companyCost(mm.distance, v) };
+      return {
+        seq:s, m:mm, v, cost:this.companyCost(mm.distance, v),
+        sector:this.sectorLabel(s), overtime:mm.durationMin>work,
+        bills:s.map(x=>({invoice:x.InvoiceNo||'', customer:x.CustomerName||'', branch:x.BranchName||'', boxes:Number(x.BoxQty)||0, id:x.DeliveryID}))
+      };
     }).filter(Boolean);
   }
 };
@@ -941,7 +1089,7 @@ const MapUtil = {
   vehMarker(map, v){
     const st=VSTATUS[deriveVehStatus(v)]||VSTATUS.Unknown;
     const moving = deriveVehStatus(v)==='In Use';
-    return L.marker([+v.lat,+v.lng], { icon:L.divIcon({ className:'veh-pin', html:`${moving?`<div class="veh-ring" style="background:${st.dot}"></div>`:''}<div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup(`<b>${esc(v.VehicleName)}</b> · ${esc(v.LicensePlate)}<br>${st.label} · ${int(v.speed)} กม./ชม.<br>${esc(v.CurrentDriver||'')}`);
+    return L.marker([+v.lat,+v.lng], { icon:L.divIcon({ className:'veh-pin', html:`${moving?`<div class="veh-ring" style="background:${st.dot}"></div>`:''}<div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`, iconSize:[30,30], iconAnchor:[15,15] }) }).addTo(map).bindPopup(`<b class="mono">${esc(vehicleShortName(v))}</b>${v.VehicleName&&v.LicensePlate&&v.VehicleName!==v.LicensePlate?' · '+esc(v.VehicleName):''}<br>${st.label} · ${int(v.speed)} กม./ชม.<br>${esc(v.CurrentDriver||'')}`);
   }
 };
 
@@ -1083,7 +1231,12 @@ function setupHint(){
   if(localStorage.getItem('ddc_hint_off')){ bar.style.display='none'; return; }
   bar.style.display='flex';
   el('hintClose').onclick = ()=>{ localStorage.setItem('ddc_hint_off','1'); bar.style.display='none'; };
-  el('hintReload').onclick = ()=>{ location.href = location.origin + location.pathname + '?r=' + Date.now() + location.hash; };
+  el('hintReload').onclick = ()=>{
+    localStorage.removeItem('ddc_onboarding_off');
+    location.hash = '#/dashboard';
+    bar.style.display='none';
+    render();
+  };
 }
 function bindShell(){
   setupHint();
@@ -1091,11 +1244,13 @@ function bindShell(){
   el('backdrop').onclick = ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); };
   el('nav').addEventListener('click', ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); });
   el('dateBtn').onclick = openDatePicker;
+  const drvBtn = el('driverModeBtn');
+  if(drvBtn) drvBtn.onclick = ()=> openDriverAccessModal();
   let _searchT;
   el('globalSearch').addEventListener('input', e=>{
     const v = e.target.value.trim().toLowerCase();
     clearTimeout(_searchT);
-    _searchT = setTimeout(()=>{ Store.search=v; if(['deliveries','rounds','customers'].includes(Store.page)) render(); }, 250);
+    _searchT = setTimeout(()=>{ Store.search=v; if(['deliveries','planning','customers'].includes(Store.page)) render(); }, 250);
   });
 }
 function openDatePicker(){
@@ -1121,6 +1276,15 @@ function openDatePicker(){
 async function init(){
   // รองรับ ?api=<AppsScriptURL> เพื่อ auto-connect (สะดวกตอน deploy/แชร์ให้ทีม)
   try{ const qp=new URLSearchParams(location.search).get('api'); if(qp){ API.setUrl(qp); history.replaceState(null,'',location.pathname+location.hash); } }catch(e){}
+  // Cutover: ถ้า localStorage ยังจำ URL Apps Script เก่า (ไม่มี action ใหม่เช่น driverSelect)
+  // ให้บังคับกลับไป /api/gas — ไม่งั้นโหมดคนขับจะขึ้น "unknown action: driverSelect"
+  try{
+    const savedApi = localStorage.getItem(LS_URL) || '';
+    if(savedApi && /script\.google\.com/i.test(savedApi)){
+      localStorage.removeItem(LS_URL);
+      console.info('[API] migrated off Apps Script URL → /api/gas');
+    }
+  }catch(e){}
   Store.date = API.configured() ? new Date().toISOString().slice(0,10) : DATA_DATE;
   Store.data = Store.data || {};
   recomputeDashboard();   // เตรียมโครงสร้าง dashboard (ค่าเป็น 0) กันหน้าพังตอนยังไม่มีข้อมูล
@@ -1129,20 +1293,37 @@ async function init(){
   render();               // แสดงโครงหน้าทันที (ไม่ต้องรอเซิร์ฟเวอร์) ระหว่างกำลังเชื่อมต่อ
   await loadBootstrap();
   render();               // เติมข้อมูลจริงเมื่อเชื่อมต่อสำเร็จ
-  // realtime polling ทุก 20 วิ — หน้าแผนที่/Cartrack ดึงพิกัดสดจาก Cartrack (light) · หน้าอื่นอ่านสรุป
-  // Store._polling กันรอบใหม่ยิงซ้อนรอบเก่าที่ยังไม่ตอบกลับ (เหตุผลเดียวกับ silentSync — ยิงซ้อนแล้วเซิร์ฟเวอร์อั้นคิว ยิ่งช้าลงอีก)
+  // realtime polling ทุก 15 วิ — หน้าแผนที่/Cartrack/หน้าหลัก ดึงพิกัดสด (light)
+  // Store._polling กันรอบใหม่ยิงซ้อนรอบเก่าที่ยังไม่ตอบกลับ
   Store.pollTimer = setInterval(async ()=>{
     const p = Store.page;
-    if(!['dashboard','livemap'].includes(p) || Store._polling) return;
+    if(!['dashboard','livemap','cartrack'].includes(p) || Store._polling) return;
     const ctOn = Store.data.cartrack && Store.data.cartrack.enabled;
     Store._polling = true;
     try{
-      if(p==='livemap' && ctOn && API.configured()){
+      if((p==='livemap' || p==='cartrack') && ctOn && API.configured()){
         // เรียลไทม์: สั่งดึง Cartrack สด (โหมดเบา) แล้วอัปเดตตำแหน่งทันที
         const r = await API.post('syncCartrack',{light:true});
-        if(r && r.vehicles){ Store._live = Object.assign({}, Store._live||{}, { vehicles:r.vehicles });
-          if(Store.data.cartrack){ Store.data.cartrack.lastSync=r.at; Store.data.cartrack.stale=false; Store.data.cartrack.matched=r.matched; }
-          Store.lastSync=new Date().toISOString(); updateSync(); if(window._onRealtime) window._onRealtime({vehicles:r.vehicles}); }
+        if(r && r.vehicles){
+          Store._live = Object.assign({}, Store._live||{}, { vehicles:r.vehicles });
+          // merge เข้า Store.data.vehicles ด้วย เพื่อให้หน้า Cartrack ตารางสถานะขยับ
+          const byId = new Map(r.vehicles.map(v=>[v.VehicleID, v]));
+          if(Array.isArray(Store.data.vehicles)){
+            Store.data.vehicles = Store.data.vehicles.map(v=>{
+              const live = byId.get(v.VehicleID); if(!live) return v;
+              return Object.assign({}, v, {
+                CurrentLatitude: live.lat, CurrentLongitude: live.lng,
+                CurrentSpeed: live.speed, CurrentHeading: live.heading,
+                CurrentOdometer: live.odometer, LastPositionTime: live.lastPositionTime,
+                LastSyncAt: live.lastSyncAt, VehicleStatus: live.VehicleStatus,
+              });
+            });
+          }
+          if(Store.data.cartrack){ Store.data.cartrack.lastSync=r.at; Store.data.cartrack.stale=false; Store.data.cartrack.matched=r.matched; Store.data.cartrack.connected=true; }
+          Store.lastSync=new Date().toISOString(); updateSync();
+          if(window._onRealtime) window._onRealtime({vehicles:r.vehicles});
+          if(p==='cartrack') render();
+        }
       } else {
         const rt = await API.get('getRealtime',{date:Store.date});
         Store.data.dashboard = { date:rt.date, kpi:rt.kpi, cost:rt.cost, fleet:rt.fleet, routes:rt.routes, activities:rt.activities };
@@ -1150,9 +1331,25 @@ async function init(){
       }
     }catch(e){}
     finally{ Store._polling = false; }
-  }, 20000);
+  }, 15000);
   // ซิงก์ข้อมูลทั้งหมดเบื้องหลังทุก 120 วิ — สถานะที่คนขับ/เครื่องอื่นอัปเดต จะขึ้นเองอัตโนมัติ
   // (getBootstrap วัดจริงหน้างานช้าได้ถึง 20-35 วิ โดยเฉพาะตอนมีคนเปิดแอปพร้อมกันหลายคน จึงยืดรอบให้ห่างขึ้นเพื่อลดโอกาสซ้อนคิว)
   Store.syncTimer = setInterval(silentSync, 120000);
+  // ดึง SO จาก TRCloud ทุก 3 นาที (ช่อง webhook SO ถูก gvtools ใช้อยู่ แก้ไม่ได้ — ใช้ poll แทน)
+  // เบาลง — sync หนักทำให้ Worker 503/1102; ผู้ใช้กดดึงเองได้ที่หน้า TRCloud
+  Store.trcloudTimer = setInterval(silentTrcloudSync, 600000);
+  setTimeout(silentTrcloudSync, 30000);
+}
+async function silentTrcloudSync(){
+  if(!API.configured() || Store._trcloudSyncing || Store.pending || (typeof document!=='undefined' && document.hidden)) return;
+  Store._trcloudSyncing = true;
+  try{
+    const r = await API.post('syncTrcloudOrders', { dateTo: Store.date, workDate: Store.date, lookbackDays: 2, limit: 80 });
+    if(r && ((r.imported|0) > 0 || (r.updated|0) > 0)){
+      await silentSync();
+      if(['deliveries','dashboard','trcloud'].includes(Store.page)) render();
+    }
+  }catch(e){}
+  finally{ Store._trcloudSyncing = false; }
 }
 document.addEventListener('DOMContentLoaded', init);

@@ -3,10 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Delivery Dispatch & Route Control Center</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>ระบบจัดส่งประจำวัน — GV Dispatch</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="favicon.png">
@@ -22,7 +19,7 @@
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-logo-wrap"><img class="brand-logo" src="logo-dark.png" alt="GV Dispatch"></div>
-        <div class="brand-cap">DISPATCH &amp; ROUTE CONTROL</div>
+        <div class="brand-cap">ศูนย์ควบคุมการจัดส่ง</div>
       </div>
       <nav class="nav scrolly" id="nav"><!-- built by JS --></nav>
       <div class="sidebar-foot">
@@ -43,20 +40,23 @@
         </button>
         <div class="search">
           <i data-lucide="search"></i>
-          <input id="globalSearch" placeholder="ค้นหางานส่ง, ลูกค้า, เลขบิล…" autocomplete="off">
+          <input id="globalSearch" placeholder="ค้นหา PO, เลขบิล, ลูกค้า…" autocomplete="off">
         </div>
         <div class="spacer"></div>
         <div class="chip-sync"><span class="sync-dot" id="syncDot2" style="background:#9AA3B2"></span><span id="syncText2">—</span></div>
+        <button class="btn btn-sm" id="driverModeBtn" title="เปิดโหมดคนขับ / QR ให้สแกน" style="gap:6px">
+          <i data-lucide="smartphone"></i><span class="dtext">โหมดคนขับ</span>
+        </button>
         <button class="bell"><i data-lucide="bell"></i><span class="badge" id="bellBadge">0</span></button>
         <div class="user">
           <div class="avatar"><i data-lucide="user"></i></div>
-          <span class="dtext" style="font-size:14px;font-weight:500;color:#1F2533">ผู้จัดการระบบ</span>
+          <span class="dtext" style="font-size:14px;font-weight:500;color:#1F2533">หัวหน้างาน</span>
         </div>
       </header>
       <div id="hintBar" class="hintbar" style="display:none">
         <i data-lucide="info"></i>
-        <span>เปิดครั้งแรกแล้วข้อมูลไม่ขึ้น หรือขึ้น "โหมดทดลอง"? กด <b>Ctrl + Shift + R</b> เพื่อล้างแคชแล้วโหลดใหม่</span>
-        <button class="hint-btn" id="hintReload"><i data-lucide="refresh-cw"></i>โหลดใหม่</button>
+        <span>เริ่มวันนี้: <b>เพิ่มงานส่ง → จัดรถ → ให้คนขับรับงาน</b> (ดู checklist ในหน้า “วันนี้”)</span>
+        <button class="hint-btn" id="hintReload"><i data-lucide="list-checks"></i>ดูขั้นตอน</button>
         <button class="hint-x" id="hintClose" aria-label="ปิด"><i data-lucide="x"></i></button>
       </div>
       <main class="view scrolly" id="view"></main>
