@@ -763,7 +763,55 @@ function updateSync(){
   ['syncText'].forEach(id=>{ if(el(id)) el(id).textContent=txt; });
   if(el('syncSub')) el('syncSub').textContent = Store.lastSync ? ('อัพเดท '+ago(Store.lastSync)) : '—';
 }
-function setDateLabel(){ if(el('dateLabel')) el('dateLabel').textContent = thDate(Store.date); }
+function setDateLabel(){
+  const lbl = el('dateLabel');
+  if (!lbl) return;
+  const today = new Date().toISOString().slice(0, 10);
+  lbl.textContent = Store.date === today ? ('วันนี้ · ' + thDate(Store.date)) : thDate(Store.date);
+}
+function openDatePicker(){
+  const today = new Date().toISOString().slice(0, 10);
+  const isToday = Store.date === today;
+  const isMock = Store.date === DATA_DATE;
+  const refreshPreview = () => {
+    const v = el('pkDate') && el('pkDate').value;
+    const th = el('pkDateTh');
+    if (th && v) th.textContent = thDate(v);
+  };
+  const m = modal({
+    title: 'เลือกวันทำงาน',
+    body: `<p class="small muted" style="margin:0 0 14px;line-height:1.55">เลือกวันที่ต้องการดูงานส่งและจัดรถ — งานค้างที่เลื่อนมาจะแสดงในวันนั้น</p>
+      <div class="date-pick-card">
+        <div class="field" style="margin:0">
+          <label class="label">วันทำงาน</label>
+          <input type="date" class="input" id="pkDate" value="${Store.date}">
+          <div class="date-pick-preview" id="pkDateTh">${thDate(Store.date)}</div>
+        </div>
+        <div class="date-pick-quick">
+          <button class="btn btn-sm ${isToday ? 'btn-primary' : ''}" data-quick="today" type="button"><i data-lucide="calendar-check"></i>วันนี้</button>
+          <button class="btn btn-sm ${isMock ? 'btn-primary' : ''}" data-quick="data" type="button"><i data-lucide="flask-conical"></i>ข้อมูลทดลอง</button>
+        </div>
+        <div class="small muted" style="margin-top:10px;line-height:1.45">ข้อมูลทดลอง = ${thDate(DATA_DATE)}</div>
+      </div>`,
+    foot: `<button class="btn" id="pkCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="pkOk" type="button"><i data-lucide="check"></i>ยืนยัน</button>`
+  });
+  icons();
+  const pk = el('pkDate');
+  if (pk) pk.onchange = refreshPreview;
+  $$('[data-quick]').forEach(b => b.onclick = () => {
+    pk.value = b.dataset.quick === 'today' ? today : DATA_DATE;
+    $$('[data-quick]').forEach(x => x.classList.toggle('btn-primary', x === b));
+    refreshPreview();
+  });
+  el('pkCancel').onclick = m.close;
+  el('pkOk').onclick = async () => {
+    Store.date = pk.value;
+    m.close();
+    setDateLabel();
+    await loadBootstrap();
+    render();
+  };
+}
 
 /** บิลซ้ำในฐานข้อมูล (sync หลายรอบ) → แสดงแค่ 1 รายการต่อเลขบิล */
 function normalizeDeliveries(list){
@@ -1317,21 +1365,6 @@ function bindShell(){
     _searchT = setTimeout(()=>{ Store.search=v; if(['deliveries','planning','customers'].includes(Store.page)) render(); }, 250);
   });
 }
-function openDatePicker(){
-  const m = modal({ title:'เลือกวันที่', body:`
-    <div class="field"><label class="label">วันที่จัดส่ง</label><input type="date" class="input" id="pkDate" value="${Store.date}"></div>
-    <div class="flex gap8 wrap">
-      <button class="btn btn-sm" data-quick="today">วันนี้</button>
-      <button class="btn btn-sm" data-quick="data">ข้อมูลทดลอง (20 ก.ค. 2569)</button>
-    </div>`, foot:`<button class="btn" id="pkCancel">ยกเลิก</button><button class="btn btn-primary" id="pkOk"><i data-lucide="check"></i>เลือก</button>` });
-  $$('[data-quick]').forEach(b=>b.onclick=()=>{ el('pkDate').value = b.dataset.quick==='today'? new Date().toISOString().slice(0,10) : DATA_DATE; });
-  el('pkCancel').onclick = m.close;
-  el('pkOk').onclick = async ()=>{ Store.date = el('pkDate').value; m.close(); await loadBootstrap(); render(); };
-}
-
-/* ================================================================
-   PAGES  (defined in app.pages.js via ROUTES)
-   ================================================================ */
 /* ROUTES are registered in app.pages.js */
 
 /* ================================================================

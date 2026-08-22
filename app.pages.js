@@ -136,6 +136,7 @@ ROUTES.dashboard = async function(view){
   });
   const rows = applyDeliveryFilter(searched);
   const districts = districtCounts(dispatchable);
+  const staffList = staffCounts(open);
   const selIds = [...dPick.sel].filter(id => open.some(d => d.DeliveryID === id));
   const selN = selIds.length;
   const selAmount = selIds.reduce((n, id) => {
@@ -147,7 +148,7 @@ ROUTES.dashboard = async function(view){
   page(view, `
     ${head('วันนี้', `${thDate(Store.date)} · ${int(open.length)} ที่ · ${int(districts.length)} เขต`,
       `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}
-    <div class="notice info mb14"><i data-lucide="info"></i><div><b>เลือกเขต</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b> · จัดรอบใหม่ให้กลับมาเลือกเขตอีกครั้ง</div></div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>
     <div class="del-search mb14">
       <i data-lucide="search"></i>
       <input id="delSearch" class="input" placeholder="กรอกเขต หรือค้นหาร้าน…" value="${esc(Store.search || '')}">
@@ -157,12 +158,7 @@ ROUTES.dashboard = async function(view){
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
         ${rows.length ? `<table class="tbl del-tbl">
-          <thead><tr>
-            <th class="c" style="width:42px"><input type="checkbox" id="dSelAll" ${allChecked ? 'checked' : ''}></th>
-            <th>ชื่อร้าน</th><th>เขต</th><th class="r">มูลค่า</th>
-            <th>เลขที่เอกสารอ้างอิง</th><th>เลขบิล</th>
-            <th>วันที่เอกสาร</th><th>วันครบกำหนด</th>
-          </tr></thead>
+          ${delTableHead(staffList)}
           <tbody>${rows.map(d => {
             const zone = DelView.zone(d);
             const po = DelView.poNo(d);
@@ -171,6 +167,7 @@ ROUTES.dashboard = async function(view){
             return `<tr class="${dPick.sel.has(d.DeliveryID) ? 'row-sel' : ''}">
               <td class="c"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${dPick.sel.has(d.DeliveryID) ? 'checked' : ''}></td>
               <td class="strong">${esc(d.CustomerName || '—')}${d.Address ? `<div class="small muted" style="font-weight:400;margin-top:2px">${esc(shortAddr(d.Address, 64))}</div>` : ''}</td>
+              <td>${delStaffBadge(d)}</td>
               <td>${zone ? esc(zone) : '<span class="muted">—</span>'}</td>
               <td class="r">${delAmountHtml(d)}</td>
               <td class="mono small">${esc(po || '—')}</td>
@@ -179,7 +176,7 @@ ROUTES.dashboard = async function(view){
               <td class="small tab">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</td>
             </tr>`;
           }).join('')}</tbody>
-        </table>` : emptyState('ไม่มีงานตามเขตนี้','ลองเลือกเขตอื่น หรือรีเฟรชข้อมูล')}
+        </table>` : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขต / ชื่อร้าน / WALK-IN หรือรีเฟรชข้อมูล')}
         </div>
       </div>
       <div class="m-only" style="padding:12px">
@@ -198,28 +195,44 @@ ROUTES.dashboard = async function(view){
       ds._t = setTimeout(() => ROUTES.dashboard(view), 200);
     };
   }
+  const fn = view.querySelector('#fName');
+  if (fn) {
+    fn.oninput = () => {
+      dPick.nameFilter = fn.value.trim();
+      clearTimeout(fn._t);
+      fn._t = setTimeout(() => ROUTES.dashboard(view), 200);
+    };
+  }
+  const fs = view.querySelector('#fStaff');
+  if (fs) fs.onchange = () => { dPick.staffFilter = fs.value; ROUTES.dashboard(view); };
   $$('[data-district]', view).forEach(b => b.onclick = () => {
-    dPick.district = b.dataset.district || '';
-    dPick.sel.clear();
-    const dist = dPick.district;
-    if (dist) {
-      normalizeDeliveries(dispatchable.filter(d => {
-        const z = DelView.zone(d);
-        return dist === '__none__' ? !z : z === dist;
-      })).forEach(d => dPick.sel.add(d.DeliveryID));
+    const dist = b.dataset.district || '';
+    if (!dist) {
+      dPick.districts.clear();
+      dPick.sel.clear();
       Plan.result = null;
-      handoffSelectionToPlan([...dPick.sel]);
-      location.hash = '#/planning';
+      ROUTES.dashboard(view);
       return;
     }
+    if (dPick.districts.has(dist)) {
+      dPick.districts.delete(dist);
+      deliveriesForDistrict(dispatchable, dist).forEach(d => dPick.sel.delete(d.DeliveryID));
+    } else {
+      dPick.districts.add(dist);
+      deliveriesForDistrict(dispatchable, dist).forEach(d => dPick.sel.add(d.DeliveryID));
+    }
+    Plan.result = null;
     ROUTES.dashboard(view);
   });
   const selAll = view.querySelector('#dSelAll');
-  if (selAll) selAll.onchange = () => {
-    if (selAll.checked) rows.forEach(d => dPick.sel.add(d.DeliveryID));
-    else rows.forEach(d => dPick.sel.delete(d.DeliveryID));
-    ROUTES.dashboard(view);
-  };
+  if (selAll) {
+    selAll.checked = allChecked;
+    selAll.onchange = () => {
+      if (selAll.checked) rows.forEach(d => dPick.sel.add(d.DeliveryID));
+      else rows.forEach(d => dPick.sel.delete(d.DeliveryID));
+      ROUTES.dashboard(view);
+    };
+  }
   $$('.d-sel', view).forEach(cb => cb.onchange = () => {
     if (cb.checked) dPick.sel.add(cb.dataset.sel); else dPick.sel.delete(cb.dataset.sel);
     ROUTES.dashboard(view);
@@ -231,14 +244,14 @@ ROUTES.dashboard = async function(view){
     handoffSelectionToPlan([...dPick.sel]);
     location.hash = '#/planning';
   };
-  const clr = view.querySelector('[data-act="dselClear"]'); if (clr) clr.onclick = () => { dPick.sel.clear(); ROUTES.dashboard(view); };
+  const clr = view.querySelector('[data-act="dselClear"]'); if (clr) clr.onclick = () => { dPick.sel.clear(); dPick.districts.clear(); ROUTES.dashboard(view); };
 };
 
 /* ================================================================
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), filter: 'all', district: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'all', nameFilter: '', staffFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
   { key:'all', label:'ทั้งหมด' },
   { key:'noRoute', label:'ยังไม่จัดรถ' },
@@ -265,6 +278,18 @@ const DelView = {
     const m = String(d.Note || '').match(/\bPR[\w\/.-]+/i);
     return m ? m[0] : '';
   },
+  /** พนักงานขาย / ช่องทาง TRCloud — เช่น 116-WALK-IN, 04-TENG */
+  salesStaff(d){
+    if (d.SalesStaff) return String(d.SalesStaff).trim();
+    const note = String(d.Note || '');
+    let m = note.match(/พนักงานขาย:\s*([^·|]+)/);
+    if (m) return m[1].trim();
+    const first = note.split('·')[0].trim();
+    if (/^\d{2,3}-[\w-]+$/i.test(first) || /WALK-IN/i.test(first)) return first;
+    m = note.match(/\b(\d{2,3}-[A-Z0-9-]+)\b/i);
+    return m ? m[1].trim() : '';
+  },
+  isWalkIn(d){ return /WALK-IN/i.test(this.salesStaff(d)); },
   poNo(d){ return String(d.PoNo || '').trim(); },
   invoiceNo(d){ return String(d.InvoiceNo || '').trim(); },
   /** เขต จากที่อยู่เดิม — ไม่คิดทิศเข็มทิศ */
@@ -306,11 +331,24 @@ function applyDeliveryFilter(rows){
   if (f === 'dueToday') out = out.filter(d => DelView.isDueToday(d));
   if (f === 'overdue') out = out.filter(d => DelView.isOverdue(d));
   if (f === 'selected') out = out.filter(d => dPick.sel.has(d.DeliveryID));
-  if (dPick.district) {
-    if (dPick.district === '__none__') out = out.filter(d => !DelView.zone(d));
-    else out = out.filter(d => DelView.zone(d) === dPick.district);
+  if (dPick.districts.size) {
+    out = out.filter(d => dPick.districts.has(deliveryDistrictKey(d)));
   }
+  const nf = String(dPick.nameFilter || '').trim().toLowerCase();
+  if (nf) out = out.filter(d => String(d.CustomerName || '').toLowerCase().includes(nf));
+  const sf = dPick.staffFilter;
+  if (sf === '__walkin__') out = out.filter(d => DelView.isWalkIn(d));
+  else if (sf) out = out.filter(d => DelView.salesStaff(d) === sf);
   return out;
+}
+function deliveryDistrictKey(d){
+  return DelView.zone(d) || '__none__';
+}
+function deliveryDistrictLabel(key){
+  return key === '__none__' ? 'ไม่ระบุเขต' : key;
+}
+function deliveriesForDistrict(list, distKey){
+  return normalizeDeliveries((list || []).filter(d => deliveryDistrictKey(d) === distKey));
 }
 function deliveryFilterCounts(allRows){
   return {
@@ -327,6 +365,50 @@ function routeVehicleLabel(routeId){
   if (!r) return routeId;
   return r.LicensePlate || r.VehicleName || r.ProviderName || r.DriverName || routeId;
 }
+function staffCounts(list){
+  const map = new Map();
+  (list || []).forEach(d => {
+    const s = DelView.salesStaff(d);
+    if (!s) return;
+    map.set(s, (map.get(s) || 0) + 1);
+  });
+  return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
+}
+function delStaffFilterHtml(staffList){
+  const opts = ['<option value="">ทั้งหมด</option>',
+    `<option value="__walkin__"${dPick.staffFilter === '__walkin__' ? ' selected' : ''}>WALK-IN ทั้งหมด</option>`]
+    .concat(staffList.map(([name, n]) =>
+      `<option value="${esc(name)}"${dPick.staffFilter === name ? ' selected' : ''}>${esc(name)} (${int(n)})</option>`
+    ));
+  return `<select class="select del-filter-input" id="fStaff" title="กรองช่องทาง / พนักงานขาย">${opts.join('')}</select>`;
+}
+function delTableHead(staffList){
+  return `<thead>
+    <tr class="del-head-row">
+      <th class="c" style="width:42px"><input type="checkbox" id="dSelAll"></th>
+      <th>ชื่อร้าน</th>
+      <th>WALK-IN / ชื่อ</th>
+      <th>เขต</th>
+      <th class="r">มูลค่า</th>
+      <th>เลขที่เอกสารอ้างอิง</th>
+      <th>เลขบิล</th>
+      <th>วันที่ออกเอกสาร</th>
+      <th>กำหนดส่งของ</th>
+    </tr>
+    <tr class="del-filter-row">
+      <th class="c"></th>
+      <th><input class="input del-filter-input" id="fName" placeholder="กรองชื่อร้าน…" value="${esc(dPick.nameFilter || '')}"></th>
+      <th>${delStaffFilterHtml(staffList)}</th>
+      <th colspan="6"><span class="small muted">ใช้ chip เขตด้านบนกรองตามพื้นที่</span></th>
+    </tr>
+  </thead>`;
+}
+function delStaffBadge(d){
+  const s = DelView.salesStaff(d);
+  if (!s) return '<span class="muted">—</span>';
+  const walk = DelView.isWalkIn(d);
+  return `<span class="badge ${walk ? 'b-cyan' : 'b-blue'}" style="font-size:10px">${esc(s)}</span>`;
+}
 function districtCounts(list){
   const map = new Map();
   (list || []).forEach(d => {
@@ -338,12 +420,18 @@ function districtCounts(list){
 function districtChipsHtml(list){
   const counts = districtCounts(list);
   const noneN = (list || []).filter(d => !DelView.zone(d)).length;
-  const chips = [`<button type="button" class="pw-step ${!dPick.district ? 'on' : ''}" data-district="">ทั้งหมด (${int(list.length)})</button>`]
-    .concat(counts.filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) =>
-      `<button type="button" class="pw-step ${dPick.district === name ? 'on' : ''}" data-district="${esc(name)}">${esc(name)} (${int(n)})</button>`
-    ));
-  if (noneN) chips.push(`<button type="button" class="pw-step ${dPick.district === '__none__' ? 'on' : ''}" data-district="__none__">ไม่ระบุเขต (${int(noneN)})</button>`);
-  return `<div class="plan-wizard-steps mb14" id="districtChips">${chips.join('')}</div>`;
+  const ds = dPick.districts;
+  const allOn = !ds.size;
+  const chip = (key, label, n) => {
+    const on = ds.has(key);
+    return `<button type="button" class="pw-step ${on ? 'on' : ''}" data-district="${esc(key)}" title="ติ๊กเลือก/ยกเลิกเขต">${on ? '☑ ' : ''}${esc(label)} (${int(n)})</button>`;
+  };
+  const chips = [`<button type="button" class="pw-step ${allOn ? 'on' : ''}" data-district="">ทั้งหมด (${int(list.length)})</button>`]
+    .concat(counts.filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) => chip(name, name, n)));
+  if (noneN) chips.push(chip('__none__', 'ไม่ระบุเขต', noneN));
+  const picked = ds.size ? `<span class="small strong" style="color:var(--brand-ink)">เลือก ${int(ds.size)} เขต</span>` : '';
+  return `<div class="flex between aic wrap gap8 mb8"><span class="small muted">ติ๊กเลือกหลายเขต · รวมบิลแล้วกด <b>จัดรถอัตโนมัติ</b></span>${picked}</div>
+    <div class="plan-wizard-steps mb14" id="districtChips">${chips.join('')}</div>`;
 }
 function delKpiStrip(kpi){
   const cell = (label, val, color) => `<div class="del-kpi-card" style="--kpi:${color}">
@@ -368,9 +456,13 @@ function delAmountHtml(d){
 }
 function delSelectionBar(selN, selAmount){
   if (!selN) return '';
+  const distHint = dPick.districts.size
+    ? `<div class="small muted">${[...dPick.districts].map(deliveryDistrictLabel).join(' · ')}</div>`
+    : '';
   return `<div class="del-sel-bar" id="delSelBar">
     <div class="del-sel-meta">
       <div class="strong">เลือกแล้ว ${int(selN)} ร้าน</div>
+      ${distHint}
       ${selAmount > 0 ? `<div class="small muted">มูลค่ารวม ${money(selAmount)} บาท</div>` : `<div class="small muted">กดจัดรถรายการที่เลือก</div>`}
     </div>
     <div class="del-sel-actions">
@@ -397,10 +489,10 @@ function delMobileCard(d){
     </div>
     <div class="job-card-grid">
       <div><span class="lbl">มูลค่า</span><div class="val">${delAmountHtml(d)}</div></div>
-      <div><span class="lbl">เลขอ้างอิง</span><div class="val mono">${esc(po || '—')}</div></div>
+      <div><span class="lbl">WALK-IN / ชื่อ</span><div class="val">${delStaffBadge(d)}</div></div>
       <div><span class="lbl">เลขบิล</span><div class="val mono">${esc(invShow || inv || '—')}</div></div>
-      <div><span class="lbl">วันที่เอกสาร</span><div class="val">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</div></div>
-      <div><span class="lbl">วันครบกำหนด</span><div class="val">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</div></div>
+      <div><span class="lbl">วันที่ออกเอกสาร</span><div class="val">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</div></div>
+      <div><span class="lbl">กำหนดส่งของ</span><div class="val">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</div></div>
     </div>
   </div>`;
 }
@@ -467,7 +559,8 @@ function qdBody(){
         :`<select class="select" id="qdVeh">${veh.map(x=>`<option value="${esc(x.VehicleID)}" ${QD.vehId===x.VehicleID?'selected':''}>${esc(vehicleOptionLabel(x))}</option>`).join('')}</select>`}</div>
     <div class="field"><label class="label">คนขับ</label><input class="input" id="qdDriver" list="qdEmp" value="${esc(QD.driver)}" placeholder="ชื่อคนขับ"><datalist id="qdEmp">${emps.map(e=>`<option value="${esc(e.EmployeeName)}">`).join('')}</datalist></div>
     <div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-      <div class="flex between" style="font-size:13px;margin-bottom:6px"><span class="muted">ระยะทาง (ตามแผนที่ · ไป)</span><span class="tab strong">${num1(Planner.routeDisplayKm(m))} กม.${m.source==='straight'?' <span class="small muted">(ประมาณ)</span>':''}</span></div>
+      <div class="flex between" style="font-size:13px;margin-bottom:4px"><span class="muted">ระยะทาง (ไป · ตามแผนที่)</span><span class="tab strong">${num1(Planner.routeDisplayKm(m))} กม.${m.source==='straight'?' <span class="small muted">(ประมาณ)</span>':''}</span></div>
+      <div class="flex between" style="font-size:13px;margin-bottom:6px"><span class="muted">ระยะทาง (ไป-กลับ · ตามแผนที่)</span><span class="tab">${num1(Planner.fuelDistanceKm(m))} กม.${m.source==='straight'?' <span class="small muted">(ประมาณ)</span>':''}</span></div>
       ${row('ค่าน้ำมัน',c.fuel)}
       ${qdEdit('ค่าทางด่วน','qdToll',Number(QD.toll)||0,'ใส่ 0 ถ้าไม่ขึ้นทางด่วน')}
       ${qdEdit('ค่าจอดรถ','qdPark',Number(QD.parking)||0, Planner.isMall(d)?'ปลายทางเป็นห้าง':'ร้านเดี่ยว')}
@@ -520,8 +613,8 @@ function deliveryForm(d){
       <div><label class="label">จำนวน (ชิ้น)</label><input class="input" type="number" id="fBox" value="${esc(d.BoxQty||'')}" title="จาก TRCloud คอลัมน์ จำนวน — รวมทุกรายการสินค้า"><div class="small muted" style="margin-top:4px">เทียบ TRCloud: จำนวน</div></div>
       <div></div></div>
     <div class="field row2">
-      <div><label class="label">วันที่เปิดบิล/เอกสาร</label><input class="input" type="date" id="fDocDate" value="${esc((d.DocumentDate||'').slice(0,10))}"><div class="small muted" style="margin-top:4px">TRCloud: วันที่ออกเอกสาร</div></div>
-      <div><label class="label">วันกำหนดส่ง</label><input class="input" type="date" id="fDueDate" value="${esc((d.DueDate||d.DeliveryDate||'').slice(0,10))}"><div class="small muted" style="margin-top:4px">TRCloud: กำหนดส่งของ</div></div></div>
+      <div><label class="label">วันที่ออกเอกสาร</label><input class="input" type="date" id="fDocDate" value="${esc((d.DocumentDate||'').slice(0,10))}"></div>
+      <div><label class="label">กำหนดส่งของ</label><input class="input" type="date" id="fDueDate" value="${esc((d.DueDate||d.DeliveryDate||'').slice(0,10))}"></div></div>
     <div class="field"><label class="label">ที่อยู่ (ถ้าไม่ได้เลือกลูกค้า ระบบจะหาพิกัดจากที่อยู่นี้ให้)</label><input class="input" id="fAddr" value="${esc(d.Address||'')}"></div>
     <input type="hidden" id="fLat" value="${esc(d.Latitude||'')}"><input type="hidden" id="fLng" value="${esc(d.Longitude||'')}">
     <div id="fGeoStat"></div>
@@ -696,8 +789,8 @@ async function renderPlanTab(view){
     return;
   }
 
-  const districtLabel = dPick.district && dPick.district !== '__none__'
-    ? dPick.district
+  const districtLabel = dPick.districts.size
+    ? [...dPick.districts].map(deliveryDistrictLabel).join(' · ')
     : (selected.length === 1 ? DelView.zone(selected[0]) : '');
 
   page(view, `
@@ -812,7 +905,7 @@ function renderDecision(){
 
   dec.innerHTML = `
     <div class="flex between aic mb14">
-      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน · ${num1(Planner.routeDisplayKm(m))} กม.${m.source==='osrm'?'':' (ประมาณ)'} · ${Planner.fmtDur(m.durationMin)}</span>
+      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน · ${num1(Planner.routeDisplayKm(m))} กม. ไป · ${num1(Planner.fuelDistanceKm(m))} กม. ไป-กลับ${m.source==='osrm'?'':' (ประมาณ)'} · ${Planner.fmtDur(m.durationMin)}</span>
       <button class="btn btn-sm" id="replan" type="button"><i data-lucide="rotate-cw"></i>เรียงลำดับใหม่</button>
     </div>
     ${timeWarn}
@@ -1026,7 +1119,7 @@ async function confirmRoute(){
     Latitude:s.Latitude, Longitude:s.Longitude, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) }));
   Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
-  if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.district = ''; }
+  if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.districts.clear(); }
   Plan.tab = 'plan';
   toast('บันทึกรายการแล้ว — เปิดใบงานให้พิมพ์','ok','บันทึกแล้ว');
   location.hash = '#/dashboard';
@@ -1104,7 +1197,7 @@ function routeCard(r){
       ${rItem('รถ',esc(r.VehicleName||r.ProviderName||'—'))}
       ${rItem('จุดส่ง',int(r.TotalStops)+' จุด')}
       ${rItem('กล่อง',int(r.TotalBoxes))}
-      ${rItem('ระยะทาง',num1(r.TotalDistance)+' กม.')}
+      ${rItem('ระยะทาง (ไป)',num1(r.TotalDistance)+' กม.')}
       ${rItem('ต้นทุน',money(r.EstimatedTotalCost)+' ฿')}
     </div></div>`;
 }
@@ -1857,25 +1950,29 @@ async function printRouteNote(r){
     return Number.isFinite(km) && km > 0 ? num1(km) : '—';
   };
   const row=(l,v)=>`<div><span>${l}:</span> <b>${esc(v==null||v===''?'-':v)}</b></div>`;
-  let distKm = Number(r.TotalDistance) || 0;
+  let distOutKm = Number(r.TotalDistance) || 0;
+  let distRoundKm = 0;
   let fuelCost = Number(r.EstimatedFuelCost) || 0;
-  let distNote = '';
+  let mapTag = '';
   const mapCalc = await Planner.metricsForStops(stops);
   if(mapCalc && mapCalc.metrics){
     const mm = mapCalc.metrics;
-    distKm = Planner.routeDisplayKm(mm);
-    distNote = mm.source === 'osrm' ? ' (ตามแผนที่)' : ' (ประมาณ)';
+    distOutKm = Planner.routeDisplayKm(mm);
+    distRoundKm = Planner.fuelDistanceKm(mm);
+    mapTag = mm.source === 'osrm' ? ' · ตามแผนที่' : ' · ประมาณ';
     const veh = (Store.data.vehicles||[]).find(v => v.LicensePlate && r.LicensePlate && v.LicensePlate === r.LicensePlate);
     fuelCost = r.RouteType === 'EXTERNAL_VEHICLE'
       ? Number(r.EstimatedExternalCost) || 0
-      : Planner.fuelCost(Planner.fuelDistanceKm(mm), veh);
+      : Planner.fuelCost(distRoundKm, veh);
   }
   const body=`
     <div class="kv">
       ${row('รอบส่ง',r.RouteID)}${row('วันที่',thDate(r.DeliveryDate))}
       ${row('คนขับ',r.DriverName)}${row('รถ',((r.VehicleName||r.ProviderName||'') + (r.LicensePlate ? ' · '+r.LicensePlate : '')).trim() || '-')}
       ${row('จำนวนบิล',int(stops.length))}${row('จำนวนรวม',int(r.TotalBoxes))}
-      ${row('ระยะทาง'+distNote,num1(distKm)+' กม.')}${row('ค่าน้ำมัน (ประมาณ)',money(fuelCost)+' บาท')}</div>
+      ${row('ระยะทาง (ไป'+mapTag+')',num1(distOutKm)+' กม.')}
+      ${distRoundKm ? row('ระยะทาง (ไป-กลับ'+mapTag+')',num1(distRoundKm)+' กม.') : ''}
+      ${row('ค่าน้ำมัน (ประมาณ · จากไป-กลับ)',money(fuelCost)+' บาท')}</div>
     <div class="sec-title">รายการขึ้นของ / จุดส่ง — ให้คนขับเช็คก่อนออกรถ</div>
     <table class="slip-table">
       <colgroup><col style="width:5%"><col style="width:4%"><col style="width:6%"><col style="width:18%"><col style="width:13%"><col style="width:13%"><col style="width:7%"><col></colgroup>

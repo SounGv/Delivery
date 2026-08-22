@@ -80,6 +80,11 @@ input,select,textarea{font-family:inherit;}
 .date-btn{display:flex;align-items:center;gap:10px;height:var(--ctrl-h);padding:0 14px;border-radius:9px;
   border:1px solid var(--border);background:#fff;color:var(--ink-2);font-size:14px;font-weight:500;}
 .date-btn:hover{background:#F5F7FA;} .date-btn i{width:18px;height:18px;color:#6B7383;}
+.date-btn .dtext{white-space:nowrap;}
+.date-pick-card{border:1px solid var(--border);border-radius:12px;padding:16px;background:var(--bg,#FAFBFC);}
+.date-pick-preview{margin-top:8px;font-size:15px;font-weight:600;color:var(--ink-2);}
+.date-pick-quick{display:flex;gap:8px;margin-top:14px;}
+.date-pick-quick .btn{flex:1;justify-content:center;}
 .search{position:relative;flex:1;max-width:420px;}
 .search i{width:18px;height:18px;color:var(--muted-2);position:absolute;left:14px;top:50%;transform:translateY(-50%);}
 .search input{width:100%;height:var(--ctrl-h);border:1px solid var(--border);border-radius:9px;background:var(--bg);
@@ -202,7 +207,7 @@ input,select,textarea{font-family:inherit;}
 
 .plan-mobile-stack{display:flex;flex-direction:column;gap:14px;}
 .plan-wizard-steps .pw-step{flex:0 0 auto;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#EEF1F5;color:var(--muted);}
-.plan-wizard-steps .pw-step.on{background:var(--brand);color:var(--brand-ink-dark);}
+.plan-wizard-steps .pw-step.on{background:var(--brand);color:var(--brand-ink-dark);box-shadow:inset 0 0 0 2px rgba(0,0,0,.08);}
 .plan-wizard-steps .pw-step.done{background:var(--green-soft);color:var(--green-ink);}
 .plan-wizard-nav{display:flex;gap:10px;margin-top:16px;position:sticky;bottom:0;padding:12px 0;background:linear-gradient(180deg,transparent,var(--bg) 30%);}
 .plan-wizard-nav .btn{flex:1;}
@@ -346,7 +351,10 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
 .del-search > i{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:#9AA3B2;pointer-events:none}
 .del-search .input{padding-left:40px;min-height:var(--ctrl-h);height:var(--ctrl-h);font-size:15px;width:100%}
 .del-tbl-sticky{max-height:min(68vh,720px);overflow:auto;-webkit-overflow-scrolling:touch}
-.del-tbl thead th{position:sticky;top:0;z-index:2;background:#F7F8FA;box-shadow:0 1px 0 var(--border);font-size:var(--fs-th)}
+.del-tbl thead th{position:sticky;top:0;z-index:3;background:#F7F8FA;box-shadow:0 1px 0 var(--border);font-size:var(--fs-th)}
+.del-tbl thead tr.del-filter-row th{top:38px;z-index:2;background:#fff;padding:6px 8px;font-weight:500;box-shadow:0 1px 0 var(--border)}
+.del-filter-input{width:100%;min-height:32px;height:32px;font-size:12px;padding:0 8px}
+.del-filter-row .select.del-filter-input{padding-right:24px}
 .del-tbl tbody td{font-size:var(--fs-table)}
 .del-tbl tfoot td{position:sticky;bottom:0;background:#fff;box-shadow:0 -1px 0 var(--border);font-size:13px}
 .job-card-list{display:flex;flex-direction:column;gap:12px}
