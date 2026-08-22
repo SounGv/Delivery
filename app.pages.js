@@ -714,8 +714,8 @@ ROUTES.rounds = async function(view){
 };
 function planPageTabs(active){
   return `<div class="seg mb14" id="planTabs">
-    <button class="${active==='plan'?'on':''}" data-ptab="plan"><i data-lucide="sparkles" style="width:14px;height:14px"></i> วางแผนจัดรถ</button>
-    <button class="${active==='rounds'?'on':''}" data-ptab="rounds"><i data-lucide="list-checks" style="width:14px;height:14px"></i> รอบส่งวันนี้</button>
+    <button class="${active==='plan'?'on':''}" data-ptab="plan"><i data-lucide="route" style="width:14px;height:14px"></i> มอบหมายงาน</button>
+    <button class="${active==='rounds'?'on':''}" data-ptab="rounds"><i data-lucide="list-checks" style="width:14px;height:14px"></i> รอบส่งแล้ว</button>
   </div>`;
 }
 function bindPlanTabs(view){

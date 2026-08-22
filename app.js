@@ -107,7 +107,7 @@ const NAV = [
 const NAV_FOOT = [
   { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
   { id:'settings', label:'ตั้งค่า', icon:'settings' },
-  { id:'guide',    label:'คู่มือ',  icon:'book-open', href:'user-guide.html', external:true },
+  { id:'guide',    label:'คู่มือใช้งาน', icon:'book-open', href:'user-guide.html', external:true },
 ];
 
 /* ---------------- STATE ---------------- */
@@ -731,13 +731,12 @@ function buildNav(){
     g.items.forEach(it=>{ html += navLink(it); });
   });
   nav.innerHTML = html;
-  // footer links live in sidebar-foot area — inject settings/cartrack above sync
   const foot = $('.sidebar-foot');
   if(!$('#footLinks')){
-    const div = document.createElement('div'); div.id='footLinks'; div.style.marginBottom='8px';
-    div.innerHTML = NAV_FOOT.map(navLink).join('');
+    const div = document.createElement('div'); div.id='footLinks'; div.className='nav-foot-block';
+    div.innerHTML = `<div class="nav-group">เมนูเพิ่มเติม</div>${NAV_FOOT.map(navLink).join('')}`;
     foot.insertBefore(div, foot.firstChild);
-  } else { $('#footLinks').innerHTML = NAV_FOOT.map(navLink).join(''); }
+  } else { $('#footLinks').innerHTML = `<div class="nav-group">เมนูเพิ่มเติม</div>${NAV_FOOT.map(navLink).join('')}`; }
   // mobile bottom nav
   const m = el('mnav');
   const mItems = [
@@ -1226,20 +1225,7 @@ const Chart = {
 };
 
 /* ---------------- EVENTS: shell ---------------- */
-function setupHint(){
-  const bar = el('hintBar'); if(!bar) return;
-  if(localStorage.getItem('ddc_hint_off')){ bar.style.display='none'; return; }
-  bar.style.display='flex';
-  el('hintClose').onclick = ()=>{ localStorage.setItem('ddc_hint_off','1'); bar.style.display='none'; };
-  el('hintReload').onclick = ()=>{
-    localStorage.removeItem('ddc_onboarding_off');
-    location.hash = '#/dashboard';
-    bar.style.display='none';
-    render();
-  };
-}
 function bindShell(){
-  setupHint();
   el('menuBtn').onclick = ()=>{ el('sidebar').classList.toggle('open'); el('backdrop').classList.toggle('show'); };
   el('backdrop').onclick = ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); };
   el('nav').addEventListener('click', ()=>{ el('sidebar').classList.remove('open'); el('backdrop').classList.remove('show'); });
