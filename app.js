@@ -1196,8 +1196,11 @@ const Printer = {
         table{width:100%;border-collapse:collapse;margin:8px 0;}
         th,td{border:1px solid #d6dbe2;padding:${A5?'6px 9px':'8px 11px'};text-align:left;font-size:inherit;vertical-align:middle;}
         td{line-height:1.4;}
-        th{background:#0B1220;color:#fff;font-weight:600;white-space:nowrap;text-align:center;}
+        th{background:#0B1220;color:#fff;font-weight:600;text-align:center;}
         th.tl{text-align:left;}
+        .slip-table th{white-space:normal;font-size:10px;line-height:1.3;padding:5px 6px;}
+        .slip-table td{font-size:10.5px;padding:5px 6px;vertical-align:top;}
+        .slip-table .mono{word-break:break-all;}
         td.addr{vertical-align:top;}
         tbody tr:nth-child(even) td{background:#f7f9f4;}
         tfoot th{background:#f0f5dd;color:#0B1220;}

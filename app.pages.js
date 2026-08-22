@@ -88,6 +88,29 @@ function shortAddr(addr, max){
   const n = max || 72;
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
+/** TRCloud: organization มักมี (สาขา) ต่อท้าย — แยกชื่อกับ branch ให้ชัด */
+function trcBranchLabel(row){
+  const br = String((row && row.BranchName) || '').trim();
+  if (br) return br;
+  const m = String((row && row.CustomerName) || '').match(/\(([^)]+)\)\s*$/);
+  return m ? m[1].trim() : '';
+}
+function trcCustomerName(row){
+  if (!row) return '—';
+  let name = String(row.CustomerName || '').trim();
+  if (!name) return '—';
+  const br = trcBranchLabel(row);
+  if (br) {
+    const escBr = br.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    name = name.replace(new RegExp('\\s*\\(' + escBr + '\\)\\s*$'), '').trim();
+  } else {
+    name = name.replace(/\s*\([^)]+\)\s*$/, '').trim();
+  }
+  return name || String(row.CustomerName || '').trim();
+}
+function trcAddressOnly(row){
+  return String((row && row.Address) || '').trim();
+}
 function uniqueDocParts(d){
   const seen = new Set();
   const out = [];
@@ -1824,12 +1847,11 @@ async function printRouteNote(r){
     const d = deliveryForStop(s);
     return Number(d ? (d.BoxQty ?? s.BoxQty) : s.BoxQty) || 0;
   };
-  const addrForStop = s => {
-    const parts = [s.BranchName, s.Address].filter(Boolean);
-    if(parts.length) return parts.join(' · ');
+  const rowForStop = s => {
     const d = deliveryForStop(s);
-    return d && d.Address ? d.Address : '—';
+    return d || { CustomerName: s.CustomerName, BranchName: s.BranchName, Address: s.Address };
   };
+  const addrForStop = s => trcAddressOnly(rowForStop(s)) || '—';
   const row=(l,v)=>`<div><span>${l}:</span> <b>${esc(v==null||v===''?'-':v)}</b></div>`;
   const distKm = Number(r.TotalDistance) || 0;
   const fuelCost = Number(r.EstimatedFuelCost) || 0;
@@ -1840,20 +1862,20 @@ async function printRouteNote(r){
       ${row('จำนวนบิล',int(stops.length))}${row('จำนวนรวม',int(r.TotalBoxes))}
       ${row('ระยะทาง',num1(distKm)+' กม.')}${row('ค่าน้ำมัน (ประมาณ)',money(fuelCost)+' บาท')}</div>
     <div class="sec-title">รายการขึ้นของ / จุดส่ง — ให้คนขับเช็คก่อนออกรถ</div>
-    <table>
-      <colgroup><col style="width:5%"><col style="width:4%"><col style="width:18%"><col style="width:14%"><col style="width:14%"><col style="width:7%"><col></colgroup>
-      <thead><tr><th>☐</th><th>#</th><th>ลูกค้า</th><th>เลขที่เอกสารอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
-      <tbody>${stops.map(s=>`<tr>
+    <table class="slip-table">
+      <colgroup><col style="width:5%"><col style="width:4%"><col style="width:20%"><col style="width:14%"><col style="width:14%"><col style="width:7%"><col></colgroup>
+      <thead><tr><th>☐</th><th>#</th><th>ลูกค้า</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
+      <tbody>${stops.map(s=>{ const row = rowForStop(s); return `<tr>
         <td class="c">☐</td><td class="c">${s.StopOrder}</td>
-        <td>${esc(s.CustomerName||'—')}</td>
-        <td class="mono small">${esc(poForStop(s))}</td>
-        <td class="mono small">${esc(invForStop(s))}</td>
+        <td>${esc(trcCustomerName(row))}</td>
+        <td class="mono">${esc(poForStop(s))}</td>
+        <td class="mono">${esc(invForStop(s))}</td>
         <td class="r">${int(qtyNumForStop(s))}</td>
-        <td class="addr small">${esc(addrForStop(s))}</td>
-      </tr>`).join('')||'<tr><td colspan="7" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
+        <td class="addr">${esc(addrForStop(s))}</td>
+      </tr>`; }).join('')||'<tr><td colspan="7" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
       <tfoot><tr><th colspan="5" class="r">รวมจำนวน</th><th class="r">${int(stops.reduce((n,s)=>n+qtyNumForStop(s),0))}</th><th></th></tr></tfoot>
     </table>
-    <p class="small muted" style="margin:12px 0 0">หัวคอลัมน์ตาม TRCloud · เลขที่เอกสารอ้างอิง = reference · เลขบิล = ref_no · จำนวน = จำนวนชิ้น</p>
+    <p class="small muted" style="margin:10px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตาม #</p>
     <div class="sign"><div>ผู้จัดงาน</div><div>คนขับ (เช็คขึ้นของ)</div></div>`;
   Printer.open('ใบงานส่ง — เช็ครายการขึ้นของ', rSize(), body);
 }
