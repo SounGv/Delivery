@@ -105,13 +105,14 @@ function actIcon(a){ return {CREATE_DELIVERY:'package-plus',CREATE_ROUTE:'route'
 
 ROUTES.dashboard = async function(view){
   const open = (Store.data.deliveries || []).filter(d => DelView.isOpen(d));
+  const dispatchable = open.filter(d => DelView.isNoRoute(d));
   const searched = open.filter(d => {
     if (!Store.search) return true;
     if (matchSearch(d, ['CustomerName','BranchName','InvoiceNo','PoNo','Address'])) return true;
     return DelView.zone(d).toLowerCase().includes(Store.search);
   });
   const rows = applyDeliveryFilter(searched);
-  const districts = districtCounts(open);
+  const districts = districtCounts(dispatchable);
   const selIds = [...dPick.sel].filter(id => open.some(d => d.DeliveryID === id));
   const selN = selIds.length;
   const selAmount = selIds.reduce((n, id) => {
@@ -123,12 +124,12 @@ ROUTES.dashboard = async function(view){
   page(view, `
     ${head('วันนี้', `${thDate(Store.date)} · ${int(open.length)} ที่ · ${int(districts.length)} เขต`,
       `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}
-    <div class="notice info mb14"><i data-lucide="info"></i><div><b>กดเลือกเขต</b> → ระบบจัดเส้นทางให้อัตโนมัติ → <b>ยืนยัน</b> → <b>พิมพ์ใบงาน</b></div></div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div><b>กดเลือกเขต</b> → จัดเส้นทางอัตโนมัติ → <b>เลือกคนขับ</b> → <b>ยืนยัน</b> → <b>พิมพ์ใบงาน</b> (เช็ครายการขึ้นของ)</div></div>
     <div class="del-search mb14">
       <i data-lucide="search"></i>
       <input id="delSearch" class="input" placeholder="กรอกเขต หรือค้นหาร้าน…" value="${esc(Store.search || '')}">
     </div>
-    ${districtChipsHtml(open)}
+    ${districtChipsHtml(dispatchable)}
     <div class="card del-list-card ${selN ? 'has-sel' : ''}" style="padding:0">
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
@@ -179,7 +180,7 @@ ROUTES.dashboard = async function(view){
     dPick.sel.clear();
     const dist = dPick.district;
     if (dist) {
-      normalizeDeliveries(open.filter(d => {
+      normalizeDeliveries(dispatchable.filter(d => {
         const z = DelView.zone(d);
         return dist === '__none__' ? !z : z === dist;
       })).forEach(d => dPick.sel.add(d.DeliveryID));
@@ -680,12 +681,16 @@ async function renderPlanTab(view){
     : (selected.length === 1 ? DelView.zone(selected[0]) : '');
 
   page(view, `
-    ${head('จัดรถ', `${thDate(Store.date)} · ${int(selCount)} ร้าน${districtLabel ? ' · ' + esc(districtLabel) : ''}`,
+    ${head('จัดรถ', `${thDate(Store.date)} · ${int(uniqueShopCount(withGeo.length ? withGeo : selected))} ร้าน · ${int(selCount)} บิล${districtLabel ? ' · ' + esc(districtLabel) : ''}`,
       `<a class="btn btn-sm" href="#/dashboard" id="planChangeSel"><i data-lucide="map-pin"></i>เปลี่ยนเขต</a>`)}
     ${planPageTabs('plan')}
-    ${noGeo.length ? `<div class="notice warn mb14"><i data-lucide="map-pin-off"></i><div>${int(noGeo.length)} บิลยังไม่มีพิกัด — จัดได้ ${int(withGeo.length)} จุด (ระบบจะข้ามบิลที่ไม่มีพิกัด)</div></div>` : ''}
+    ${noGeo.length ? `<div class="notice warn mb14"><i data-lucide="map-pin-off"></i><div>
+      ${int(noGeo.length)} บิลยังไม่มีพิกัด — จัดได้ ${int(withGeo.length)} บิล (ระบบจะข้ามบิลที่ไม่มีพิกัด)
+      <details class="plan-skipped-bills"><summary>ดูรายการที่ข้าม</summary>
+        <ul class="small" style="margin:8px 0 0;padding-left:18px">${noGeo.map(d=>`<li>${esc(d.CustomerName||'—')} · ${esc(planBillLabel(d))}${d.Address?` · ${esc(shortAddr(d.Address,48))}`:''}</li>`).join('')}</ul>
+      </details></div></div>` : ''}
 
-    <div class="card plan-single" id="decision" style="padding:16px;max-width:720px;margin:0 auto">
+    <div class="card plan-single" id="decision" style="padding:16px">
       ${Plan.result ? '' : (Plan._autoRunning ? decisionLoading() : decisionInitial(withGeo.length))}
     </div>
   `);
@@ -713,11 +718,11 @@ async function renderPlanTab(view){
 };
 function decisionLoading(){
   return `<div class="h-card mb14">กำลังจัดเส้นทาง…</div>
-    <div class="notice info"><i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i><div>ระบบกำลังคำนวณลำดับจุดส่ง · เลือกรถ · ประมาณเวลา</div></div>`;
+    <p class="small muted" style="margin:0"><i data-lucide="loader-2" style="width:14px;height:14px;animation:spin 1s linear infinite;vertical-align:-2px"></i> คำนวณลำดับส่ง · เลือกรถ</p>`;
 }
 function decisionInitial(count){
-  return `<div class="h-card mb14">รอจัดเส้นทาง</div>
-    <div class="notice info mb14"><i data-lucide="info"></i><div>มี ${int(count)} จุดที่มีพิกัด — กำลังจัดเส้นทางอัตโนมัติ…</div></div>`;
+  return `<div class="h-card mb14">กำลังจัดเส้นทาง…</div>
+    <p class="small muted" style="margin:0">${int(count)} บิลพร้อมจัด — รอสักครู่</p>`;
 }
 function miniStat(l,v,ic){ return `<div class="flex between aic" style="padding:11px 13px;border:1px solid var(--border);border-radius:10px">
   <span class="flex aic gap8"><i data-lucide="${ic}" style="width:18px;height:18px;color:#6B7383"></i><span class="small muted">${l}</span></span>
@@ -753,74 +758,96 @@ async function runAutoPlan(){
   Plan._autoRunning = false;
   renderDecision();
 }
-function decisionVehicleSummary(isSplit, splitOpt){
-  if (isSplit && splitOpt) {
-    return splitOpt.split.map((g, i) => {
-      const sel = Plan.splitSel[i] || {};
-      const v = (Store.data.vehicles || []).find(x => x.VehicleID === sel.vehId) || g.v;
-      const drv = sel.driver || (v && v.CurrentDriver) || '—';
-      return `<div class="flex between aic" style="padding:8px 0;border-bottom:1px solid #F3F5F8;font-size:13px">
-        <span><b>รอบ ${i + 1}</b> · ${int(g.seq.length)} จุด</span>
-        <span class="muted">${esc(vehicleShortName(v) || '—')} · ${esc(drv)}</span></div>`;
-    }).join('');
+/** ร้านเดียวกัน / พิกัดเดียวกัน → โชว์แถวเดียว (หลายบิลรวม) */
+function stopGroupKey(s){
+  const lat = Number(s.Latitude), lng = Number(s.Longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return lat.toFixed(5) + ',' + lng.toFixed(5);
+  return String(s.CustomerName || '').trim().toLowerCase() + '|' + String(s.Address || '').trim().toLowerCase().slice(0, 48);
+}
+function groupStopsForDisplay(stops){
+  const out = [];
+  const seen = new Map();
+  for (const s of stops || []) {
+    const k = stopGroupKey(s);
+    if (!seen.has(k)) {
+      const g = { rep: s, bills: [s], dist: Number(s._distPrev) || 0 };
+      seen.set(k, g);
+      out.push(g);
+    } else seen.get(k).bills.push(s);
   }
-  const v = selVehicle();
-  const drv = Plan.sel.driver || (v && v.CurrentDriver) || '—';
-  return `<div style="padding:10px 12px;background:var(--brand-soft);border-radius:10px;font-size:13px">รถ: <b>${esc(vehicleShortName(v) || '—')}</b> · คนขับ: ${esc(drv)}</div>`;
+  return out;
+}
+function uniqueShopCount(stops){ return groupStopsForDisplay(stops).length; }
+function planBillLabel(s){ return uniqueDocParts(s).join(' · ') || DelView.invoiceNo(s) || '—'; }
+function displayStopLine(group, i, color){
+  const s = group.rep;
+  const n = group.bills.length;
+  const billTxt = n > 1
+    ? group.bills.map(planBillLabel).filter(Boolean).join(' · ')
+    : planBillLabel(s);
+  return `<div class="plan-stop-row">
+    <span class="stop-num" style="background:${color}">${i}</span>
+    <div class="plan-stop-main">
+      <div class="strong">${esc(s.CustomerName || '—')}${n > 1 ? ` <span class="badge b-blue">${int(n)} บิล</span>` : ''}</div>
+      <div class="small muted">${esc(DelView.zone(s) || '')}${billTxt ? ' · ' + esc(billTxt) : ''}</div>
+    </div>
+    <div class="small muted tab">${num1(group.dist || 0)} กม.</div>
+  </div>`;
 }
 function renderDecision(){
   const dec = el('decision');
   if (!dec || !Plan.result) return;
   const {seq,metrics:m,options}=Plan.result;
-  const workLbl = Plan.result.workLabel || (String(Planner.workStartHour()).padStart(2,'0')+':00–'+String(Planner.workEndHour()).padStart(2,'0')+':00');
   const isSplit = Plan.chosen==='C';
   const splitOpt = isSplit ? options.find(o=>o.id==='C') : null;
-  const billLine = s => `<div class="flex aic gap8" style="padding:7px 0;border-bottom:1px solid #F3F5F8">
-    <span class="stop-num" style="width:24px;height:24px;font-size:12px;background:VARBG">${'N'}</span>
-    <span style="flex:1;min-width:0"><span class="strong" style="font-size:13px;display:block">${esc(s.CustomerName)}</span>
-      <span class="small muted">${esc(DelView.zone(s) || '')}${s.PoNo ? (DelView.zone(s) ? ' · ' : '') + esc(s.PoNo) : (s.InvoiceNo ? (DelView.zone(s) ? ' · ' : '') + esc(s.InvoiceNo) : '')}</span></span>
-    <span class="small muted">${num1(s._distPrev||0)} กม.</span></div>`;
   const seqHtml = isSplit
-    ? splitOpt.split.map((g,gi)=>{
-        const color=SPLIT_COLORS[gi%SPLIT_COLORS.length];
-        const over=g.overtime?`<span class="badge b-amber" style="margin-left:6px">เกินเวลาทำงาน</span>`:`<span class="badge b-green" style="margin-left:6px">ทัน ${workLbl}</span>`;
-        return `<div class="strong small" style="margin:12px 0 4px;color:${color}">รอบ ${gi+1} · ${esc(DelView.zone(g.seq[0]) || ('ทิศ'+(g.sector||'')))} · ${g.seq.length} จุด · ${esc(vehicleShortName(g.v)||'')}${over}</div>` +
-          g.seq.map((s,i)=>billLine(s).replace('VARBG',color).replace('>N<','>'+(i+1)+'<')).join('');
+    ? splitOpt.split.map((g, gi) => {
+        const color = SPLIT_COLORS[gi % SPLIT_COLORS.length];
+        const groups = groupStopsForDisplay(g.seq);
+        const sel = Plan.splitSel[gi] || {};
+        const v = (Store.data.vehicles || []).find(x => x.VehicleID === sel.vehId) || g.v;
+        const drv = sel.driver || (v && v.CurrentDriver) || '';
+        return `<div class="plan-round-head" style="border-left:4px solid ${color}">
+          <b>รอบ ${gi + 1}</b> · ${esc(DelView.zone(g.seq[0]) || ('ทิศ' + (g.sector || '')))}
+          · ${int(groups.length)} ร้าน (${int(g.seq.length)} บิล)
+          · ${esc(vehicleShortName(v) || '')}${drv ? ' · ' + esc(drv) : ''}
+        </div>` +
+          groups.map((grp, i) => displayStopLine(grp, i + 1, color)).join('');
       }).join('')
-    : seq.map((s,i)=>billLine(s).replace('VARBG',(PRIORITY[s.Priority]||PRIORITY.NORMAL).color).replace('>N<','>'+(i+1)+'<')).join('');
+    : groupStopsForDisplay(seq).map((grp, i) =>
+        displayStopLine(grp, i + 1, (PRIORITY[grp.rep.Priority] || PRIORITY.NORMAL).color)
+      ).join('');
 
+  const shopN = isSplit
+    ? splitOpt.split.reduce((n, g) => n + uniqueShopCount(g.seq), 0)
+    : uniqueShopCount(seq);
   const timeWarn = (!isSplit && m.durationMin > Planner.workDayMin())
-    ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลา ~${Planner.fmtDur(m.durationMin)} เกินเวลาทำงาน — ระบบแบ่งหลายคันให้แล้ว</div></div>` : '';
+    ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลานาน — ระบบแบ่งหลายคันให้แล้ว</div></div>` : '';
   const totalCost = isSplit
     ? splitOpt.split.reduce((n, g, i) => n + splitCost(g, i).total, 0)
     : selCost().total;
 
   dec.innerHTML = `
-    <div class="flex between aic mb14"><span class="h-card">แผนส่งพร้อมแล้ว</span><button class="btn btn-sm" id="replan"><i data-lucide="rotate-cw"></i>คำนวณใหม่</button></div>
-    <div class="notice info mb14"><i data-lucide="info"></i><div>กด <b>ยืนยัน</b> แล้วไปแท็บ <b>พิมพ์ใบงาน</b></div></div>
-    <div class="grid plan-kpi-row" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
-      ${miniStat('จุดส่ง',m.stops+' จุด','map-pin')}
-      ${miniStat('ระยะทาง',num1(m.distance)+' กม.','navigation')}
-      ${miniStat('เวลา',Planner.fmtDur(m.durationMin),'clock')}
+    <div class="flex between aic mb14">
+      <span class="h-card">${isSplit ? `แผน ${splitOpt.split.length} รอบ` : 'แผนส่งพร้อมแล้ว'}</span>
+      <button class="btn btn-sm" id="replan"><i data-lucide="rotate-cw"></i>คำนวณใหม่</button>
     </div>
-    <div class="small muted" style="margin:-6px 0 12px">${m.source==='osrm'?'📍 ตามถนนจริง':'📏 ประมาณการ'} · ${workLbl}</div>
+    <div class="grid plan-kpi-row" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      ${miniStat('จุดส่ง', int(shopN) + ' ร้าน · ' + int(m.stops) + ' บิล', 'map-pin')}
+      ${miniStat('ระยะทาง', num1(m.distance) + ' กม.', 'navigation')}
+      ${miniStat('เวลา', Planner.fmtDur(m.durationMin), 'clock')}
+    </div>
     ${timeWarn}
-
-    <div class="strong small muted" style="margin-bottom:6px">ลำดับจุดส่ง</div>
-    <div style="max-height:200px;overflow-y:auto;margin-bottom:12px" class="scrolly">${seqHtml}</div>
-
-    <div class="mb14">${decisionVehicleSummary(isSplit, splitOpt)}</div>
-    <div class="flex between aic mb14" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px">
-      <span class="muted">ต้นทุนประมาณ</span><span class="strong tab">${money(totalCost)} บาท</span></div>
-
-    <details style="margin-bottom:14px"><summary style="cursor:pointer;font-size:12px;font-weight:600;color:#9AA3B2;padding:4px 0">ตั้งค่าเพิ่มเติม (รถ/คนขับ/ต้นทุน)</summary>
+    <div class="plan-stop-list scrolly">${seqHtml || '<div class="muted small">ไม่มีจุดส่ง</div>'}</div>
+    <div class="plan-cost-row"><span class="muted">ต้นทุนประมาณ</span><span class="strong tab">${money(totalCost)} บาท</span></div>
+    <div class="plan-driver-box" id="driverFormBox">${isSplit ? splitFormAll(splitOpt) : selForm()}</div>
+    <details class="plan-advanced"><summary>ตั้งค่าเพิ่มเติม (แผนทางเลือก / ต้นทุน)</summary>
       <div style="margin-top:10px">
-        ${options.length>1?`<div style="margin-bottom:10px">${options.map(o=>optionCard(o)).join('')}</div>`:''}
-        <div id="selFormBox">${isSplit ? splitFormAll(splitOpt) : selForm()}</div>
+        ${options.length > 1 ? `<div style="margin-bottom:10px">${options.map(o => optionCard(o)).join('')}</div>` : ''}
         <div id="costBox" class="mt14">${isSplit ? splitCostBoxAll(splitOpt) : selCostBox()}</div>
-      </div></details>
-
-    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>${isSplit?`ยืนยัน (${splitOpt.split.length} รอบ)`:'ยืนยันการส่ง'}</button>
+      </div>
+    </details>
+    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>${isSplit ? `ยืนยัน ${splitOpt.split.length} รอบ → พิมพ์ใบงาน` : 'ยืนยัน → พิมพ์ใบงาน'}</button>
   `;
   icons();
   bindDecisionEvents();
@@ -1014,6 +1041,15 @@ function bindDecisionEvents(){
   $$('[data-splitdrv]').forEach(inp=>inp.oninput=()=>{ const i=Number(inp.dataset.splitdrv); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].driver=inp.value; Plan.splitSel[i].driverEmployeeId=''; });
   const cr=el('confirmRoute'); if(cr) cr.onclick=confirmRoute;
 }
+function queueRoutePrints(routeIds, fallbackMatch){
+  setTimeout(() => {
+    let routes = (routeIds || []).map(id => (Store.data.routes || []).find(x => x.RouteID === id)).filter(Boolean);
+    if (!routes.length && typeof fallbackMatch === 'function') {
+      routes = (Store.data.routes || []).filter(fallbackMatch);
+    }
+    routes.forEach((r, i) => setTimeout(() => printRouteNote(r), i * 900));
+  }, 350);
+}
 async function confirmRoute(){
   if(Plan.chosen==='C') return confirmSplitRoutes();
   const seq=Plan.result.seq, m=Plan.result.metrics;
@@ -1037,10 +1073,12 @@ async function confirmRoute(){
   Plan.selected.clear(); Plan.locked = false; Plan.result=null;
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
   if (typeof dPick !== 'undefined') dPick.sel.clear();
-  toast('บันทึกรอบส่งแล้ว — ไปแท็บพิมพ์ใบงาน','ok','ยืนยันแล้ว');
   Plan.tab = 'rounds';
-  location.hash='#/planning';
-  createRouteOptimistic('confirmRoute', data, stops).catch(()=>{});
+  toast('บันทึกรอบส่งแล้ว — เปิดใบงานให้คนขับเช็คขึ้นของ','ok','ยืนยันแล้ว');
+  const routeMatch = r => r.DeliveryDate === Store.date && r.DriverName === data.DriverName && r.TotalStops === data.TotalStops && (r.__pending || r.Status === 'Planned');
+  createRouteOptimistic('confirmRoute', data, stops).then(r => {
+    queueRoutePrints([r && r.RouteID], routeMatch);
+  }).catch(() => queueRoutePrints([], routeMatch));
 }
 async function confirmSplitRoutes(){
   const opt = Plan.result.options.find(o=>o.id==='C');
@@ -1067,10 +1105,16 @@ async function confirmSplitRoutes(){
   Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
   if (typeof dPick !== 'undefined') dPick.sel.clear();
-  toast('บันทึก '+jobs.length+' รอบแล้ว — ไปแท็บพิมพ์ใบงาน','ok','ยืนยันแล้ว');
   Plan.tab = 'rounds';
-  location.hash='#/planning';
-  jobs.forEach(j=>createRouteOptimistic('confirmRoute', j.data, j.stops).catch(()=>{}));
+  toast('บันทึก '+jobs.length+' รอบแล้ว — เปิดใบงานให้คนขับเช็คขึ้นของ','ok','ยืนยันแล้ว');
+  const beforeIds = new Set((Store.data.routes || []).map(r => r.RouteID));
+  Promise.all(jobs.map(j => createRouteOptimistic('confirmRoute', j.data, j.stops))).then(results => {
+    const ids = (results || []).map(r => r && r.RouteID).filter(Boolean);
+    const fallback = r => !beforeIds.has(r.RouteID) && r.DeliveryDate === Store.date && (r.__pending || r.Status === 'Planned');
+    queueRoutePrints(ids, fallback);
+  }).catch(() => {
+    queueRoutePrints([], r => !beforeIds.has(r.RouteID) && r.DeliveryDate === Store.date);
+  });
 }
 
 /* ================================================================
@@ -1082,7 +1126,7 @@ async function renderRoundsTab(view){
     ${head('จัดรถ', `${thDate(Store.date)} · ${int(routes.length)} รอบ`,
       `<button class="btn btn-sm" data-act="csv"><i data-lucide="download"></i>CSV</button>`)}
     ${planPageTabs('rounds')}
-    ${routes.length? `<div class="notice ok mb14"><i data-lucide="printer"></i><div>กด <b>พิมพ์ใบงาน</b> ที่แต่ละรอบ แล้วมอบให้คนขับก่อนออกรถ</div></div>
+    ${routes.length? `<div class="notice ok mb14"><i data-lucide="printer"></i><div>หลังยืนยันระบบเปิด <b>ใบงานส่ง</b> ให้พิมพ์อัตโนมัติ — หรือกด <b>พิมพ์ใบงาน</b> ที่แต่ละรอบอีกครั้ง</div></div>
       <div style="display:flex;flex-direction:column;gap:14px">${routes.map(routeCard).join('')}</div>`
       : emptyState('ยังไม่มีรอบส่งวันนี้','กลับไปหน้าวันนี้ → เลือกเขต → ยืนยัน','<a class="btn btn-primary" href="#/dashboard"><i data-lucide="home"></i>ไปหน้าวันนี้</a>')}
   `);
@@ -1860,21 +1904,48 @@ function printReport(from,to,rep,type){
 async function printRouteNote(r){
   if(!r) return;
   let stops=[]; try{ stops=await API.get('getRouteStops',{routeId:r.RouteID}); }catch(e){}
+  if(!stops.length) stops=(Store.data.routeStops||[]).filter(s=>String(s.RouteID)===String(r.RouteID)).sort((a,b)=>a.StopOrder-b.StopOrder);
+  if(!stops.length){
+    stops=(Store.data.deliveries||[]).filter(d=>String(d.RouteID)===String(r.RouteID)).map((d,i)=>({
+      StopOrder:i+1, DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName,
+      Address:d.Address, BoxQty:d.BoxQty||0,
+    }));
+  }
+  const deliveryForStop = s => (Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID));
+  const billForStop = s => {
+    const d = deliveryForStop(s);
+    if(!d) return '—';
+    const parts = uniqueDocParts(d);
+    return parts.length ? parts.join(' / ') : '—';
+  };
+  const addrForStop = s => {
+    const parts = [s.BranchName, s.Address].filter(Boolean);
+    if(parts.length) return parts.join(' · ');
+    const d = deliveryForStop(s);
+    return d && d.Address ? d.Address : '—';
+  };
   const row=(l,v)=>`<div><span>${l}:</span> <b>${esc(v==null||v===''?'-':v)}</b></div>`;
   const body=`
     <div class="kv">
-      ${row('รอบส่ง',r.RouteID)}${row('วันที่',thDate(r.DeliveryDate))}${row('ประเภท',r.RouteType==='EXTERNAL_VEHICLE'?'รถภายนอก':'รถบริษัท')}
-      ${row('คนขับ',r.DriverName)}${row('รถ',r.VehicleName||r.ProviderName)}${row('ทะเบียน',r.LicensePlate)}
-      ${row('จำนวนจุด',int(r.TotalStops))}${row('กล่องรวม',int(r.TotalBoxes))}${row('ระยะทาง',num1(r.TotalDistance)+' กม.')}${row('สถานะ',(DSTATUS[r.Status]||{}).label||r.Status)}</div>
-    <div class="sec-title">รายการจุดส่ง</div>
+      ${row('รอบส่ง',r.RouteID)}${row('วันที่',thDate(r.DeliveryDate))}
+      ${row('คนขับ',r.DriverName)}${row('รถ',((r.VehicleName||r.ProviderName||'') + (r.LicensePlate ? ' · '+r.LicensePlate : '')).trim() || '-')}
+      ${row('จำนวนบิล',int(stops.length))}${row('กล่องรวม',int(r.TotalBoxes))}</div>
+    <div class="sec-title">รายการขึ้นของ / จุดส่ง — ให้คนขับเช็คก่อนออกรถ</div>
     <table>
-      <colgroup><col style="width:8%"><col style="width:30%"><col><col style="width:11%"><col style="width:15%"></colgroup>
-      <thead><tr><th>ลำดับ</th><th>ลูกค้า</th><th>สาขา / ที่อยู่</th><th>กล่อง</th><th>หมายเหตุ</th></tr></thead>
-      <tbody>${stops.map(s=>`<tr><td class="c">${s.StopOrder}</td><td>${esc(s.CustomerName)}</td><td class="addr">${esc(s.BranchName||s.Address||'')}</td><td class="r">${int(s.BoxQty)}</td><td></td></tr>`).join('')||'<tr><td colspan="5" class="c muted">ไม่มีจุดส่ง</td></tr>'}</tbody></table>
-    <div class="sec-title">สรุปค่าใช้จ่าย (สำหรับเบิกกับฝ่ายบัญชี)</div>
-    <div class="kv">${row('ค่าน้ำมัน',money(r.EstimatedFuelCost))}${row('ค่าทางด่วน',money(r.EstimatedTollCost))}${row('ค่าจอดรถ',money(r.EstimatedParkingCost))}${row('ค่ารถภายนอก',money(r.EstimatedExternalCost))}${row('ค่าอื่นๆ',money(r.EstimatedOtherCost))}${row('รวมเบิกทั้งสิ้น',money(r.EstimatedTotalCost)+' บาท')}</div>
-    <div class="sign"><div>ผู้มอบหมายงาน / หัวหน้า</div><div>คนขับ (ผู้เบิก)</div><div>ฝ่ายบัญชี (ผู้อนุมัติจ่าย)</div></div>`;
-  Printer.open('ใบสรุปงาน-เบิกค่าใช้จ่าย', rSize(), body);
+      <colgroup><col style="width:6%"><col style="width:5%"><col style="width:22%"><col style="width:18%"><col style="width:8%"><col></colgroup>
+      <thead><tr><th>☐</th><th>#</th><th>ร้าน / ลูกค้า</th><th>เลขบิล / PO</th><th>กล่อง</th><th>ที่อยู่</th></tr></thead>
+      <tbody>${stops.map(s=>`<tr>
+        <td class="c">☐</td><td class="c">${s.StopOrder}</td>
+        <td>${esc(s.CustomerName||'—')}</td>
+        <td class="mono">${esc(billForStop(s))}</td>
+        <td class="r">${int(s.BoxQty)}</td>
+        <td class="addr small">${esc(addrForStop(s))}</td>
+      </tr>`).join('')||'<tr><td colspan="6" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
+      <tfoot><tr><th colspan="4" class="r">รวมกล่อง</th><th class="r">${int(stops.reduce((n,s)=>n+(Number(s.BoxQty)||0),0))}</th><th></th></tr></tfoot>
+    </table>
+    <p class="small muted" style="margin:12px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตามหมายเลข #</p>
+    <div class="sign"><div>ผู้จัดงาน</div><div>คนขับ (เช็คขึ้นของ)</div></div>`;
+  Printer.open('ใบงานส่ง — เช็ครายการขึ้นของ', rSize(), body);
 }
 
 /* ================================================================

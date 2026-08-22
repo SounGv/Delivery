@@ -582,13 +582,21 @@ function localAddRoute(r, stops){
 function createRouteOptimistic(action, data, stops){
   const tmp = Object.assign({ RouteID: tmpId(), IsDeleted:false, __pending:true }, data);
   const ids = (stops||[]).map(s=>s.DeliveryID).filter(Boolean);
+  const stopRows = (stops||[]).map((s,i)=>Object.assign({}, s, { RouteID: tmp.RouteID, StopOrder: i + 1, Status: 'Pending' }));
   return optimistic(()=>{
     coll('routes').unshift(tmp);
+    stopRows.forEach(s=>coll('routeStops').push(s));
     const prev = [];
     ids.forEach(id=>{ const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(id)); if(d){ prev.push([d,d.Status,d.RouteID]); d.Status='Planned'; d.RouteID=tmp.RouteID; } });
-    return ()=>{ const a=coll('routes'), i=a.indexOf(tmp); if(i>=0) a.splice(i,1); prev.forEach(([d,st,rid])=>{ d.Status=st; d.RouteID=rid; }); };
+    return ()=>{
+      const a=coll('routes'), i=a.indexOf(tmp); if(i>=0) a.splice(i,1);
+      const rs=coll('routeStops');
+      for(let j=rs.length-1;j>=0;j--) if(rs[j].RouteID===tmp.RouteID) rs.splice(j,1);
+      prev.forEach(([d,st,rid])=>{ d.Status=st; d.RouteID=rid; });
+    };
   }, action, { data, stops },
   { reconcile:r=>{ if(!r) return; const a=coll('routes'), i=a.indexOf(tmp); if(i>=0) a[i]=r;
+      coll('routeStops').forEach(s=>{ if(s.RouteID===tmp.RouteID) s.RouteID=r.RouteID; });
       ids.forEach(id=>{ const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(id)); if(d && d.RouteID===tmp.RouteID) d.RouteID=r.RouteID; }); } });
 }
 

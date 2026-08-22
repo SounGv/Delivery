@@ -209,6 +209,19 @@ input,select,textarea{font-family:inherit;}
 .plan-panel[hidden]{display:none !important;}
 .plan-2{grid-template-columns:1fr minmax(340px,420px);gap:16px;align-items:start;}
 .plan-single{width:100%;}
+.plan-stop-list{max-height:min(420px,50vh);overflow-y:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:12px;padding:8px 10px;background:#FAFBFC;}
+.plan-stop-row{display:flex;align-items:flex-start;gap:10px;padding:10px 6px;border-bottom:1px solid #EEF1F5;}
+.plan-stop-row:last-child{border-bottom:none;}
+.plan-stop-main{flex:1;min-width:0;}
+.plan-round-head{font-size:13px;font-weight:700;padding:10px 8px 6px;margin-top:8px;color:var(--ink-2);}
+.plan-round-head:first-child{margin-top:0;}
+.plan-cost-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:14px;font-size:14px;}
+.plan-advanced{margin-bottom:8px;}
+.plan-advanced summary{cursor:pointer;font-size:12px;font-weight:600;color:#9AA3B2;padding:4px 0;list-style:none;}
+.plan-driver-box{margin:14px 0 8px;}
+.plan-skipped-bills{margin-top:8px;}
+.plan-skipped-bills summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--amber-ink);}
+.plan-veh-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;font-size:13px;border-bottom:1px solid #F3F5F8;}
 @media(max-width:720px){
   .plan-kpi-row{grid-template-columns:1fr !important;}
 }
