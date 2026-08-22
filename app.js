@@ -931,16 +931,28 @@ const Planner = {
     }
     return seq;
   },
+  // ระยะทางแสดงผล = ไป (คลัง→จุดส่ง) · ค่าน้ำมันใช้ไป-กลับ
+  routeDisplayKm(m){ return m && m.outboundKm != null ? m.outboundKm : (m ? m.distance : 0); },
+  fuelDistanceKm(m){ return m && m.distance != null ? m.distance : 0; },
   // total distance incl return to warehouse (Haversine straight-line — instant, offline)
   metrics(seq){
     const wh = warehouse();
-    let dist = 0; let cur = wh;
-    seq.forEach(s=>{ dist += haversine(cur.lat,cur.lng,+s.Latitude,+s.Longitude); cur={lat:+s.Latitude,lng:+s.Longitude}; });
-    dist += haversine(cur.lat,cur.lng,wh.lat,wh.lng); // return
+    let outbound = 0; let cur = wh;
+    seq.forEach(s=>{
+      const leg = haversine(cur.lat,cur.lng,+s.Latitude,+s.Longitude);
+      s._distPrev = +leg.toFixed(1);
+      outbound += leg;
+      cur = { lat:+s.Latitude, lng:+s.Longitude };
+    });
+    const returnKm = haversine(cur.lat,cur.lng,wh.lat,wh.lng);
+    const dist = outbound + returnKm;
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
     const serviceMin = seq.length*12;
     const durationMin = Math.round(dist/this.speed()*60 + serviceMin);
-    return { distance:+dist.toFixed(1), boxes, stops:seq.length, durationMin, source:'straight' };
+    return {
+      distance:+dist.toFixed(1), outboundKm:+outbound.toFixed(1), returnKm:+returnKm.toFixed(1),
+      boxes, stops:seq.length, durationMin, source:'straight'
+    };
   },
   // ระยะทางตามถนนจริงผ่าน OSRM (async) — คืน null ถ้าล่ม (ให้ fallback ไป metrics())
   async roadMetrics(seq){
@@ -950,8 +962,33 @@ const Planner = {
     if(!r) return null;
     // legsKm[i] = ระยะจากจุดก่อนหน้าถึง seq[i]  (leg 0 = คลัง→จุด1)
     if(r.legsKm && r.legsKm.length){ seq.forEach((s,i)=>{ s._distPrev = r.legsKm[i]; }); }
+    const outboundKm = r.legsKm && r.legsKm.length >= seq.length
+      ? +(r.legsKm.slice(0, seq.length).reduce((n, km)=>n + km, 0)).toFixed(1)
+      : r.distance;
+    const returnKm = r.legsKm && r.legsKm.length > seq.length ? r.legsKm[seq.length] : 0;
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
-    return { distance:r.distance, boxes, stops:seq.length, durationMin:r.durationMin + seq.length*12, geometry:r.geometry, source:'osrm' };
+    return {
+      distance:r.distance, outboundKm, returnKm,
+      boxes, stops:seq.length, durationMin:r.durationMin + seq.length*12,
+      geometry:r.geometry, source:'osrm', legsKm:r.legsKm
+    };
+  },
+  // คำนวณระยะทางตามแผนที่จากรายการจุดส่ง (ใช้ตอนพิมพ์ใบงาน)
+  async metricsForStops(stops){
+    const ordered = (stops || [])
+      .filter(s => s && s.Latitude && s.Longitude)
+      .sort((a,b)=>(Number(a.StopOrder)||0)-(Number(b.StopOrder)||0))
+      .map(s => Object.assign({}, s, { Latitude:+s.Latitude, Longitude:+s.Longitude }));
+    if(!ordered.length) return null;
+    const attachLegs = () => ordered.forEach(s => {
+      const orig = (stops || []).find(x => (s.DeliveryID && String(x.DeliveryID) === String(s.DeliveryID)) || x.StopOrder === s.StopOrder);
+      if(orig && s._distPrev != null) orig._distPrev = s._distPrev;
+    });
+    const road = await this.roadMetrics(ordered);
+    if(road){ attachLegs(); return { metrics:road, seq:ordered }; }
+    const straight = this.metrics(ordered);
+    attachLegs();
+    return { metrics:straight, seq:ordered };
   },
   companyCost(distanceKm, vehicle){
     const rate = vehicle && vehicle.FuelCostPerKm ? Number(vehicle.FuelCostPerKm) : this.fuelPerKm();
@@ -991,7 +1028,11 @@ const Planner = {
   // build options — แบ่งตามเขต/ทิศทาง + เวลาทำงาน (ไม่ใช้ความจุกล่อง)
   options(seq, override){
     const m = this.metrics(seq);
-    if(override){ m.distance=override.distance; m.durationMin=override.durationMin; m.geometry=override.geometry; m.source=override.source; }
+    if(override){
+      m.distance=override.distance; m.durationMin=override.durationMin; m.geometry=override.geometry; m.source=override.source;
+      if(override.outboundKm != null) m.outboundKm=override.outboundKm;
+      if(override.returnKm != null) m.returnKm=override.returnKm;
+    }
     const avail = this.sortByWh(this.availableVehicles());
     const work = this.workDayMin();
     const workLbl = String(this.workStartHour()).padStart(2,'0')+':00–'+String(this.workEndHour()).padStart(2,'0')+':00';

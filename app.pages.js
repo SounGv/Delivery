@@ -467,7 +467,7 @@ function qdBody(){
         :`<select class="select" id="qdVeh">${veh.map(x=>`<option value="${esc(x.VehicleID)}" ${QD.vehId===x.VehicleID?'selected':''}>${esc(vehicleOptionLabel(x))}</option>`).join('')}</select>`}</div>
     <div class="field"><label class="label">คนขับ</label><input class="input" id="qdDriver" list="qdEmp" value="${esc(QD.driver)}" placeholder="ชื่อคนขับ"><datalist id="qdEmp">${emps.map(e=>`<option value="${esc(e.EmployeeName)}">`).join('')}</datalist></div>
     <div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-      <div class="flex between" style="font-size:13px;margin-bottom:6px"><span class="muted">ระยะทาง (ไป-กลับคลัง)</span><span class="tab strong">${num1(m.distance)} กม.</span></div>
+      <div class="flex between" style="font-size:13px;margin-bottom:6px"><span class="muted">ระยะทาง (ตามแผนที่ · ไป)</span><span class="tab strong">${num1(Planner.routeDisplayKm(m))} กม.${m.source==='straight'?' <span class="small muted">(ประมาณ)</span>':''}</span></div>
       ${row('ค่าน้ำมัน',c.fuel)}
       ${qdEdit('ค่าทางด่วน','qdToll',Number(QD.toll)||0,'ใส่ 0 ถ้าไม่ขึ้นทางด่วน')}
       ${qdEdit('ค่าจอดรถ','qdPark',Number(QD.parking)||0, Planner.isMall(d)?'ปลายทางเป็นห้าง':'ร้านเดี่ยว')}
@@ -497,9 +497,9 @@ async function qdConfirm(){
     DriverName:driverName, DriverPhone:(emp&&emp.Phone)||(isExt?v.DriverPhone:'')||'',
     DriverEmployeeID: isExt?'':(emp?emp.EmployeeID:''),
     VehicleType:v.VehicleType||'', VehicleName:isExt?'':(v.VehicleName||''), LicensePlate:v.LicensePlate||'', ProviderName:isExt?(v.ProviderName||''):'',
-    TotalStops:1, TotalBoxes:Number(d.BoxQty)||0, TotalDistance:m.distance, EstimatedDuration:m.durationMin,
+    TotalStops:1, TotalBoxes:Number(d.BoxQty)||0, TotalDistance:Planner.routeDisplayKm(m), EstimatedDuration:m.durationMin,
     EstimatedFuelCost:c.fuel, EstimatedTollCost:c.toll, EstimatedParkingCost:c.parking, EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
-  const stops=[{ DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName, Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty, DistanceFromPrevious:m.distance }];
+  const stops=[{ DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName, Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty, DistanceFromPrevious:+(d._distPrev||Planner.routeDisplayKm(m)).toFixed(1) }];
   QD.modal.close();
   toast('กำลังจ่ายรถ · '+money(c.total)+' ฿…','ok','จัดทีละงานสำเร็จ');
   createRouteOptimistic('confirmRoute', data, stops).catch(()=>{});
@@ -812,7 +812,7 @@ function renderDecision(){
 
   dec.innerHTML = `
     <div class="flex between aic mb14">
-      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน · ${num1(m.distance)} กม. · ${Planner.fmtDur(m.durationMin)}</span>
+      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน · ${num1(Planner.routeDisplayKm(m))} กม.${m.source==='osrm'?'':' (ประมาณ)'} · ${Planner.fmtDur(m.durationMin)}</span>
       <button class="btn btn-sm" id="replan" type="button"><i data-lucide="rotate-cw"></i>เรียงลำดับใหม่</button>
     </div>
     ${timeWarn}
@@ -912,7 +912,7 @@ function selCostBox(){
     <span class="flex aic" style="gap:4px"><input class="input" id="${id}" type="number" value="${val}" style="width:96px;height:32px;text-align:right;padding:0 8px"><span class="small muted">฿</span></span></div>`;
   return `${warn}<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
     <div class="strong mb14">สรุปต้นทุนรอบส่ง <span class="small muted">(แก้ทางด่วน/ค่าจอดได้)</span></div>
-    ${row('ค่าน้ำมัน · '+num1(m.distance)+' กม.', c.fuel)}
+    ${row('ค่าน้ำมัน · '+num1(Planner.fuelDistanceKm(m))+' กม. (ไป-กลับ)', c.fuel)}
     ${editRow('ค่าทางด่วน','selToll',Number(Plan.sel.toll)||0,'ใส่ 0 ถ้าไม่ขึ้นทางด่วน')}
     ${editRow('ค่าจอดรถ','selPark',Number(Plan.sel.parking)||0, mallN?`ห้าง ${mallN} จุด`:'ร้านเดี่ยว')}
     ${c.external?row('ค่ารถภายนอก',c.external):''}
@@ -1019,7 +1019,7 @@ async function confirmRoute(){
     DriverEmployeeID: isExt?'':(Plan.sel.driverEmployeeId||''),
     VehicleType: v.VehicleType||'', VehicleName: isExt?'':(v.VehicleName||''),
     LicensePlate: v.LicensePlate||'', ProviderName: isExt?(v.ProviderName||''):'',
-    TotalStops:m.stops, TotalBoxes:m.boxes, TotalDistance:m.distance, EstimatedDuration:m.durationMin,
+    TotalStops:m.stops, TotalBoxes:m.boxes, TotalDistance:Planner.routeDisplayKm(m), EstimatedDuration:m.durationMin,
     EstimatedFuelCost:c.fuel, EstimatedTollCost:c.toll, EstimatedParkingCost:c.parking,
     EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
   const stops=seq.map(s=>({ DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
@@ -1827,7 +1827,7 @@ async function printRouteNote(r){
   if(!stops.length){
     stops=(Store.data.deliveries||[]).filter(d=>String(d.RouteID)===String(r.RouteID)).map((d,i)=>({
       StopOrder:i+1, DeliveryID:d.DeliveryID, CustomerName:d.CustomerName, BranchName:d.BranchName,
-      Address:d.Address, BoxQty:d.BoxQty||0,
+      Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty||0,
     }));
   }
   const deliveryForStop = s => (Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID));
@@ -1852,30 +1852,46 @@ async function printRouteNote(r){
     return d || { CustomerName: s.CustomerName, BranchName: s.BranchName, Address: s.Address };
   };
   const addrForStop = s => trcAddressOnly(rowForStop(s)) || '—';
+  const legForStop = s => {
+    const km = Number(s._distPrev ?? s.DistanceFromPrevious);
+    return Number.isFinite(km) && km > 0 ? num1(km) : '—';
+  };
   const row=(l,v)=>`<div><span>${l}:</span> <b>${esc(v==null||v===''?'-':v)}</b></div>`;
-  const distKm = Number(r.TotalDistance) || 0;
-  const fuelCost = Number(r.EstimatedFuelCost) || 0;
+  let distKm = Number(r.TotalDistance) || 0;
+  let fuelCost = Number(r.EstimatedFuelCost) || 0;
+  let distNote = '';
+  const mapCalc = await Planner.metricsForStops(stops);
+  if(mapCalc && mapCalc.metrics){
+    const mm = mapCalc.metrics;
+    distKm = Planner.routeDisplayKm(mm);
+    distNote = mm.source === 'osrm' ? ' (ตามแผนที่)' : ' (ประมาณ)';
+    const veh = (Store.data.vehicles||[]).find(v => v.LicensePlate && r.LicensePlate && v.LicensePlate === r.LicensePlate);
+    fuelCost = r.RouteType === 'EXTERNAL_VEHICLE'
+      ? Number(r.EstimatedExternalCost) || 0
+      : Planner.fuelCost(Planner.fuelDistanceKm(mm), veh);
+  }
   const body=`
     <div class="kv">
       ${row('รอบส่ง',r.RouteID)}${row('วันที่',thDate(r.DeliveryDate))}
       ${row('คนขับ',r.DriverName)}${row('รถ',((r.VehicleName||r.ProviderName||'') + (r.LicensePlate ? ' · '+r.LicensePlate : '')).trim() || '-')}
       ${row('จำนวนบิล',int(stops.length))}${row('จำนวนรวม',int(r.TotalBoxes))}
-      ${row('ระยะทาง',num1(distKm)+' กม.')}${row('ค่าน้ำมัน (ประมาณ)',money(fuelCost)+' บาท')}</div>
+      ${row('ระยะทาง'+distNote,num1(distKm)+' กม.')}${row('ค่าน้ำมัน (ประมาณ)',money(fuelCost)+' บาท')}</div>
     <div class="sec-title">รายการขึ้นของ / จุดส่ง — ให้คนขับเช็คก่อนออกรถ</div>
     <table class="slip-table">
-      <colgroup><col style="width:5%"><col style="width:4%"><col style="width:20%"><col style="width:14%"><col style="width:14%"><col style="width:7%"><col></colgroup>
-      <thead><tr><th>☐</th><th>#</th><th>ลูกค้า</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
+      <colgroup><col style="width:5%"><col style="width:4%"><col style="width:6%"><col style="width:18%"><col style="width:13%"><col style="width:13%"><col style="width:7%"><col></colgroup>
+      <thead><tr><th>☐</th><th>#</th><th class="r">กม.</th><th>ลูกค้า</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
       <tbody>${stops.map(s=>{ const row = rowForStop(s); return `<tr>
         <td class="c">☐</td><td class="c">${s.StopOrder}</td>
+        <td class="r tab">${legForStop(s)}</td>
         <td>${esc(trcCustomerName(row))}</td>
         <td class="mono">${esc(poForStop(s))}</td>
         <td class="mono">${esc(invForStop(s))}</td>
         <td class="r">${int(qtyNumForStop(s))}</td>
         <td class="addr">${esc(addrForStop(s))}</td>
-      </tr>`; }).join('')||'<tr><td colspan="7" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
-      <tfoot><tr><th colspan="5" class="r">รวมจำนวน</th><th class="r">${int(stops.reduce((n,s)=>n+qtyNumForStop(s),0))}</th><th></th></tr></tfoot>
+      </tr>`; }).join('')||'<tr><td colspan="8" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
+      <tfoot><tr><th colspan="6" class="r">รวมจำนวน</th><th class="r">${int(stops.reduce((n,s)=>n+qtyNumForStop(s),0))}</th><th></th></tr></tfoot>
     </table>
-    <p class="small muted" style="margin:10px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตาม #</p>
+    <p class="small muted" style="margin:10px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตาม # · กม. = ระยะตามถนนจากจุดก่อนหน้า</p>
     <div class="sign"><div>ผู้จัดงาน</div><div>คนขับ (เช็คขึ้นของ)</div></div>`;
   Printer.open('ใบงานส่ง — เช็ครายการขึ้นของ', rSize(), body);
 }
