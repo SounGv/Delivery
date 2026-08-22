@@ -149,7 +149,7 @@ ROUTES.dashboard = async function(view){
   page(view, `
     ${head('วันนี้', `${thDate(Store.date)} · ${int(open.length)} ที่ · ${int(districts.length)} เขต`,
       `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}
-    <div class="notice info mb14"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>
     <div class="del-search mb14">
       <i data-lucide="search"></i>
       <input id="delSearch" class="input" placeholder="กรอกเขต หรือค้นหาร้าน…" value="${esc(Store.search || '')}">
@@ -206,25 +206,44 @@ ROUTES.dashboard = async function(view){
   }
   const fs = view.querySelector('#fStaff');
   if (fs) fs.onchange = () => { dPick.staffFilter = fs.value; ROUTES.dashboard(view); };
-  const fz = view.querySelector('#fZone');
-  if (fz) fz.onchange = () => { dPick.zoneFilter = fz.value; ROUTES.dashboard(view); };
+  const fZoneWrap = view.querySelector('#fZoneWrap');
+  const fZoneBtn = view.querySelector('#fZoneBtn');
+  const fZonePop = view.querySelector('#fZonePop');
+  if (fZoneBtn && fZonePop && fZoneWrap) {
+    const closeZonePop = () => {
+      fZonePop.hidden = true;
+      fZoneBtn.setAttribute('aria-expanded', 'false');
+    };
+    fZoneBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (fZonePop.hidden) {
+        fZonePop.hidden = false;
+        fZoneBtn.setAttribute('aria-expanded', 'true');
+      } else closeZonePop();
+    };
+    fZonePop.onclick = (e) => e.stopPropagation();
+    const clr = fZonePop.querySelector('[data-zone-clear]');
+    if (clr) clr.onclick = () => { toggleDistrictPick('', dispatchable); ROUTES.dashboard(view); };
+    fZonePop.querySelectorAll('input[data-zone-filter]').forEach(cb => {
+      cb.onchange = () => {
+        const key = cb.dataset.zoneFilter;
+        if (cb.checked && !dPick.districts.has(key)) toggleDistrictPick(key, dispatchable);
+        else if (!cb.checked && dPick.districts.has(key)) toggleDistrictPick(key, dispatchable);
+        ROUTES.dashboard(view);
+      };
+    });
+    setTimeout(() => {
+      const onDoc = (e) => {
+        if (!fZoneWrap.contains(e.target)) {
+          closeZonePop();
+          document.removeEventListener('click', onDoc);
+        }
+      };
+      document.addEventListener('click', onDoc);
+    }, 0);
+  }
   $$('[data-district]', view).forEach(b => b.onclick = () => {
-    const dist = b.dataset.district || '';
-    if (!dist) {
-      dPick.districts.clear();
-      dPick.sel.clear();
-      Plan.result = null;
-      ROUTES.dashboard(view);
-      return;
-    }
-    if (dPick.districts.has(dist)) {
-      dPick.districts.delete(dist);
-      deliveriesForDistrict(dispatchable, dist).forEach(d => dPick.sel.delete(d.DeliveryID));
-    } else {
-      dPick.districts.add(dist);
-      deliveriesForDistrict(dispatchable, dist).forEach(d => dPick.sel.add(d.DeliveryID));
-    }
-    Plan.result = null;
+    toggleDistrictPick(b.dataset.district || '', dispatchable);
     ROUTES.dashboard(view);
   });
   const selAll = view.querySelector('#dSelAll');
@@ -254,7 +273,7 @@ ROUTES.dashboard = async function(view){
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), districts: new Set(), filter: 'all', nameFilter: '', staffFilter: '', zoneFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'all', nameFilter: '', staffFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
   { key:'all', label:'ทั้งหมด' },
   { key:'noRoute', label:'ยังไม่จัดรถ' },
@@ -337,9 +356,6 @@ function applyDeliveryFilter(rows){
   if (dPick.districts.size) {
     out = out.filter(d => dPick.districts.has(deliveryDistrictKey(d)));
   }
-  if (dPick.zoneFilter) {
-    out = out.filter(d => deliveryDistrictKey(d) === dPick.zoneFilter);
-  }
   const nf = String(dPick.nameFilter || '').trim().toLowerCase();
   if (nf) out = out.filter(d => String(d.CustomerName || '').toLowerCase().includes(nf));
   const sf = dPick.staffFilter;
@@ -355,6 +371,28 @@ function deliveryDistrictLabel(key){
 }
 function deliveriesForDistrict(list, distKey){
   return normalizeDeliveries((list || []).filter(d => deliveryDistrictKey(d) === distKey));
+}
+function toggleDistrictPick(distKey, dispatchable){
+  if (!distKey) {
+    dPick.districts.clear();
+    dPick.sel.clear();
+    Plan.result = null;
+    return;
+  }
+  if (dPick.districts.has(distKey)) {
+    dPick.districts.delete(distKey);
+    deliveriesForDistrict(dispatchable, distKey).forEach(d => dPick.sel.delete(d.DeliveryID));
+  } else {
+    dPick.districts.add(distKey);
+    deliveriesForDistrict(dispatchable, distKey).forEach(d => dPick.sel.add(d.DeliveryID));
+  }
+  Plan.result = null;
+}
+function delDistrictFilterLabel(){
+  const ds = dPick.districts;
+  if (!ds.size) return 'ทั้งหมด';
+  if (ds.size === 1) return deliveryDistrictLabel([...ds][0]);
+  return int(ds.size) + ' เขต';
 }
 function deliveryFilterCounts(allRows){
   return {
@@ -389,13 +427,19 @@ function delStaffFilterHtml(staffList){
   return `<select class="select del-filter-input" id="fStaff" title="กรองช่องทาง / พนักงานขาย">${opts.join('')}</select>`;
 }
 function delDistrictFilterHtml(districtList){
-  const none = (districtList || []).find(([name]) => name === 'ไม่ระบุเขต');
-  const opts = ['<option value="">ทั้งหมด</option>']
-    .concat((districtList || []).filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) =>
-      `<option value="${esc(name)}"${dPick.zoneFilter === name ? ' selected' : ''}>${esc(name)} (${int(n)})</option>`
-    ));
-  if (none) opts.push(`<option value="__none__"${dPick.zoneFilter === '__none__' ? ' selected' : ''}>ไม่ระบุเขต (${int(none[1])})</option>`);
-  return `<select class="select del-filter-input" id="fZone" title="กรองตามเขต">${opts.join('')}</select>`;
+  const ds = dPick.districts;
+  const items = (districtList || []).map(([name, n]) => {
+    const key = name === 'ไม่ระบุเขต' ? '__none__' : name;
+    const on = ds.has(key);
+    return `<label class="del-zone-opt"><input type="checkbox" data-zone-filter="${esc(key)}"${on ? ' checked' : ''}> ${esc(name)} (${int(n)})</label>`;
+  });
+  return `<div class="del-zone-multi" id="fZoneWrap">
+    <button type="button" class="del-zone-btn del-filter-input" id="fZoneBtn" aria-expanded="false" title="เลือกได้หลายเขต">${esc(delDistrictFilterLabel())}</button>
+    <div class="del-zone-pop scrolly" id="fZonePop" hidden>
+      <button type="button" class="del-zone-clear" data-zone-clear>ล้าง · แสดงทั้งหมด</button>
+      ${items.join('') || '<div class="small muted" style="padding:6px 8px">ไม่มีข้อมูลเขต</div>'}
+    </div>
+  </div>`;
 }
 function delTableHead(staffList, districtList){
   return `<thead>
@@ -792,8 +836,9 @@ async function renderPlanTab(view){
   persistPlanSelection();
 
   const selected = planSelectedRows();
-  const withGeo = selected.filter(d => d.Latitude && d.Longitude);
-  const noGeo = selected.filter(d => !(d.Latitude && d.Longitude));
+  const enrichedSel = Planner.enrichStopCoords(selected, Store.data.deliveries, Store.data.customers);
+  const withGeo = enrichedSel.filter(d => Planner.hasCoords(d));
+  const noGeo = enrichedSel.filter(d => !Planner.hasCoords(d));
   const selCount = selected.length;
 
   // ถ้าเข้าหน้าจัดรถตรงๆ โดยไม่มีบิลที่เลือก — แสดง empty + ลิงก์ไปหน้าวันนี้
@@ -862,8 +907,9 @@ async function runAutoPlan(){
   const dec = el('decision');
   if (dec) { dec.innerHTML = decisionLoading(); icons(); }
   const btn=el('autoPlan'); if(btn){btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังวิเคราะห์…'; icons();}
-  const drafts=normalizeDeliveries((Store.data.deliveries||[]).filter(d=>Plan.selected.has(d.DeliveryID)&&d.Latitude));
-  const seq=Planner.order(drafts);
+  const drafts=normalizeDeliveries((Store.data.deliveries||[]).filter(d=>Plan.selected.has(d.DeliveryID)));
+  const enriched=Planner.enrichStopCoords(drafts, Store.data.deliveries, Store.data.customers);
+  const seq=Planner.order(enriched.filter(d=>Planner.hasCoords(d)));
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
   Plan.result={seq,...out};
@@ -1131,8 +1177,13 @@ async function confirmRoute(){
     TotalStops:m.stops, TotalBoxes:m.boxes, TotalDistance:Planner.routeDisplayKm(m), EstimatedDuration:m.durationMin,
     EstimatedFuelCost:c.fuel, EstimatedTollCost:c.toll, EstimatedParkingCost:c.parking,
     EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
-  const stops=seq.map(s=>({ DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
-    Latitude:s.Latitude, Longitude:s.Longitude, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) }));
+  const stops=seq.map(s=>{
+    const d=(Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID));
+    const lat=Planner.hasCoords(s)?+s.Latitude:(d&&Planner.hasCoords(d)?+d.Latitude:null);
+    const lng=Planner.hasCoords(s)?+s.Longitude:(d&&Planner.hasCoords(d)?+d.Longitude:null);
+    return { DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
+      Latitude:lat, Longitude:lng, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) };
+  });
   Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
   if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.districts.clear(); }
@@ -1163,6 +1214,35 @@ async function renderRoundsTab(view){
   $$('[data-route]',view).forEach(b=>b.onclick=()=>openRouteDetail(b.dataset.route));
   $$('[data-print-route]',view).forEach(b=>b.onclick=()=>printRouteNote(routes.find(x=>x.RouteID===b.dataset.printRoute)));
   $$('[data-start]',view).forEach(b=>b.onclick=()=>{ updateLocal('routes','startRoute',b.dataset.start,{Status:'In Progress'},{routeId:b.dataset.start}).then(()=>toast('เริ่มรอบส่งแล้ว','ok')).catch(()=>{}); });
+}
+function routeFuelExpense(route, expenses){
+  return (expenses||[]).filter(e => e.RouteID === route.RouteID && e.ExpenseType === 'FUEL')
+    .reduce((n, e) => n + (Number(e.Amount) || 0), 0);
+}
+function routeGpsFuelEst(route){
+  const km = Number(route.GpsDistanceKm);
+  if (!km) return null;
+  return GpsTrack.fuelEst(km, route);
+}
+function gpsDiffPct(est, actual){
+  est = Number(est); actual = Number(actual);
+  if (!est || !actual) return '';
+  const d = ((actual - est) / est * 100);
+  const sign = d > 0 ? '+' : '';
+  return sign + d.toFixed(0) + '%';
+}
+function fmtTimeShort(iso){
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch (_) { return '—'; }
+}
+function gpsSourceLabel(src){
+  if (src === 'cartrack') return 'Cartrack (GPS รถ)';
+  if (src === 'driver') return 'มือถือคนขับ';
+  if (src === 'mixed') return 'Cartrack + มือถือ';
+  return '—';
 }
 function routeEditForm(r){
   if(!r) return;
@@ -1441,11 +1521,29 @@ async function showRouteTrackModal(route){
     API.get('getRouteGpsTrack',{routeId:route.RouteID}),
   ]);
   const dwells = deriveDwells(track);
+  const useCt = (track||[]).some(p => GpsTrack.isCartrack(p.EventType));
+  const gm = GpsTrack.metrics(track, { cartrack: useCt });
+  const gpsSrc = route.GpsSource || (useCt ? 'cartrack' : (track.length ? 'driver' : 'none'));
+  const gpsFuel = GpsTrack.fuelEst(gm.distanceKm, route);
+  const estKm = Number(route.TotalDistance) || 0;
+  const estFuel = Number(route.EstimatedFuelCost) || 0;
+  const statRow = (l, v, sub) => `<div class="flex between" style="padding:5px 0;font-size:13px"><span class="muted">${l}${sub?` <span class="small" style="color:#9AA3B2">${sub}</span>`:''}</span><span class="tab strong">${v}</span></div>`;
   const m = modal({ title:'เส้นทางจริง vs วางแผน — '+esc(route.RouteID), body:`
-    <div id="rtMap" class="map" style="height:340px;margin-bottom:12px"></div>
+    <div id="rtMap" class="map" style="height:300px;margin-bottom:12px"></div>
     <div class="flex gap12 small muted" style="margin-bottom:12px">
       <span><span style="display:inline-block;width:14px;height:3px;background:#2563EB;vertical-align:middle;margin-right:5px"></span>วางแผน</span>
       <span><span style="display:inline-block;width:14px;height:3px;background:#EF4444;vertical-align:middle;margin-right:5px"></span>วิ่งจริง (GPS)</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:11px;padding:12px;margin-bottom:12px">
+      <div class="small strong muted mb8">เปรียบเทียบระยะทาง / ค่าน้ำมัน</div>
+      ${statRow('แหล่ง GPS', gpsSourceLabel(gpsSrc), int(gm.pointCount)+' จุด')}
+      ${statRow('ออกจากคลัง (GPS)', fmtTimeShort(gm.startedAt), gm.startedAt ? thDate(gm.startedAt) : '')}
+      ${statRow('กลับถึงคลัง (GPS)', fmtTimeShort(gm.endedAt), gm.endedAt ? thDate(gm.endedAt) : '')}
+      ${statRow('เวลาวิ่งจริง', gm.durationMin ? Planner.fmtDur(gm.durationMin) : '—', '')}
+      ${statRow('ระยะประมาณ (ไป)', num1(estKm)+' กม.', 'จากแผนที่วางแผน')}
+      ${statRow('ระยะ GPS จริง', gm.distanceKm ? num1(gm.distanceKm)+' กม.' : '—', gm.distanceKm && estKm ? gpsDiffPct(estKm, gm.distanceKm) : 'ยังไม่มี track')}
+      ${statRow('น้ำมันประมาณ', money(estFuel)+' ฿', '')}
+      ${statRow('น้ำมันจาก GPS', gpsFuel ? money(gpsFuel)+' ฿' : '—', 'ระยะ GPS × อัตรา/กม.')}
     </div>
     <div class="h-card mb14">จุดที่จอดนิ่งนาน (${dwells.length})</div>
     ${dwells.length? dwells.map(d=>`<div class="flex between" style="padding:6px 0;border-bottom:1px solid #F3F5F8"><span class="small">${timeShort(d.from)}–${timeShort(d.to)}</span><span class="small strong">จอด ${int(d.minutes)} นาที</span></div>`).join('')
@@ -1799,6 +1897,7 @@ ROUTES.reports = async function(view){
           <button class="btn btn-sm" data-preset="month">เดือนนี้</button></div>
         <div style="align-self:flex-end"><label class="label">ประเภทรายงาน</label><select class="select" id="rType" style="width:210px">
           <option value="routes">สรุปรอบส่ง</option>
+          <option value="gpsactual">เปรียบเทียบ GPS จริง</option>
           <option value="deliveries">รายการจัดส่ง (รายร้าน)</option>
           <option value="expenses">ค่าใช้จ่ายแยกประเภท</option></select></div>
         <div style="flex:1"></div>
@@ -1822,13 +1921,15 @@ ROUTES.reports = async function(view){
     const company=routes.filter(r=>r.RouteType==='COMPANY_VEHICLE');
     const external=routes.filter(r=>r.RouteType==='EXTERNAL_VEHICLE');
     const dist=sum(routes,'TotalDistance'); const boxes=sum(routes,'TotalBoxes');
+    const gpsDist=sum(routes,'GpsDistanceKm');
     const kpi=(l,v,u)=>`<div class="cost"><div class="lbl">${l}</div><div class="val tab">${v}</div><div class="unit">${u||''}</div></div>`;
     el('rBody').innerHTML=`
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:6px">
         ${kpi('จำนวนงาน',int(dels.length),'งาน')}
         ${kpi('จำนวนรวม',int(sum(dels,'BoxQty')||boxes),'ชิ้น')}
         ${kpi('ค่าใช้จ่ายรวม',money(totalCost),'บาท')}
-        ${kpi('ระยะทางรวม',num1(dist),'กม.')}
+        ${kpi('ระยะประมาณ',num1(dist),'กม.')}
+        ${kpi('ระยะ GPS จริง',gpsDist ? num1(gpsDist) : '—','กม.')}
       </div>
       <div id="rDetail"></div>
     `;
@@ -1858,8 +1959,65 @@ ROUTES.reports = async function(view){
 /* สร้างตาราง + ข้อมูล export ตามประเภทรายงานที่เลือก */
 function reportDetail(type, rep){
   rep = rep||{};
-  const routes = rep.routes||[], dels = rep.deliveries||[];
+  const routes = rep.routes||[], dels = rep.deliveries||[], exps = rep.expenses||[];
   const rmap={}; routes.forEach(r=>{ rmap[r.RouteID]=r; });
+  if(type==='gpsactual'){
+    const hasTrack = r => Number(r.GpsPointCount) > 1;
+    const rows = routes.map(r=>{
+      const gpsFuel = routeGpsFuelEst(r);
+      const receipt = Number(r.ActualFuelExpense) || routeFuelExpense(r, exps);
+      return {
+        'รอบส่ง': r.RouteID, 'วันที่': r.DeliveryDate, 'คนขับ': r.DriverName||'',
+        'ออก': r.GpsStartedAt||'', 'กลับ': r.GpsEndedAt||'',
+        'ระยะประมาณ (กม.)': Number(r.TotalDistance)||0,
+        'ระยะ GPS จริง (กม.)': Number(r.GpsDistanceKm)||0,
+        'ผลต่างระยะ %': gpsDiffPct(r.TotalDistance, r.GpsDistanceKm),
+        'น้ำมันประมาณ (บาท)': Number(r.EstimatedFuelCost)||0,
+        'น้ำมันจาก GPS (บาท)': gpsFuel != null ? gpsFuel : '',
+        'น้ำมันใบเสร็จ (บาท)': receipt || '',
+        'เวลาวิ่ง GPS (น.)': Number(r.GpsDurationMin)||0,
+        'จุด GPS': Number(r.GpsPointCount)||0,
+        'แหล่ง GPS': gpsSourceLabel(r.GpsSource),
+        'สถานะ': (DSTATUS[r.Status]||{}).label||r.Status,
+      };
+    });
+    const sumEst = routes.reduce((n,r)=>n+(Number(r.TotalDistance)||0),0);
+    const sumGps = routes.reduce((n,r)=>n+(Number(r.GpsDistanceKm)||0),0);
+    const html=`    <div class="notice info mb14"><i data-lucide="satellite"></i><div>
+      <b>ระยะ GPS จริง</b> = ใช้ <b>Cartrack (GPS ติดรถ)</b> เป็นหลัก — ซิงก์ทุก ~1 นาที · ถ้าไม่มีใช้มือถือคนขับ<br>
+      <b>น้ำมันจาก GPS</b> = ระยะ GPS × อัตรา/กม. · <b>ใบเสร็จ</b> = บันทึกค่าใช้จ่ายประเภท ค่าน้ำมัน
+    </div></div>
+    <div class="card mt16"><div class="h-card mb14">เปรียบเทียบ GPS จริง · ${int(routes.length)} รอบ · ประมาณ ${num1(sumEst)} กม. vs GPS ${num1(sumGps)} กม.</div>
+      <div class="tbl-wrap scrolly"><table class="tbl"><thead><tr>
+        <th>รอบส่ง</th><th>วันที่</th><th>คนขับ</th><th>ออก</th><th>กลับ</th>
+        <th class="r">กม.ประมาณ</th><th class="r">กม.GPS</th><th class="r">Δ%</th>
+        <th class="r">น้ำมันประมาณ</th>        <th class="r">น้ำมัน GPS</th><th class="r">ใบเสร็จ</th>
+        <th class="r">เวลา</th><th>แหล่ง</th><th>สถานะ</th><th class="r">แผนที่</th>
+      </tr></thead><tbody>${routes.map(r=>{
+        const gpsFuel = routeGpsFuelEst(r);
+        const receipt = Number(r.ActualFuelExpense) || routeFuelExpense(r, exps);
+        const diff = gpsDiffPct(r.TotalDistance, r.GpsDistanceKm);
+        const diffCls = diff && diff.startsWith('+') ? ' style="color:#D97706"' : (diff && diff.startsWith('-') ? ' style="color:#059669"' : '');
+        return `<tr>
+          <td class="mono strong">${esc(r.RouteID)}</td>
+          <td class="small">${thDate(r.DeliveryDate)}</td>
+          <td>${esc(r.DriverName||'—')}</td>
+          <td class="small tab">${fmtTimeShort(r.GpsStartedAt)}</td>
+          <td class="small tab">${fmtTimeShort(r.GpsEndedAt)}</td>
+          <td class="r tab">${num1(r.TotalDistance)}</td>
+          <td class="r tab strong">${r.GpsDistanceKm ? num1(r.GpsDistanceKm) : '<span class="muted">—</span>'}</td>
+          <td class="r tab small"${diffCls}>${diff || '—'}</td>
+          <td class="r tab">${money(r.EstimatedFuelCost)}</td>
+          <td class="r tab">${gpsFuel != null ? money(gpsFuel) : '—'}</td>
+          <td class="r tab">${receipt ? money(receipt) : '—'}</td>
+          <td class="r tab small">${r.GpsDurationMin ? int(r.GpsDurationMin)+' น.' : '—'}</td>
+          <td class="small">${esc(gpsSourceLabel(r.GpsSource))}</td>
+          <td>${dstatusBadge(r.Status)}</td>
+          <td class="r">${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="ดูเส้นทาง"><i data-lucide="route"></i></button>`:'<span class="muted small">ไม่มี GPS</span>'}</td>
+        </tr>`;
+      }).join('')||`<tr><td colspan="15">${emptyState('ไม่มีรอบส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
+    return { html, rows, filename:'report_gps_actual', title:'รายงานเปรียบเทียบ GPS จริง' };
+  }
   if(type==='deliveries'){
     const totBox = dels.reduce((n,d)=>n+(+d.BoxQty||0),0);
     const rows = dels.map(d=>({
@@ -1921,6 +2079,20 @@ function printReport(from,to,rep,type){
     <table><thead><tr><th class="tl">รอบส่ง</th><th>วันที่</th><th>ค่าน้ำมัน</th><th>ทางด่วน</th><th>จอดรถ</th><th>รถภายนอก</th><th>อื่นๆ</th><th>รวม</th></tr></thead>
     <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td class="r">${money(r.EstimatedFuelCost)}</td><td class="r">${money(r.EstimatedTollCost)}</td><td class="r">${money(r.EstimatedParkingCost)}</td><td class="r">${money(r.EstimatedExternalCost)}</td><td class="r">${money(r.EstimatedOtherCost)}</td><td class="r">${money(r.EstimatedTotalCost)}</td></tr>`).join('')||'<tr><td colspan="8" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
     <tfoot><tr><th colspan="2" class="r">รวมทั้งสิ้น</th><th class="r">${money(sum(routes,'EstimatedFuelCost'))}</th><th class="r">${money(sum(routes,'EstimatedTollCost'))}</th><th class="r">${money(sum(routes,'EstimatedParkingCost'))}</th><th class="r">${money(sum(routes,'EstimatedExternalCost'))}</th><th class="r">${money(sum(routes,'EstimatedOtherCost'))}</th><th class="r">${money(total)}</th></tr></tfoot></table>`;
+  } else if(type==='gpsactual'){
+    title='รายงานเปรียบเทียบ GPS จริง';
+    const exps = rep.expenses||[];
+    tbl=`<div class="sec-title">เปรียบเทียบระยะทาง / ค่าน้ำมัน (GPS จริง vs ประมาณการ)</div>
+    <table><thead><tr><th>รอบส่ง</th><th>วันที่</th><th>คนขับ</th><th>ออก</th><th>กลับ</th><th class="r">กม.ประมาณ</th><th class="r">กม.GPS</th><th class="r">น้ำมันประมาณ</th><th class="r">น้ำมัน GPS</th><th class="r">ใบเสร็จ</th><th class="r">เวลา</th></tr></thead>
+    <tbody>${routes.map(r=>{
+      const gpsFuel = routeGpsFuelEst(r);
+      const receipt = Number(r.ActualFuelExpense) || routeFuelExpense(r, exps);
+      return `<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${esc(r.DriverName||'-')}</td>
+        <td>${fmtTimeShort(r.GpsStartedAt)}</td><td>${fmtTimeShort(r.GpsEndedAt)}</td>
+        <td class="r">${num1(r.TotalDistance)}</td><td class="r">${r.GpsDistanceKm?num1(r.GpsDistanceKm):'-'}</td>
+        <td class="r">${money(r.EstimatedFuelCost)}</td><td class="r">${gpsFuel!=null?money(gpsFuel):'-'}</td>
+        <td class="r">${receipt?money(receipt):'-'}</td><td class="r">${r.GpsDurationMin?int(r.GpsDurationMin)+' น.':'-'}</td></tr>`;
+    }).join('')||'<tr><td colspan="11" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody></table>`;
   } else {
     tbl=`<div class="sec-title">รายการรอบส่ง</div>
     <table><thead><tr><th class="tl">รอบส่ง</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th>จุด</th><th>กล่อง</th><th>ระยะทาง</th><th>เวลาวิ่ง</th><th>ต้นทุน</th><th>สถานะ</th></tr></thead>
@@ -1939,6 +2111,7 @@ async function printRouteNote(r){
       Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty||0,
     }));
   }
+  stops = Planner.enrichStopCoords(stops, Store.data.deliveries, Store.data.customers);
   const deliveryForStop = s => (Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID));
   const poForStop = s => {
     const d = deliveryForStop(s);
@@ -1970,8 +2143,9 @@ async function printRouteNote(r){
   let distRoundKm = 0;
   let fuelCost = Number(r.EstimatedFuelCost) || 0;
   let mapTag = '';
-  const mapCalc = await Planner.metricsForStops(stops);
-  if(mapCalc && mapCalc.metrics){
+  const mapCalc = await Planner.metricsForStops(stops, Store.data.deliveries, Store.data.customers);
+  const fullRoute = mapCalc && mapCalc.metrics && mapCalc.geoCount >= (mapCalc.totalCount || stops.length);
+  if(fullRoute){
     const mm = mapCalc.metrics;
     distOutKm = Planner.routeDisplayKm(mm);
     distRoundKm = Planner.fuelDistanceKm(mm);
@@ -1980,6 +2154,8 @@ async function printRouteNote(r){
     fuelCost = r.RouteType === 'EXTERNAL_VEHICLE'
       ? Number(r.EstimatedExternalCost) || 0
       : Planner.fuelCost(distRoundKm, veh);
+  } else if (mapCalc && mapCalc.metrics && mapCalc.geoCount > 0) {
+    mapTag = ' · บางจุดไม่มีพิกัด';
   }
   const body=`
     <div class="kv">

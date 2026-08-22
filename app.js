@@ -89,6 +89,60 @@ function deriveDwells(points, minMinutes, radiusM){
   }
   return dwells;
 }
+// ระยะทาง/เวลาจริงจาก GPS track (gps_logs) — Cartrack มาก่อน แล้วค่อยมือถือคนขับ
+const GpsTrack = {
+  normPlate(s){ return String(s||'').replace(/[\s\-]/g,'').toUpperCase(); },
+  isCartrack(ev){ return String(ev||'').startsWith('CARTRACK:'); },
+  cartrackReg(ev){ const m=String(ev||'').match(/^CARTRACK:(.+)$/); return m?this.normPlate(m[1]):''; },
+  pickTrack(route, linked, cartrackOrphans){
+    const plate = this.normPlate(route && route.LicensePlate);
+    const linkedCt = (linked||[]).filter(p=>this.isCartrack(p.EventType));
+    const linkedDrv = (linked||[]).filter(p=>!this.isCartrack(p.EventType));
+    let ct = (cartrackOrphans||[]).slice();
+    if(plate) ct = ct.filter(p=>this.cartrackReg(p.EventType)===plate);
+    const allCt = [...linkedCt, ...ct].sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
+    if(allCt.length>=2) return { track:allCt, source:'cartrack' };
+    const drv = linkedDrv.slice().sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
+    if(drv.length>=2) return { track:drv, source:'driver' };
+    const mixed = [...allCt,...drv].sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
+    return { track:mixed, source:mixed.length?'mixed':'none' };
+  },
+  metrics(points, opts){
+    opts = opts || {};
+    const cartrack = opts.cartrack;
+    const maxJumpKm = opts.maxJumpKm ?? 2;
+    const minDtSec = opts.minDtSec ?? (cartrack ? 45 : 20);
+    const minMoveM = opts.minMoveM ?? (cartrack ? 15 : 25);
+    const pts = (points||[])
+      .filter(p => Number.isFinite(+p.Latitude) && Number.isFinite(+p.Longitude) && p.Timestamp)
+      .slice().sort((a,b) => new Date(a.Timestamp) - new Date(b.Timestamp));
+    if(!pts.length) return { distanceKm:0, durationMin:0, pointCount:0, startedAt:null, endedAt:null };
+    if(pts.length === 1) return { distanceKm:0, durationMin:0, pointCount:1, startedAt:pts[0].Timestamp, endedAt:pts[0].Timestamp };
+    let dist = 0; let prev = pts[0];
+    for(let i=1;i<pts.length;i++){
+      const cur = pts[i];
+      const leg = haversine(+prev.Latitude,+prev.Longitude,+cur.Latitude,+cur.Longitude);
+      const dtSec = (new Date(cur.Timestamp)-new Date(prev.Timestamp))/1000;
+      if(leg>maxJumpKm && dtSec<60) continue;
+      if(leg*1000<minMoveM && dtSec<minDtSec) continue;
+      dist += leg; prev = cur;
+    }
+    const startedAt = pts[0].Timestamp;
+    const endedAt = pts[pts.length-1].Timestamp;
+    const durationMin = Math.max(0, Math.round((new Date(endedAt)-new Date(startedAt))/60000));
+    return { distanceKm:+dist.toFixed(1), durationMin, pointCount:pts.length, startedAt, endedAt };
+  },
+  routeMetrics(route, linked, cartrackOrphans){
+    const picked = this.pickTrack(route, linked, cartrackOrphans);
+    const m = this.metrics(picked.track, { cartrack: picked.source==='cartrack' });
+    return Object.assign(m, { source:picked.source, track:picked.track });
+  },
+  fuelEst(distanceKm, route){
+    if(!distanceKm) return 0;
+    const veh = (Store.data.vehicles||[]).find(v => v.LicensePlate && route.LicensePlate && v.LicensePlate === route.LicensePlate);
+    return Planner.fuelCost(distanceKm, veh);
+  },
+};
 // รายชื่อรถ+พิกัดปัจจุบัน ใช้ร่วมกันทั้งหน้า "วันนี้" และ "ติดตาม" — Store._live ถ้ามี (polling) ไม่งั้น fallback จาก bootstrap
 function liveVehicles(){
   return Store._live ? Store._live.vehicles : (Store.data.vehicles||[]).map(v=>({VehicleID:v.VehicleID,VehicleName:v.VehicleName,LicensePlate:v.LicensePlate,VehicleType:v.VehicleType,CurrentDriver:v.CurrentDriver,VehicleStatus:v.VehicleStatus,CartrackVehicleID:v.CartrackVehicleID,lat:v.CurrentLatitude,lng:v.CurrentLongitude,speed:v.CurrentSpeed,heading:v.CurrentHeading,lastPositionTime:v.LastPositionTime,lastSyncAt:v.LastSyncAt}));
@@ -302,7 +356,13 @@ const Mock = (() => {
       }
       case 'getRoutes': { let r=db.routes.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); return r; }
       case 'getRouteStops': return db.routeStops.filter(s=>!p.routeId||s.RouteID===p.routeId).sort((a,b)=>a.StopOrder-b.StopOrder);
-      case 'getRouteGpsTrack': return db.gps.filter(g=>g.RouteID===p.routeId).sort((a,b)=>new Date(a.Timestamp)-new Date(b.Timestamp));
+      case 'getRouteGpsTrack': {
+        const r = db.routes.find(x=>x.RouteID===p.routeId) || {};
+        const linked = db.gps.filter(g=>g.RouteID===p.routeId);
+        const orphans = db.gps.filter(g=>!g.RouteID && GpsTrack.isCartrack(g.EventType));
+        const rm = GpsTrack.routeMetrics(r, linked, orphans);
+        return rm.track;
+      }
       case 'getCustomers': return live(db.customers);
       case 'getEmployees': return live(db.employees);
       case 'getVehicles': return live(db.vehicles);
@@ -325,7 +385,24 @@ const Mock = (() => {
             deliveries.push(d); seen.add(d.DeliveryID);
           });
         }
-        return { deliveries, routes:db.routes.filter(x=>!x.IsDeleted&&inR(x.DeliveryDate)), expenses:db.expenses.filter(x=>!x.IsDeleted&&inR(x.ExpenseDate)) };
+        const routesList = db.routes.filter(x=>!x.IsDeleted&&inR(x.DeliveryDate));
+        const fuelExp = {};
+        db.expenses.filter(x=>!x.IsDeleted&&x.ExpenseType==='FUEL').forEach(e=>{
+          if(e.RouteID) fuelExp[e.RouteID]=(fuelExp[e.RouteID]||0)+(Number(e.Amount)||0);
+        });
+        routesList.forEach(r=>{
+          const linked = db.gps.filter(g=>g.RouteID===r.RouteID);
+          const orphans = db.gps.filter(g=>!g.RouteID && GpsTrack.isCartrack(g.EventType));
+          const rm = GpsTrack.routeMetrics(r, linked, orphans);
+          r.GpsDistanceKm = rm.distanceKm;
+          r.GpsDurationMin = rm.durationMin;
+          r.GpsStartedAt = rm.startedAt;
+          r.GpsEndedAt = rm.endedAt;
+          r.GpsPointCount = rm.pointCount;
+          r.GpsSource = rm.source;
+          r.ActualFuelExpense = +(fuelExp[r.RouteID]||0).toFixed(2);
+        });
+        return { deliveries, routes:routesList, expenses:db.expenses.filter(x=>!x.IsDeleted&&inR(x.ExpenseDate)) };
       }
       case 'getSettings': return p.group?db.settings.filter(s=>s.Group===p.group):db.settings;
       case 'getCartrackStatus': return cartrackStatus();
@@ -626,7 +703,8 @@ const Geo = {
   // points = [{lat,lng}, ...] เรียงตามลำดับที่จะวิ่ง (คลัง → จุด1 → ... → คลัง)
   async route(points){
     try{
-      const valid = (points||[]).filter(p=>p && p.lat && p.lng);
+      const valid = (points||[]).map(p=>p && ({ lat:+p.lat, lng:+p.lng }))
+        .filter(p=>p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
       if(valid.length<2) return null;
       const coords = valid.map(p=>`${p.lng},${p.lat}`).join(';');
       const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
@@ -1001,6 +1079,39 @@ const Planner = {
   // ระยะทางแสดงผล = ไป (คลัง→จุดส่ง) · ค่าน้ำมันใช้ไป-กลับ
   routeDisplayKm(m){ return m && m.outboundKm != null ? m.outboundKm : (m ? m.distance : 0); },
   fuelDistanceKm(m){ return m && m.distance != null ? m.distance : 0; },
+  hasCoords(s){
+    return !!(s && Number.isFinite(+s.Latitude) && Number.isFinite(+s.Longitude));
+  },
+  // เติมพิกัดจากงานส่ง / ลูกค้า — route_stops จาก DB มักไม่มี lat/lng แต่ deliveries มี
+  enrichStopCoords(stops, deliveries, customers){
+    const dels = deliveries || [];
+    const custs = customers || [];
+    const findDel = id => id && dels.find(x => String(x.DeliveryID) === String(id));
+    const findCust = s => custs.find(c =>
+      String(c.CustomerName || '').trim() === String(s.CustomerName || '').trim() &&
+      (!String(s.BranchName || '').trim() || String(c.BranchName || '').trim() === String(s.BranchName || '').trim())
+    );
+    return (stops || []).map(s => {
+      const copy = Object.assign({}, s);
+      if (this.hasCoords(copy)) {
+        copy.Latitude = +copy.Latitude;
+        copy.Longitude = +copy.Longitude;
+        return copy;
+      }
+      const d = findDel(copy.DeliveryID);
+      if (d && this.hasCoords(d)) {
+        copy.Latitude = +d.Latitude;
+        copy.Longitude = +d.Longitude;
+        return copy;
+      }
+      const c = findCust(copy);
+      if (c && this.hasCoords(c)) {
+        copy.Latitude = +c.Latitude;
+        copy.Longitude = +c.Longitude;
+      }
+      return copy;
+    });
+  },
   // total distance incl return to warehouse (Haversine straight-line — instant, offline)
   metrics(seq){
     const wh = warehouse();
@@ -1041,21 +1152,25 @@ const Planner = {
     };
   },
   // คำนวณระยะทางตามแผนที่จากรายการจุดส่ง (ใช้ตอนพิมพ์ใบงาน)
-  async metricsForStops(stops){
-    const ordered = (stops || [])
-      .filter(s => s && s.Latitude && s.Longitude)
+  async metricsForStops(stops, deliveries, customers){
+    const enriched = this.enrichStopCoords(stops, deliveries, customers);
+    const ordered = enriched
+      .filter(s => this.hasCoords(s))
       .sort((a,b)=>(Number(a.StopOrder)||0)-(Number(b.StopOrder)||0))
       .map(s => Object.assign({}, s, { Latitude:+s.Latitude, Longitude:+s.Longitude }));
-    if(!ordered.length) return null;
-    const attachLegs = () => ordered.forEach(s => {
-      const orig = (stops || []).find(x => (s.DeliveryID && String(x.DeliveryID) === String(s.DeliveryID)) || x.StopOrder === s.StopOrder);
-      if(orig && s._distPrev != null) orig._distPrev = s._distPrev;
+    if(!ordered.length) return { metrics:null, seq:[], geoCount:0, totalCount:(stops||[]).length };
+    const attachLegs = () => enriched.forEach(orig => {
+      const calc = ordered.find(x =>
+        (orig.DeliveryID && String(x.DeliveryID) === String(orig.DeliveryID)) ||
+        x.StopOrder === orig.StopOrder
+      );
+      if(calc && calc._distPrev != null) orig._distPrev = calc._distPrev;
     });
     const road = await this.roadMetrics(ordered);
-    if(road){ attachLegs(); return { metrics:road, seq:ordered }; }
+    if(road){ attachLegs(); return { metrics:road, seq:ordered, geoCount:ordered.length, totalCount:enriched.length }; }
     const straight = this.metrics(ordered);
     attachLegs();
-    return { metrics:straight, seq:ordered };
+    return { metrics:straight, seq:ordered, geoCount:ordered.length, totalCount:enriched.length };
   },
   companyCost(distanceKm, vehicle){
     const rate = vehicle && vehicle.FuelCostPerKm ? Number(vehicle.FuelCostPerKm) : this.fuelPerKm();

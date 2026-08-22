@@ -360,6 +360,15 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
 .del-tbl thead tr.del-filter-row th{top:38px;z-index:2;background:#fff;padding:6px 8px;font-weight:500;box-shadow:0 1px 0 var(--border)}
 .del-filter-input{width:100%;min-height:32px;height:32px;font-size:12px;padding:0 8px}
 .del-filter-row .select.del-filter-input{padding-right:24px}
+.del-zone-multi{position:relative;width:100%}
+.del-zone-btn{position:relative;width:100%;min-height:32px;height:32px;font-size:12px;padding:0 28px 0 8px;text-align:left;background:#fff;border:1px solid var(--border);border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.del-zone-btn::after{content:'';position:absolute;right:10px;top:50%;margin-top:-3px;border:5px solid transparent;border-top-color:#6B7383;pointer-events:none}
+.del-zone-pop{position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:220px;max-height:240px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.12);z-index:20;padding:6px 0}
+.del-zone-pop[hidden]{display:none!important}
+.del-zone-clear{display:block;width:calc(100% - 12px);margin:0 6px 6px;padding:6px 8px;border:0;border-radius:7px;background:var(--brand-soft);color:var(--brand-ink);font-size:12px;font-weight:600;cursor:pointer;text-align:left}
+.del-zone-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12px;cursor:pointer;white-space:normal;line-height:1.35}
+.del-zone-opt:hover{background:#F4F6F9}
+.del-zone-opt input{flex-shrink:0;margin:0}
 .del-tbl tbody td{font-size:var(--fs-table)}
 .del-tbl tfoot td{position:sticky;bottom:0;background:#fff;box-shadow:0 -1px 0 var(--border);font-size:13px}
 .job-card-list{display:flex;flex-direction:column;gap:12px}
