@@ -65,6 +65,12 @@ function districtFromAddress(addr){
   if (m3) return 'อำเภอ' + m3[1];
   return '';
 }
+function shortAddr(addr, max){
+  const s = String(addr || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const n = max || 72;
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
 function uniqueDocParts(d){
   const seen = new Set();
   const out = [];
@@ -123,7 +129,7 @@ ROUTES.dashboard = async function(view){
             const invShow = (inv && po && inv.replace(/\s+/g,'').toLowerCase() === po.replace(/\s+/g,'').toLowerCase()) ? '—' : (inv || '—');
             return `<tr class="${dPick.sel.has(d.DeliveryID) ? 'row-sel' : ''}">
               <td class="c"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${dPick.sel.has(d.DeliveryID) ? 'checked' : ''}></td>
-              <td class="strong">${esc(d.CustomerName || '—')}</td>
+              <td class="strong">${esc(d.CustomerName || '—')}${d.Address ? `<div class="small muted" style="font-weight:400;margin-top:2px">${esc(shortAddr(d.Address, 64))}</div>` : ''}</td>
               <td>${zone ? esc(zone) : '<span class="muted">—</span>'}</td>
               <td class="r">${delAmountHtml(d)}</td>
               <td class="mono small">${esc(po || '—')}</td>
@@ -328,6 +334,7 @@ function delMobileCard(d){
       <div class="job-card-main">
         <div class="job-card-title">${esc(d.CustomerName || 'ไม่ระบุร้าน')}</div>
         <div class="job-card-sub">${esc(zone || 'ไม่ระบุเขต')}</div>
+        ${d.Address ? `<div class="small muted" style="margin-top:2px">${esc(shortAddr(d.Address, 80))}</div>` : ''}
       </div>
       ${delStatusBadge(d)}
     </div>
@@ -348,7 +355,7 @@ function delDesktopRow(d){
   const invShow = (inv && po && inv.replace(/\s+/g,'').toLowerCase() === po.replace(/\s+/g,'').toLowerCase()) ? '—' : (inv || '—');
   return `<tr class="${selected ? 'row-sel' : ''}">
     <td class="c"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${selected ? 'checked' : ''}></td>
-    <td class="strong">${esc(d.CustomerName || '—')}</td>
+    <td class="strong">${esc(d.CustomerName || '—')}${d.Address ? `<div class="small muted" style="font-weight:400;margin-top:2px">${esc(shortAddr(d.Address, 64))}</div>` : ''}</td>
     <td class="small">${zone ? esc(zone) : '<span class="muted">—</span>'}</td>
     <td class="r">${delAmountHtml(d)}</td>
     <td class="mono small">${esc(po || '—')}</td>
@@ -639,13 +646,20 @@ function planSelectedCard(d, { removable } = {}){
   const zone = DelView.zone(d);
   const po = DelView.poNo(d);
   const inv = DelView.invoiceNo(d);
+  const amt = DelView.amount(d);
   const invShow = (inv && po && inv.replace(/\s+/g,'').toLowerCase() === po.replace(/\s+/g,'').toLowerCase()) ? '' : inv;
+  const geoMsg = hasGeo
+    ? ''
+    : (d.Address
+      ? `<div class="small" style="color:var(--amber-ink)">มีที่อยู่แล้ว แต่ยังไม่มีพิกัด — กดแก้ที่อยู่หรือรอระบบหาพิกัด</div>`
+      : `<div class="small" style="color:var(--amber-ink)">ไม่มีพิกัด — ต้องเพิ่มที่อยู่ก่อนจัดเส้นทาง</div>`);
   return `<div class="check-item on locked">
     <div class="cbx"><i data-lucide="check"></i></div>
     <div style="flex:1;min-width:0">
       <div class="shop-name">${esc(d.CustomerName || '—')}</div>
-      <div class="small muted">${esc(zone || 'ไม่ระบุเขต')}${po ? ' · ' + esc(po) : (invShow ? ' · ' + esc(invShow) : '')}</div>
-      ${hasGeo ? '' : `<div class="small" style="color:var(--amber-ink)">ไม่มีพิกัด — ต้องเพิ่มที่อยู่ก่อนจัดเส้นทาง</div>`}
+      <div class="small muted">${esc(zone || 'ไม่ระบุเขต')}${po ? ' · ' + esc(po) : (invShow ? ' · ' + esc(invShow) : '')}${amt != null ? ' · ' + money(amt) + ' ฿' : ''}</div>
+      ${d.Address ? `<div class="small muted">${esc(shortAddr(d.Address, 90))}</div>` : ''}
+      ${geoMsg}
     </div>
     <div style="text-align:right">
       ${removable ? `<button class="btn btn-sm" data-unpick="${esc(d.DeliveryID)}" type="button">เอาออก</button>` : ''}
@@ -663,6 +677,30 @@ function planWizardStepsHtml(step){
 }
 ROUTES.planning = async function(view){
   if (Plan.tab === 'rounds') return renderRoundsTab(view);
+  // มีที่อยู่จากบิลแล้วแต่ยังไม่มีพิกัด → หาพิกัดอัตโนมัติครั้งเดียวต่อชุดที่เลือก
+  const geoKey = [...Plan.selected].sort().join(',');
+  if (geoKey && Plan._geocodedKey !== geoKey) {
+    const need = planSelectedRows().filter(d => String(d.Address || '').trim() && !(d.Latitude && d.Longitude));
+    Plan._geocodedKey = geoKey;
+    if (need.length) {
+      toast('กำลังหาพิกัดจากที่อยู่…', 'info');
+      let ok = 0;
+      for (const d of need.slice(0, 25)) {
+        try {
+          const g = await Geo.geocode(String(d.Address).trim() + ' ประเทศไทย');
+          if (!g || !g.lat || !g.lng) continue;
+          d.Latitude = g.lat;
+          d.Longitude = g.lng;
+          await updateLocal('deliveries', 'updateDelivery', d.DeliveryID, {
+            Latitude: g.lat, Longitude: g.lng, Address: d.Address,
+          });
+          ok++;
+        } catch (_) {}
+      }
+      if (ok) toast('หาพิกัดได้ ' + ok + ' บิล', 'ok');
+      else if (need.length) toast('ยังหาพิกัดอัตโนมัติไม่ได้ — กดแก้ที่อยู่', 'warn');
+    }
+  }
   return renderPlanTab(view);
 };
 ROUTES.rounds = async function(view){

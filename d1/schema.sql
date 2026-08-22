@@ -130,6 +130,7 @@ create table deliveries (
   address       text,
   latitude      real,
   longitude     real,
+  amount        real,              -- รวมทั้งสิ้น (TRCloud grand_total)
   box_qty       integer,
   priority      text default 'NORMAL',
   note          text,
