@@ -1808,11 +1808,21 @@ async function printRouteNote(r){
     }));
   }
   const deliveryForStop = s => (Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID));
-  const billForStop = s => {
+  const poForStop = s => {
     const d = deliveryForStop(s);
-    if(!d) return '—';
-    const parts = uniqueDocParts(d);
-    return parts.length ? parts.join(' / ') : '—';
+    return d ? (DelView.poNo(d) || '—') : '—';
+  };
+  const invForStop = s => {
+    const d = deliveryForStop(s);
+    if (!d) return '—';
+    const po = DelView.poNo(d);
+    const inv = DelView.invoiceNo(d);
+    if (inv && po && inv.replace(/\s+/g, '').toLowerCase() === po.replace(/\s+/g, '').toLowerCase()) return '—';
+    return inv || '—';
+  };
+  const qtyNumForStop = s => {
+    const d = deliveryForStop(s);
+    return Number(d ? (d.BoxQty ?? s.BoxQty) : s.BoxQty) || 0;
   };
   const addrForStop = s => {
     const parts = [s.BranchName, s.Address].filter(Boolean);
@@ -1821,25 +1831,29 @@ async function printRouteNote(r){
     return d && d.Address ? d.Address : '—';
   };
   const row=(l,v)=>`<div><span>${l}:</span> <b>${esc(v==null||v===''?'-':v)}</b></div>`;
+  const distKm = Number(r.TotalDistance) || 0;
+  const fuelCost = Number(r.EstimatedFuelCost) || 0;
   const body=`
     <div class="kv">
       ${row('รอบส่ง',r.RouteID)}${row('วันที่',thDate(r.DeliveryDate))}
       ${row('คนขับ',r.DriverName)}${row('รถ',((r.VehicleName||r.ProviderName||'') + (r.LicensePlate ? ' · '+r.LicensePlate : '')).trim() || '-')}
-      ${row('จำนวนบิล',int(stops.length))}${row('กล่องรวม',int(r.TotalBoxes))}</div>
+      ${row('จำนวนบิล',int(stops.length))}${row('จำนวนรวม',int(r.TotalBoxes))}
+      ${row('ระยะทาง',num1(distKm)+' กม.')}${row('ค่าน้ำมัน (ประมาณ)',money(fuelCost)+' บาท')}</div>
     <div class="sec-title">รายการขึ้นของ / จุดส่ง — ให้คนขับเช็คก่อนออกรถ</div>
     <table>
-      <colgroup><col style="width:6%"><col style="width:5%"><col style="width:22%"><col style="width:18%"><col style="width:8%"><col></colgroup>
-      <thead><tr><th>☐</th><th>#</th><th>ร้าน / ลูกค้า</th><th>เลขบิล / PO</th><th>กล่อง</th><th>ที่อยู่</th></tr></thead>
+      <colgroup><col style="width:5%"><col style="width:4%"><col style="width:18%"><col style="width:14%"><col style="width:14%"><col style="width:7%"><col></colgroup>
+      <thead><tr><th>☐</th><th>#</th><th>ลูกค้า</th><th>เลขที่เอกสารอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
       <tbody>${stops.map(s=>`<tr>
         <td class="c">☐</td><td class="c">${s.StopOrder}</td>
         <td>${esc(s.CustomerName||'—')}</td>
-        <td class="mono">${esc(billForStop(s))}</td>
-        <td class="r">${int(s.BoxQty)}</td>
+        <td class="mono small">${esc(poForStop(s))}</td>
+        <td class="mono small">${esc(invForStop(s))}</td>
+        <td class="r">${int(qtyNumForStop(s))}</td>
         <td class="addr small">${esc(addrForStop(s))}</td>
-      </tr>`).join('')||'<tr><td colspan="6" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
-      <tfoot><tr><th colspan="4" class="r">รวมกล่อง</th><th class="r">${int(stops.reduce((n,s)=>n+(Number(s.BoxQty)||0),0))}</th><th></th></tr></tfoot>
+      </tr>`).join('')||'<tr><td colspan="7" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
+      <tfoot><tr><th colspan="5" class="r">รวมจำนวน</th><th class="r">${int(stops.reduce((n,s)=>n+qtyNumForStop(s),0))}</th><th></th></tr></tfoot>
     </table>
-    <p class="small muted" style="margin:12px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตามหมายเลข #</p>
+    <p class="small muted" style="margin:12px 0 0">หัวคอลัมน์ตาม TRCloud · เลขที่เอกสารอ้างอิง = reference · เลขบิล = ref_no · จำนวน = จำนวนชิ้น</p>
     <div class="sign"><div>ผู้จัดงาน</div><div>คนขับ (เช็คขึ้นของ)</div></div>`;
   Printer.open('ใบงานส่ง — เช็ครายการขึ้นของ', rSize(), body);
 }
