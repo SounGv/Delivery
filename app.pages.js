@@ -124,7 +124,7 @@ ROUTES.dashboard = async function(view){
   page(view, `
     ${head('วันนี้', `${thDate(Store.date)} · ${int(open.length)} ที่ · ${int(districts.length)} เขต`,
       `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}
-    <div class="notice info mb14"><i data-lucide="info"></i><div><b>กดเลือกเขต</b> → จัดเส้นทางอัตโนมัติ → <b>เลือกคนขับ</b> → <b>ยืนยัน</b> → <b>พิมพ์ใบงาน</b> (เช็ครายการขึ้นของ)</div></div>
+    <div class="notice info mb14"><i data-lucide="info"></i><div><b>เลือกเขต</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b> · จัดรอบใหม่ให้กลับมาเลือกเขตอีกครั้ง</div></div>
     <div class="del-search mb14">
       <i data-lucide="search"></i>
       <input id="delSearch" class="input" placeholder="กรอกเขต หรือค้นหาร้าน…" value="${esc(Store.search || '')}">
@@ -602,7 +602,6 @@ function planSelectedCard(d, { removable } = {}){
   </div>`;
 }
 ROUTES.planning = async function(view){
-  if (Plan.tab === 'rounds') return renderRoundsTab(view);
   // มีที่อยู่จากบิลแล้วแต่ยังไม่มีพิกัด → หาพิกัดอัตโนมัติครั้งเดียวต่อชุดที่เลือก
   const geoKey = [...Plan.selected].sort().join(',');
   if (geoKey && Plan._geocodedKey !== geoKey) {
@@ -669,10 +668,8 @@ async function renderPlanTab(view){
   if (!selCount) {
     page(view, `
       ${head('จัดรถ', thDate(Store.date), '')}
-      ${planPageTabs('plan')}
-      ${emptyState('ยังไม่ได้เลือกเขต','กดเลือกเขตจากหน้าวันนี้ แล้วกดจัดรถ','<a class="btn btn-primary btn-lg" href="#/dashboard"><i data-lucide="home"></i>ไปหน้าวันนี้</a>')}
+      ${emptyState('ยังไม่ได้เลือกเขต','กดเลือกเขตจากหน้าวันนี้','<a class="btn btn-primary btn-lg" href="#/dashboard"><i data-lucide="home"></i>ไปหน้าวันนี้</a>')}
     `);
-    bindPlanTabs(view);
     return;
   }
 
@@ -681,9 +678,8 @@ async function renderPlanTab(view){
     : (selected.length === 1 ? DelView.zone(selected[0]) : '');
 
   page(view, `
-    ${head('จัดรถ', `${thDate(Store.date)} · ${int(uniqueShopCount(withGeo.length ? withGeo : selected))} ร้าน · ${int(selCount)} บิล${districtLabel ? ' · ' + esc(districtLabel) : ''}`,
+    ${head('จัดรถ', `${thDate(Store.date)} · ${int(selCount)} บิล${districtLabel ? ' · ' + esc(districtLabel) : ''}`,
       `<a class="btn btn-sm" href="#/dashboard" id="planChangeSel"><i data-lucide="map-pin"></i>เปลี่ยนเขต</a>`)}
-    ${planPageTabs('plan')}
     ${noGeo.length ? `<div class="notice warn mb14"><i data-lucide="map-pin-off"></i><div>
       ${int(noGeo.length)} บิลยังไม่มีพิกัด — จัดได้ ${int(withGeo.length)} บิล (ระบบจะข้ามบิลที่ไม่มีพิกัด)
       <details class="plan-skipped-bills"><summary>ดูรายการที่ข้าม</summary>
@@ -707,7 +703,6 @@ async function renderPlanTab(view){
   if (change) change.onclick = () => { Plan.locked = false; persistPlanSelection(); location.hash = '#/dashboard'; };
 
   bindDecisionEvents();
-  bindPlanTabs(view);
 
   if (Plan.result) {
     renderDecision();
@@ -740,14 +735,8 @@ async function runAutoPlan(){
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
   Plan.result={seq,...out};
-  // เลือกอัตโนมัติ: มีรถว่าง ≥2 คัน → เริ่มที่ Option C (แบ่งหลาย Route ตามพื้นที่) เป็นค่าเริ่มต้นเสมอ
-  // เพราะนี่คือสิ่งที่ "จัดเส้นทางอัตโนมัติ" ควรทำเมื่อมีรถหลายคัน — ไม่ใช่ซ่อนไว้ใน Option เพิ่มเติม
-  // ถ้ามีรถว่างคันเดียว (ไม่มี Option C) จึงกลับไปใช้ตรรกะเดิม: รถแนะนำ > Option ที่รองรับได้และถูกที่สุด > ตัวแรก
-  const cOpt = out.options.find(o=>o.id==='C');
-  const feasibleCheap = out.options.filter(o=>o.feasible).sort((a,b)=>a.cost.total-b.cost.total)[0];
-  Plan.chosen = cOpt ? 'C' : (out.options.find(o=>o.recommended) || feasibleCheap || out.options[0]).id;
-  if (cOpt) Plan.splitSel = cOpt.split.map(splitSelFor);
-  // ค่าเริ่มต้นสำหรับเลือกรถ/คนขับเอง (ยังต้องมีไว้รองรับ Option A/B ถ้าแอดมินสลับกลับเอง)
+  Plan.chosen = 'A';
+  Plan.splitSel = [];
   const rec = Planner.recommendVehicle() || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
   const emp = rec && (Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
   Plan.sel = { type:'COMPANY', vehId: rec?rec.VehicleID:'', extId:(Planner.availableExternal()[0]||{}).ExternalVehicleID||'',
@@ -779,78 +768,57 @@ function groupStopsForDisplay(stops){
 }
 function uniqueShopCount(stops){ return groupStopsForDisplay(stops).length; }
 function planBillLabel(s){ return uniqueDocParts(s).join(' · ') || DelView.invoiceNo(s) || '—'; }
-function displayStopLine(group, i, color){
-  const s = group.rep;
-  const n = group.bills.length;
-  const billTxt = n > 1
-    ? group.bills.map(planBillLabel).filter(Boolean).join(' · ')
-    : planBillLabel(s);
+function displayBillRow(s, i){
+  const color = (PRIORITY[s.Priority] || PRIORITY.NORMAL).color;
   return `<div class="plan-stop-row">
     <span class="stop-num" style="background:${color}">${i}</span>
     <div class="plan-stop-main">
-      <div class="strong">${esc(s.CustomerName || '—')}${n > 1 ? ` <span class="badge b-blue">${int(n)} บิล</span>` : ''}</div>
-      <div class="small muted">${esc(DelView.zone(s) || '')}${billTxt ? ' · ' + esc(billTxt) : ''}</div>
+      <div class="strong">${esc(s.CustomerName || '—')}</div>
+      <div class="small muted">${esc(planBillLabel(s))}${DelView.zone(s) ? ' · ' + esc(DelView.zone(s)) : ''}</div>
     </div>
-    <div class="small muted tab">${num1(group.dist || 0)} กม.</div>
+    <div class="small muted tab">${int(s.BoxQty || 0)} กล.</div>
   </div>`;
 }
 function renderDecision(){
   const dec = el('decision');
   if (!dec || !Plan.result) return;
-  const {seq,metrics:m,options}=Plan.result;
-  const isSplit = Plan.chosen==='C';
-  const splitOpt = isSplit ? options.find(o=>o.id==='C') : null;
-  const seqHtml = isSplit
-    ? splitOpt.split.map((g, gi) => {
-        const color = SPLIT_COLORS[gi % SPLIT_COLORS.length];
-        const groups = groupStopsForDisplay(g.seq);
-        const sel = Plan.splitSel[gi] || {};
-        const v = (Store.data.vehicles || []).find(x => x.VehicleID === sel.vehId) || g.v;
-        const drv = sel.driver || (v && v.CurrentDriver) || '';
-        return `<div class="plan-round-head" style="border-left:4px solid ${color}">
-          <b>รอบ ${gi + 1}</b> · ${esc(DelView.zone(g.seq[0]) || ('ทิศ' + (g.sector || '')))}
-          · ${int(groups.length)} ร้าน (${int(g.seq.length)} บิล)
-          · ${esc(vehicleShortName(v) || '')}${drv ? ' · ' + esc(drv) : ''}
-        </div>` +
-          groups.map((grp, i) => displayStopLine(grp, i + 1, color)).join('');
-      }).join('')
-    : groupStopsForDisplay(seq).map((grp, i) =>
-        displayStopLine(grp, i + 1, (PRIORITY[grp.rep.Priority] || PRIORITY.NORMAL).color)
-      ).join('');
-
-  const shopN = isSplit
-    ? splitOpt.split.reduce((n, g) => n + uniqueShopCount(g.seq), 0)
-    : uniqueShopCount(seq);
-  const timeWarn = (!isSplit && m.durationMin > Planner.workDayMin())
-    ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลานาน — ระบบแบ่งหลายคันให้แล้ว</div></div>` : '';
-  const totalCost = isSplit
-    ? splitOpt.split.reduce((n, g, i) => n + splitCost(g, i).total, 0)
-    : selCost().total;
+  const { seq, metrics: m } = Plan.result;
+  const seqHtml = (seq || []).map((s, i) => displayBillRow(s, i + 1)).join('');
+  const timeWarn = m.durationMin > Planner.workDayMin()
+    ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
 
   dec.innerHTML = `
     <div class="flex between aic mb14">
-      <span class="h-card">${isSplit ? `แผน ${splitOpt.split.length} รอบ` : 'แผนส่งพร้อมแล้ว'}</span>
-      <button class="btn btn-sm" id="replan"><i data-lucide="rotate-cw"></i>คำนวณใหม่</button>
-    </div>
-    <div class="grid plan-kpi-row" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      ${miniStat('จุดส่ง', int(shopN) + ' ร้าน · ' + int(m.stops) + ' บิล', 'map-pin')}
-      ${miniStat('ระยะทาง', num1(m.distance) + ' กม.', 'navigation')}
-      ${miniStat('เวลา', Planner.fmtDur(m.durationMin), 'clock')}
+      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน · ${num1(m.distance)} กม. · ${Planner.fmtDur(m.durationMin)}</span>
+      <button class="btn btn-sm" id="replan" type="button"><i data-lucide="rotate-cw"></i>เรียงลำดับใหม่</button>
     </div>
     ${timeWarn}
-    <div class="plan-stop-list scrolly">${seqHtml || '<div class="muted small">ไม่มีจุดส่ง</div>'}</div>
-    <div class="plan-cost-row"><span class="muted">ต้นทุนประมาณ</span><span class="strong tab">${money(totalCost)} บาท</span></div>
-    <div class="plan-driver-box" id="driverFormBox">${isSplit ? splitFormAll(splitOpt) : selForm()}</div>
-    <details class="plan-advanced"><summary>ตั้งค่าเพิ่มเติม (แผนทางเลือก / ต้นทุน)</summary>
-      <div style="margin-top:10px">
-        ${options.length > 1 ? `<div style="margin-bottom:10px">${options.map(o => optionCard(o)).join('')}</div>` : ''}
-        <div id="costBox" class="mt14">${isSplit ? splitCostBoxAll(splitOpt) : selCostBox()}</div>
-      </div>
-    </details>
-    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute"><i data-lucide="check-circle-2"></i>${isSplit ? `ยืนยัน ${splitOpt.split.length} รอบ → พิมพ์ใบงาน` : 'ยืนยัน → พิมพ์ใบงาน'}</button>
+    <div class="plan-driver-step">
+      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>เลือกรถ + คนขับ</span></div>
+      <div class="plan-driver-box" id="driverFormBox">${selForm()}</div>
+    </div>
+    <div class="plan-stop-section">
+      <div class="small strong muted mb8">รายการบิลที่จัด (${int(m.stops)})</div>
+      <div class="plan-stop-list scrolly">${seqHtml || '<div class="muted small">ไม่มีบิล</div>'}</div>
+    </div>
+    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute" type="button"><i data-lucide="save"></i>${confirmBtnLabel()}</button>
   `;
   icons();
   bindDecisionEvents();
+  setTimeout(() => { const box = el('driverFormBox'); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 60);
+}
+function confirmBtnLabel(){
+  const v = selVehicle();
+  const drv = String(Plan.sel.driver || (v && (v.CurrentDriver || v.DriverName)) || '').trim();
+  const vehLbl = vehicleShortName(v) || '';
+  const who = [drv, vehLbl].filter(Boolean).join(' · ');
+  return who ? `บันทึกรายการ (${who})` : 'บันทึกรายการ';
+}
+function refreshConfirmBtn(){
+  const cr = el('confirmRoute');
+  if (!cr || !Plan.result) return;
+  cr.innerHTML = `<i data-lucide="save"></i>${confirmBtnLabel()}`;
+  icons();
 }
 function optionCard(o){
   const sel = Plan.chosen===o.id;
@@ -874,27 +842,28 @@ function optionCard(o){
 }
 /* ---- manual vehicle/driver selection ---- */
 function selForm(){
-  const emps=Store.data.employees||[], veh=Store.data.vehicles||[], ext=Store.data.externalVehicles||[];
+  const emps=Store.data.employees||[], ext=Store.data.externalVehicles||[];
+  const veh=(Planner.availableVehicles().length?Planner.availableVehicles():(Store.data.vehicles||[]));
   const drivers=emps.filter(x=>x.Role==='DRIVER'&&!x.IsDeleted);
   const isExt=Plan.sel.type==='EXTERNAL';
-  return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:12px">
-    <div class="strong" style="margin-bottom:10px">รถ & คนขับที่จะใช้</div>
-    <div class="seg" id="selType" style="margin-bottom:10px">
+  return `<div class="plan-driver-card">
+    <div class="seg" id="selType" style="margin-bottom:12px">
       <button class="${!isExt?'on':''}" data-t="COMPANY">รถบริษัท</button>
       <button class="${isExt?'on':''}" data-t="EXTERNAL">รถภายนอก</button></div>
-    <div class="field" style="margin-bottom:10px"><label class="label">เลือกรถ</label>
-      ${isExt
-        ? `<select class="select" id="selExt">${ext.length?ext.map(v=>`<option value="${esc(v.ExternalVehicleID)}" ${Plan.sel.extId===v.ExternalVehicleID?'selected':''}>${esc(v.ProviderName)} · ${esc(v.LicensePlate)} (${money(v.Rate)} ${RATE_TYPE[v.RateType]||''})</option>`).join(''):'<option value="">— ไม่มีรถภายนอก —</option>'}</select>`
-        : `<select class="select" id="selVeh">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${Plan.sel.vehId===v.VehicleID?'selected':''}>${esc(vehicleOptionLabel(v))} · ${VSTATUS[v.VehicleStatus]?VSTATUS[v.VehicleStatus].label:''}</option>`).join('')}</select>`}
+    <div class="plan-driver-grid">
+      <div class="field" style="margin:0"><label class="label">รถ</label>
+        ${isExt
+          ? `<select class="select" id="selExt">${ext.length?ext.map(v=>`<option value="${esc(v.ExternalVehicleID)}" ${Plan.sel.extId===v.ExternalVehicleID?'selected':''}>${esc(v.ProviderName)} · ${esc(v.LicensePlate)}</option>`).join(''):'<option value="">— ไม่มีรถภายนอก —</option>'}</select>`
+          : `<select class="select" id="selVeh">${veh.length?veh.map(v=>`<option value="${esc(v.VehicleID)}" ${Plan.sel.vehId===v.VehicleID?'selected':''}>${esc(vehicleOptionLabel(v))}</option>`).join(''):'<option value="">— ไม่มีรถว่าง —</option>'}</select>`}
+      </div>
+      <div class="field" style="margin:0"><label class="label">คนขับ</label>
+        <select class="select" id="selDriverEmp">
+          <option value="">— เลือกคนขับ —</option>
+          ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${Plan.sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
+        </select>
+      </div>
     </div>
-    <div class="field" style="margin-bottom:8px"><label class="label">คนขับ (เลือกจากระบบให้เข้าโหมดคนขับได้)</label>
-      <select class="select" id="selDriverEmp">
-        <option value="">— ไม่ระบุ (คนขับกดรับเองได้) / พิมพ์ชื่อเอง —</option>
-        ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${Plan.sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
-      </select></div>
-    <div class="field" style="margin:0">
-      <input class="input" id="selDriver" value="${esc(Plan.sel.driver)}" placeholder="ชื่อคนขับ">
-    </div>
+    <div class="field" style="margin:10px 0 0"><input class="input" id="selDriver" value="${esc(Plan.sel.driver)}" placeholder="หรือพิมพ์ชื่อคนขับ (ถ้าไม่ได้เลือกจากรายชื่อ)"></div>
   </div>`;
 }
 function selVehicle(){ return Plan.sel.type==='EXTERNAL'
@@ -944,26 +913,23 @@ function bindCostInputs(){
 }
 /* ---- multi-route (split) vehicle/driver selection — 1 ชุดต่อ Route ---- */
 function splitForm(g, i){
-  const veh=Store.data.vehicles||[], emps=Store.data.employees||[];
+  const veh=(Planner.availableVehicles().length?Planner.availableVehicles():(Store.data.vehicles||[]));
+  const emps=Store.data.employees||[];
   const drivers=emps.filter(x=>x.Role==='DRIVER'&&!x.IsDeleted);
   const sel = Plan.splitSel[i] || {};
   const color=SPLIT_COLORS[i%SPLIT_COLORS.length];
-  const bills = (g.bills||g.seq||[]).map((b,bi)=>{
-    const inv = b.invoice!=null?b.invoice:(b.InvoiceNo||'');
-    const name = b.customer!=null?b.customer:(b.CustomerName||'');
-    return `<div class="small" style="padding:3px 0;border-bottom:1px dashed #F0F2F5"><span class="mono muted">${bi+1}.</span> ${esc(name)}${inv?' · <span class="mono">บิล '+esc(inv)+'</span>':''}</div>`;
-  }).join('');
-  return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:12px;border-left:4px solid ${color}">
-    <div class="strong" style="margin-bottom:6px">รอบ ${i+1} · ทิศ${esc(g.sector||'')} · ${g.seq.length} จุด · ${Planner.fmtDur(g.m.durationMin)}${g.overtime?' <span class="badge b-amber">เกินเวลา</span>':''}</div>
-    <div style="max-height:110px;overflow-y:auto;margin-bottom:10px;background:#FAFBFC;border-radius:8px;padding:8px 10px">${bills||'<span class="muted small">ไม่มีรายการบิล</span>'}</div>
-    <div class="field" style="margin-bottom:10px"><label class="label">เลือกรถ</label>
-      <select class="select" data-splitveh="${i}">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${sel.vehId===v.VehicleID?'selected':''}>${esc(vehicleOptionLabel(v))} · ${VSTATUS[v.VehicleStatus]?VSTATUS[v.VehicleStatus].label:''}</option>`).join('')}</select></div>
-    <div class="field" style="margin-bottom:8px"><label class="label">คนขับ (เลือกจากระบบให้เข้าโหมดคนขับได้)</label>
-      <select class="select" data-splitdrvemp="${i}">
-        <option value="">— ไม่ระบุ (คนขับกดรับเองได้) —</option>
-        ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
-      </select></div>
-    <div class="field" style="margin:0"><input class="input" data-splitdrv="${i}" value="${esc(sel.driver||'')}" placeholder="ชื่อคนขับ"></div>
+  return `<div class="plan-driver-card plan-split-card" style="border-left:4px solid ${color}">
+    <div class="strong" style="margin-bottom:10px">รอบ ${i+1} · ${int(g.seq.length)} บิล · ${Planner.fmtDur(g.m.durationMin)}</div>
+    <div class="plan-driver-grid">
+      <div class="field" style="margin:0"><label class="label">รถ</label>
+        <select class="select" data-splitveh="${i}">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${sel.vehId===v.VehicleID?'selected':''}>${esc(vehicleOptionLabel(v))}</option>`).join('')}</select></div>
+      <div class="field" style="margin:0"><label class="label">คนขับ</label>
+        <select class="select" data-splitdrvemp="${i}">
+          <option value="">— เลือกคนขับ —</option>
+          ${drivers.map(dr=>`<option value="${esc(dr.EmployeeID)}" ${sel.driverEmployeeId===dr.EmployeeID?'selected':''}>${esc(dr.EmployeeName)}</option>`).join('')}
+        </select></div>
+    </div>
+    <div class="field" style="margin:10px 0 0"><input class="input" data-splitdrv="${i}" value="${esc(sel.driver||'')}" placeholder="หรือพิมพ์ชื่อคนขับ"></div>
   </div>`;
 }
 function splitFormAll(opt){
@@ -989,56 +955,22 @@ function empIdByName(name){ const emp=(Store.data.employees||[]).find(x=>x.Emplo
 function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { vehId:g.v?g.v.VehicleID:'', driver, driverEmployeeId:empIdByName(driver), toll:Planner.toll(), parking:Planner.autoParking(g.seq) }; }
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; runAutoPlan(); };
-  // คลิก Option → เติมค่าในฟอร์มเลือกรถ (Option C = โหมดแบ่งหลาย Route)
-  $$('[data-opt]').forEach(c=>c.onclick=()=>{ const o=Plan.result.options.find(x=>x.id===c.dataset.opt); Plan.chosen=c.dataset.opt;
-    if(o){ if(o.id==='C'){ Plan.splitSel = o.split.map(splitSelFor); }
-      else if(o.id==='B'&&o.external){ Plan.sel.type='EXTERNAL'; Plan.sel.extId=o.external.ExternalVehicleID; }
-      else { Plan.sel.type='COMPANY'; const v=o.vehicles.filter(Boolean)[0]; if(v){ Plan.sel.vehId=v.VehicleID; Plan.sel.driver=v.CurrentDriver||Plan.sel.driver; } } }
-    renderDecision(); });
-  // ปุ่ม −/+ จำนวนคันใน Option C — คำนวณกลุ่มใหม่ทันที
-  $$('[data-ksplit]').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    const opt=Plan.result.options.find(o=>o.id==='C'); if(!opt) return;
-    const newK=Math.min(Math.max(opt.split.length+Number(b.dataset.ksplit),1),opt.kMax);
-    if(newK===opt.split.length) return;
-    const vehicles=Planner.sortByWh(Planner.availableVehicles()).slice(0,newK);
-    const groups=Planner.autoSplit(Plan.result.seq, vehicles);
-    opt.split=groups; opt.vehicles=groups.map(g=>g.v);
-    opt.distance=+groups.reduce((n,g)=>n+g.m.distance,0).toFixed(1);
-    opt.duration=Math.max(...groups.map(g=>g.m.durationMin));
-    opt.overtime=groups.some(g=>g.overtime);
-    const cFuel=groups.reduce((n,g)=>n+g.cost.fuel,0), cToll=groups.reduce((n,g)=>n+g.cost.toll,0), cPark=groups.reduce((n,g)=>n+g.cost.parking,0);
-    opt.cost={ fuel:+cFuel.toFixed(2), toll:cToll, parking:cPark, external:0, other:0, total:+(cFuel+cToll+cPark).toFixed(2) };
-    opt.name=`แบ่งตามเขต ${groups.length} คัน (ทิศทาง)`;
-    opt.note=groups.map((g,i)=>`คัน ${i+1} ทิศ${g.sector}: ${g.seq.length} จุด · ${Planner.fmtDur(g.m.durationMin)}`).join(' · ');
-    if(Plan.chosen==='C') Plan.splitSel=groups.map(splitSelFor);
-    renderDecision();
-  });
   const st=el('selType'); if(st) $$('#selType button').forEach(b=>b.onclick=()=>{ Plan.sel.type=b.dataset.t;
     if(b.dataset.t==='EXTERNAL' && !Plan.sel.extId){ const e=(Store.data.externalVehicles||[])[0]; Plan.sel.extId=e?e.ExternalVehicleID:''; }
     renderDecision(); });
   const sv=el('selVeh'); if(sv) sv.onchange=()=>{ Plan.sel.vehId=sv.value; const v=selVehicle();
     if(v&&v.CurrentDriver){ Plan.sel.driver=v.CurrentDriver; Plan.sel.driverEmployeeId=empIdByName(v.CurrentDriver);
       if(el('selDriver')) el('selDriver').value=v.CurrentDriver; if(el('selDriverEmp')) el('selDriverEmp').value=Plan.sel.driverEmployeeId; }
-    refreshCostBox(); };
+    else { const emp=(Store.data.employees||[]).find(e=>e.VehicleID===sv.value); if(emp){ Plan.sel.driver=emp.EmployeeName; Plan.sel.driverEmployeeId=emp.EmployeeID;
+      if(el('selDriver')) el('selDriver').value=emp.EmployeeName; if(el('selDriverEmp')) el('selDriverEmp').value=emp.EmployeeID; } }
+    refreshConfirmBtn(); };
   const se=el('selExt'); if(se) se.onchange=()=>{ Plan.sel.extId=se.value; const v=selVehicle();
     if(v&&v.DriverName){ Plan.sel.driver=v.DriverName; Plan.sel.driverEmployeeId=''; if(el('selDriver')) el('selDriver').value=v.DriverName; }
-    refreshCostBox(); };
+    refreshConfirmBtn(); };
   const sde=el('selDriverEmp'); if(sde) sde.onchange=()=>{ Plan.sel.driverEmployeeId=sde.value;
-    if(sde.value){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeID===sde.value); Plan.sel.driver=emp?emp.EmployeeName:''; if(el('selDriver')) el('selDriver').value=Plan.sel.driver; } };
-  const sd=el('selDriver'); if(sd) sd.oninput=()=>{ Plan.sel.driver=sd.value; Plan.sel.driverEmployeeId=''; };
-  bindCostInputs();
-  // อินพุตรถ/คนขับต่อ Route ในโหมดแบ่งหลาย Route
-  $$('[data-splitveh]').forEach(sel=>sel.onchange=()=>{ const i=Number(sel.dataset.splitveh); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].vehId=sel.value;
-    const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===sel.value);
-    if(v&&v.CurrentDriver){ Plan.splitSel[i].driver=v.CurrentDriver; Plan.splitSel[i].driverEmployeeId=empIdByName(v.CurrentDriver);
-      const de=document.querySelector('[data-splitdrvemp="'+i+'"]'); if(de) de.value=Plan.splitSel[i].driverEmployeeId;
-      const di=document.querySelector('[data-splitdrv="'+i+'"]'); if(di) di.value=v.CurrentDriver; }
-    const cb=el('costBox'); if(cb){ const opt=Plan.result.options.find(o=>o.id==='C'); cb.innerHTML=splitCostBoxAll(opt); icons(); } });
-  $$('[data-splitdrvemp]').forEach(sel=>sel.onchange=()=>{ const i=Number(sel.dataset.splitdrvemp); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].driverEmployeeId=sel.value;
-    if(sel.value){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeID===sel.value); Plan.splitSel[i].driver=emp?emp.EmployeeName:'';
-      const di=document.querySelector('[data-splitdrv="'+i+'"]'); if(di) di.value=Plan.splitSel[i].driver; } });
-  $$('[data-splitdrv]').forEach(inp=>inp.oninput=()=>{ const i=Number(inp.dataset.splitdrv); Plan.splitSel[i]=Plan.splitSel[i]||{}; Plan.splitSel[i].driver=inp.value; Plan.splitSel[i].driverEmployeeId=''; });
+    if(sde.value){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeID===sde.value); Plan.sel.driver=emp?emp.EmployeeName:''; if(el('selDriver')) el('selDriver').value=Plan.sel.driver; }
+    refreshConfirmBtn(); };
+  const sd=el('selDriver'); if(sd) sd.oninput=()=>{ Plan.sel.driver=sd.value; Plan.sel.driverEmployeeId=''; refreshConfirmBtn(); };
   const cr=el('confirmRoute'); if(cr) cr.onclick=confirmRoute;
 }
 function queueRoutePrints(routeIds, fallbackMatch){
@@ -1051,7 +983,6 @@ function queueRoutePrints(routeIds, fallbackMatch){
   }, 350);
 }
 async function confirmRoute(){
-  if(Plan.chosen==='C') return confirmSplitRoutes();
   const seq=Plan.result.seq, m=Plan.result.metrics;
   const isExt=Plan.sel.type==='EXTERNAL';
   const v=selVehicle();
@@ -1070,51 +1001,16 @@ async function confirmRoute(){
     EstimatedExternalCost:c.external||0, EstimatedOtherCost:0, Status:'Planned' };
   const stops=seq.map(s=>({ DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
     Latitude:s.Latitude, Longitude:s.Longitude, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) }));
-  Plan.selected.clear(); Plan.locked = false; Plan.result=null;
+  Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
-  if (typeof dPick !== 'undefined') dPick.sel.clear();
-  Plan.tab = 'rounds';
-  toast('บันทึกรอบส่งแล้ว — เปิดใบงานให้คนขับเช็คขึ้นของ','ok','ยืนยันแล้ว');
+  if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.district = ''; }
+  Plan.tab = 'plan';
+  toast('บันทึกรายการแล้ว — เปิดใบงานให้พิมพ์','ok','บันทึกแล้ว');
+  location.hash = '#/dashboard';
   const routeMatch = r => r.DeliveryDate === Store.date && r.DriverName === data.DriverName && r.TotalStops === data.TotalStops && (r.__pending || r.Status === 'Planned');
   createRouteOptimistic('confirmRoute', data, stops).then(r => {
     queueRoutePrints([r && r.RouteID], routeMatch);
   }).catch(() => queueRoutePrints([], routeMatch));
-}
-async function confirmSplitRoutes(){
-  const opt = Plan.result.options.find(o=>o.id==='C');
-  if(!opt){ toast('ไม่พบแผนแบ่งเส้นทาง','err'); return; }
-  const groups = opt.split;
-  if(!Plan.splitSel.length || Plan.splitSel.some(s=>!s||!s.vehId)){ toast('กรุณาเลือกรถให้ครบทุกรอบส่ง','warn'); return; }
-  const emps = Store.data.employees||[];
-  const jobs = groups.map((g,i)=>{
-    const sel = Plan.splitSel[i];
-    const v = (Store.data.vehicles||[]).find(x=>x.VehicleID===sel.vehId);
-    const emp = emps.find(e=>e.EmployeeID===sel.driverEmployeeId) || (v && emps.find(e=>e.VehicleID===v.VehicleID));
-    const fuel = v ? Planner.fuelCost(g.m.distance, v) : 0;
-    const toll = Number(sel.toll)||0, parking = Number(sel.parking)||0;
-    const data = { DeliveryDate:Store.date, RouteType:'COMPANY_VEHICLE',
-      DriverName: sel.driver || (v&&v.CurrentDriver) || '', DriverPhone:(emp&&emp.Phone)||'',
-      DriverEmployeeID: sel.driverEmployeeId||'',
-      VehicleType:(v&&v.VehicleType)||'', VehicleName:(v&&v.VehicleName)||'', LicensePlate:(v&&v.LicensePlate)||'',
-      TotalStops:g.m.stops, TotalBoxes:g.m.boxes, TotalDistance:g.m.distance, EstimatedDuration:g.m.durationMin,
-      EstimatedFuelCost:fuel, EstimatedTollCost:toll, EstimatedParkingCost:parking, EstimatedExternalCost:0, EstimatedOtherCost:0, Status:'Planned' };
-    const stops = g.seq.map(s=>({ DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
-      Latitude:s.Latitude, Longitude:s.Longitude, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) }));
-    return { data, stops };
-  });
-  Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
-  try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
-  if (typeof dPick !== 'undefined') dPick.sel.clear();
-  Plan.tab = 'rounds';
-  toast('บันทึก '+jobs.length+' รอบแล้ว — เปิดใบงานให้คนขับเช็คขึ้นของ','ok','ยืนยันแล้ว');
-  const beforeIds = new Set((Store.data.routes || []).map(r => r.RouteID));
-  Promise.all(jobs.map(j => createRouteOptimistic('confirmRoute', j.data, j.stops))).then(results => {
-    const ids = (results || []).map(r => r && r.RouteID).filter(Boolean);
-    const fallback = r => !beforeIds.has(r.RouteID) && r.DeliveryDate === Store.date && (r.__pending || r.Status === 'Planned');
-    queueRoutePrints(ids, fallback);
-  }).catch(() => {
-    queueRoutePrints([], r => !beforeIds.has(r.RouteID) && r.DeliveryDate === Store.date);
-  });
 }
 
 /* ================================================================
