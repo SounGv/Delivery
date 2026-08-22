@@ -80,10 +80,15 @@ input,select,textarea{font-family:inherit;}
 .date-btn{display:flex;align-items:center;gap:10px;height:var(--ctrl-h);padding:0 14px;border-radius:9px;
   border:1px solid var(--border);background:#fff;color:var(--ink-2);font-size:14px;font-weight:500;}
 .date-btn:hover{background:#F5F7FA;} .date-btn i{width:18px;height:18px;color:#6B7383;}
+.date-wrap{position:relative;flex-shrink:0;}
+.date-btn .date-chev{width:16px;height:16px;color:#9AA3B2;flex-shrink:0;}
+.date-pop{position:absolute;top:calc(100% + 8px);left:0;z-index:200;min-width:min(300px,calc(100vw - 32px));}
+.date-pop[hidden]{display:none !important;}
+.date-pop-inner{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:0 12px 40px rgba(11,18,32,.14);}
+.date-pop-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;letter-spacing:.03em;}
 .date-btn .dtext{white-space:nowrap;}
-.date-pick-card{border:1px solid var(--border);border-radius:12px;padding:16px;background:var(--bg,#FAFBFC);}
 .date-pick-preview{margin-top:8px;font-size:15px;font-weight:600;color:var(--ink-2);}
-.date-pick-quick{display:flex;gap:8px;margin-top:14px;}
+.date-pick-quick{display:flex;gap:8px;margin-top:12px;}
 .date-pick-quick .btn{flex:1;justify-content:center;}
 .search{position:relative;flex:1;max-width:420px;}
 .search i{width:18px;height:18px;color:var(--muted-2);position:absolute;left:14px;top:50%;transform:translateY(-50%);}

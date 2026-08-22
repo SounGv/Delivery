@@ -137,6 +137,7 @@ ROUTES.dashboard = async function(view){
   const rows = applyDeliveryFilter(searched);
   const districts = districtCounts(dispatchable);
   const staffList = staffCounts(open);
+  const zoneList = districtCounts(open);
   const selIds = [...dPick.sel].filter(id => open.some(d => d.DeliveryID === id));
   const selN = selIds.length;
   const selAmount = selIds.reduce((n, id) => {
@@ -158,7 +159,7 @@ ROUTES.dashboard = async function(view){
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
         ${rows.length ? `<table class="tbl del-tbl">
-          ${delTableHead(staffList)}
+          ${delTableHead(staffList, zoneList)}
           <tbody>${rows.map(d => {
             const zone = DelView.zone(d);
             const po = DelView.poNo(d);
@@ -205,6 +206,8 @@ ROUTES.dashboard = async function(view){
   }
   const fs = view.querySelector('#fStaff');
   if (fs) fs.onchange = () => { dPick.staffFilter = fs.value; ROUTES.dashboard(view); };
+  const fz = view.querySelector('#fZone');
+  if (fz) fz.onchange = () => { dPick.zoneFilter = fz.value; ROUTES.dashboard(view); };
   $$('[data-district]', view).forEach(b => b.onclick = () => {
     const dist = b.dataset.district || '';
     if (!dist) {
@@ -251,7 +254,7 @@ ROUTES.dashboard = async function(view){
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), districts: new Set(), filter: 'all', nameFilter: '', staffFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'all', nameFilter: '', staffFilter: '', zoneFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
   { key:'all', label:'ทั้งหมด' },
   { key:'noRoute', label:'ยังไม่จัดรถ' },
@@ -334,6 +337,9 @@ function applyDeliveryFilter(rows){
   if (dPick.districts.size) {
     out = out.filter(d => dPick.districts.has(deliveryDistrictKey(d)));
   }
+  if (dPick.zoneFilter) {
+    out = out.filter(d => deliveryDistrictKey(d) === dPick.zoneFilter);
+  }
   const nf = String(dPick.nameFilter || '').trim().toLowerCase();
   if (nf) out = out.filter(d => String(d.CustomerName || '').toLowerCase().includes(nf));
   const sf = dPick.staffFilter;
@@ -382,7 +388,16 @@ function delStaffFilterHtml(staffList){
     ));
   return `<select class="select del-filter-input" id="fStaff" title="กรองช่องทาง / พนักงานขาย">${opts.join('')}</select>`;
 }
-function delTableHead(staffList){
+function delDistrictFilterHtml(districtList){
+  const none = (districtList || []).find(([name]) => name === 'ไม่ระบุเขต');
+  const opts = ['<option value="">ทั้งหมด</option>']
+    .concat((districtList || []).filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) =>
+      `<option value="${esc(name)}"${dPick.zoneFilter === name ? ' selected' : ''}>${esc(name)} (${int(n)})</option>`
+    ));
+  if (none) opts.push(`<option value="__none__"${dPick.zoneFilter === '__none__' ? ' selected' : ''}>ไม่ระบุเขต (${int(none[1])})</option>`);
+  return `<select class="select del-filter-input" id="fZone" title="กรองตามเขต">${opts.join('')}</select>`;
+}
+function delTableHead(staffList, districtList){
   return `<thead>
     <tr class="del-head-row">
       <th class="c" style="width:42px"><input type="checkbox" id="dSelAll"></th>
@@ -399,7 +414,8 @@ function delTableHead(staffList){
       <th class="c"></th>
       <th><input class="input del-filter-input" id="fName" placeholder="กรองชื่อร้าน…" value="${esc(dPick.nameFilter || '')}"></th>
       <th>${delStaffFilterHtml(staffList)}</th>
-      <th colspan="6"><span class="small muted">ใช้ chip เขตด้านบนกรองตามพื้นที่</span></th>
+      <th>${delDistrictFilterHtml(districtList)}</th>
+      <th colspan="5"></th>
     </tr>
   </thead>`;
 }
@@ -430,7 +446,7 @@ function districtChipsHtml(list){
     .concat(counts.filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) => chip(name, name, n)));
   if (noneN) chips.push(chip('__none__', 'ไม่ระบุเขต', noneN));
   const picked = ds.size ? `<span class="small strong" style="color:var(--brand-ink)">เลือก ${int(ds.size)} เขต</span>` : '';
-  return `<div class="flex between aic wrap gap8 mb8"><span class="small muted">ติ๊กเลือกหลายเขต · รวมบิลแล้วกด <b>จัดรถอัตโนมัติ</b></span>${picked}</div>
+  return `<div class="flex between aic wrap gap8 mb8"><span class="small muted">chip เขต = ติ๊กเลือกบิลจัดรถ · dropdown ใต้หัวคอลัมน์ = กรองดู</span>${picked}</div>
     <div class="plan-wizard-steps mb14" id="districtChips">${chips.join('')}</div>`;
 }
 function delKpiStrip(kpi){

@@ -769,48 +769,67 @@ function setDateLabel(){
   const today = new Date().toISOString().slice(0, 10);
   lbl.textContent = Store.date === today ? ('วันนี้ · ' + thDate(Store.date)) : thDate(Store.date);
 }
-function openDatePicker(){
+function closeDatePop(){
+  const pop = el('datePop');
+  const btn = el('dateBtn');
+  if (pop) pop.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+function openDatePicker(e){
+  if (e) e.stopPropagation();
+  const pop = el('datePop');
+  const btn = el('dateBtn');
+  if (!pop || !btn) return;
+  if (!pop.hidden) { closeDatePop(); return; }
+
   const today = new Date().toISOString().slice(0, 10);
   const isToday = Store.date === today;
   const isMock = Store.date === DATA_DATE;
+  pop.innerHTML = `
+    <div class="date-pop-inner">
+      <div class="date-pop-title">เลือกวันทำงาน</div>
+      <input type="date" class="input" id="pkDate" value="${Store.date}">
+      <div class="date-pick-preview" id="pkDateTh">${thDate(Store.date)}</div>
+      <div class="date-pick-quick">
+        <button class="btn btn-sm ${isToday ? 'btn-primary' : ''}" data-quick="today" type="button"><i data-lucide="calendar-check"></i>วันนี้</button>
+        <button class="btn btn-sm ${isMock ? 'btn-primary' : ''}" data-quick="data" type="button"><i data-lucide="flask-conical"></i>ทดลอง</button>
+      </div>
+      <div class="small muted" style="margin:8px 0 10px">ทดลอง = ${thDate(DATA_DATE)}</div>
+      <button class="btn btn-primary btn-block" id="pkOk" type="button"><i data-lucide="check"></i>ยืนยัน</button>
+    </div>`;
+  pop.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  icons();
+
   const refreshPreview = () => {
     const v = el('pkDate') && el('pkDate').value;
     const th = el('pkDateTh');
     if (th && v) th.textContent = thDate(v);
   };
-  const m = modal({
-    title: 'เลือกวันทำงาน',
-    body: `<p class="small muted" style="margin:0 0 14px;line-height:1.55">เลือกวันที่ต้องการดูงานส่งและจัดรถ — งานค้างที่เลื่อนมาจะแสดงในวันนั้น</p>
-      <div class="date-pick-card">
-        <div class="field" style="margin:0">
-          <label class="label">วันทำงาน</label>
-          <input type="date" class="input" id="pkDate" value="${Store.date}">
-          <div class="date-pick-preview" id="pkDateTh">${thDate(Store.date)}</div>
-        </div>
-        <div class="date-pick-quick">
-          <button class="btn btn-sm ${isToday ? 'btn-primary' : ''}" data-quick="today" type="button"><i data-lucide="calendar-check"></i>วันนี้</button>
-          <button class="btn btn-sm ${isMock ? 'btn-primary' : ''}" data-quick="data" type="button"><i data-lucide="flask-conical"></i>ข้อมูลทดลอง</button>
-        </div>
-        <div class="small muted" style="margin-top:10px;line-height:1.45">ข้อมูลทดลอง = ${thDate(DATA_DATE)}</div>
-      </div>`,
-    foot: `<button class="btn" id="pkCancel" type="button">ยกเลิก</button><button class="btn btn-primary" id="pkOk" type="button"><i data-lucide="check"></i>ยืนยัน</button>`
-  });
-  icons();
   const pk = el('pkDate');
   if (pk) pk.onchange = refreshPreview;
-  $$('[data-quick]').forEach(b => b.onclick = () => {
+  $$('[data-quick]', pop).forEach(b => b.onclick = () => {
     pk.value = b.dataset.quick === 'today' ? today : DATA_DATE;
-    $$('[data-quick]').forEach(x => x.classList.toggle('btn-primary', x === b));
+    $$('[data-quick]', pop).forEach(x => x.classList.toggle('btn-primary', x === b));
     refreshPreview();
   });
-  el('pkCancel').onclick = m.close;
   el('pkOk').onclick = async () => {
     Store.date = pk.value;
-    m.close();
+    closeDatePop();
     setDateLabel();
     await loadBootstrap();
     render();
   };
+
+  if (!openDatePicker._bound) {
+    openDatePicker._bound = true;
+    document.addEventListener('click', ev => {
+      if (!el('datePop') || el('datePop').hidden) return;
+      if (ev.target.closest('#dateWrap')) return;
+      closeDatePop();
+    });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') closeDatePop(); });
+  }
 }
 
 /** บิลซ้ำในฐานข้อมูล (sync หลายรอบ) → แสดงแค่ 1 รายการต่อเลขบิล */

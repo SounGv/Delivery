@@ -32,11 +32,14 @@
     <div class="main">
       <header class="topbar">
         <button class="icon-btn menu-btn" id="menuBtn"><i data-lucide="menu"></i></button>
-        <button class="date-btn" id="dateBtn">
-          <i data-lucide="calendar-days"></i>
-          <span class="dtext" id="dateLabel">วันนี้</span>
-          <i data-lucide="chevron-down" style="width:16px;height:16px;color:#9AA3B2"></i>
-        </button>
+        <div class="date-wrap" id="dateWrap">
+          <button class="date-btn" id="dateBtn" type="button" aria-haspopup="true" aria-expanded="false">
+            <i data-lucide="calendar-days"></i>
+            <span class="dtext" id="dateLabel">วันนี้</span>
+            <i data-lucide="chevron-down" class="date-chev"></i>
+          </button>
+          <div class="date-pop" id="datePop" hidden></div>
+        </div>
         <div class="search">
           <i data-lucide="search"></i>
           <input id="globalSearch" placeholder="ค้นหา PO, เลขบิล, ลูกค้า…" autocomplete="off">
