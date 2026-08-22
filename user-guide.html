@@ -1,623 +1,239 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>คู่มือใช้งานระบบจัดส่ง — Gadget Villa</title>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ขั้นตอนส่งงาน — GV Dispatch</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-</head><body><style>
+<style>
   :root{
-    --lime:#A9CF00; --lime-bright:#B4DC00; --lime-deep:#6f8a00;
-    --ink:#0f1608; --ground:#FBFCF6; --card:#ffffff; --card-2:#F4F7EA;
-    --muted:#5f6753; --line:#E6EBD8; --ok:#12a150; --warn:#E08A00; --crit:#E23b3b;
-    --navy:#0B1220;
-    --radius:14px;
-    --font:"Noto Sans Thai","Leelawadee UI","IBM Plex Sans Thai Looped",Tahoma,system-ui,-apple-system,sans-serif;
+    --lime:#A9CF00; --lime-bright:#B4DC00; --ink:#0f1608; --ground:#FBFCF6;
+    --card:#fff; --muted:#5f6753; --line:#E6EBD8; --ok:#12a150; --warn:#E08A00;
+    --font:"Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif;
   }
-  @media (prefers-color-scheme:dark){
-    :root{ --ink:#EAF0DC; --ground:#0d1206; --card:#161c0d; --card-2:#1c240f; --muted:#9aa585; --line:#2b3520; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:var(--ground);color:var(--ink);line-height:1.65;font-size:16px}
+  a{color:#5f7a00}
+  .hero{background:linear-gradient(135deg,#0f1608,#1b2410);color:#fff;padding:36px 20px 28px;border-bottom:4px solid var(--lime-bright)}
+  .hero .brand{font-size:13px;letter-spacing:.2em;color:var(--lime-bright);font-weight:700}
+  .hero h1{margin:10px 0 6px;font-size:clamp(22px,4vw,32px);font-weight:800;line-height:1.25}
+  .hero p{margin:0;color:#c9d4ac;max-width:40rem}
+  .wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 18px;margin:0 0 14px}
+  .card h2{margin:0 0 4px;font-size:18px;font-weight:800}
+  .card .sub{margin:0 0 14px;color:var(--muted);font-size:14px}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+  .flow span{background:#eef6cf;color:#3d5200;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:999px}
+  ol.steps{margin:0;padding:0;list-style:none;counter-reset:s}
+  ol.steps li{counter-increment:s;display:flex;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{
+    content:counter(s);flex-shrink:0;width:32px;height:32px;border-radius:10px;
+    background:var(--lime-bright);color:#182200;font-weight:800;font-size:14px;
+    display:flex;align-items:center;justify-content:center;margin-top:2px
   }
-  :root[data-theme="dark"]{ --ink:#EAF0DC; --ground:#0d1206; --card:#161c0d; --card-2:#1c240f; --muted:#9aa585; --line:#2b3520; }
-  :root[data-theme="light"]{ --ink:#0f1608; --ground:#FBFCF6; --card:#ffffff; --card-2:#F4F7EA; --muted:#5f6753; --line:#E6EBD8; }
-
-  *{box-sizing:border-box;}
-  .ug{font-family:var(--font); color:var(--ink); background:var(--ground); line-height:1.65;
-     -webkit-font-smoothing:antialiased; font-size:16px;}
-  .ug h1,.ug h2,.ug h3{text-wrap:balance; line-height:1.2; margin:0;}
-  .ug a{color:var(--lime-deep);}
-  .ic{width:1em;height:1em;display:inline-block;vertical-align:-0.15em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-
-  /* header */
-  .ug-hero{background:linear-gradient(135deg,#0f1608,#1b2410); color:#fff; padding:44px 32px 38px; border-bottom:4px solid var(--lime-bright);}
-  .ug-hero .brand{display:flex; align-items:center; gap:14px;}
-  .ug-hero .gv{font-size:30px; font-weight:800; color:var(--lime-bright); letter-spacing:.02em; line-height:1;}
-  .ug-hero .gv small{display:block; font-size:11px; letter-spacing:.34em; color:#c7d3a6; font-weight:600; margin-top:4px;}
-  .ug-hero h1{font-size:clamp(24px,4vw,36px); font-weight:800; margin-top:22px;}
-  .ug-hero p{color:#c9d4ac; margin-top:10px; max-width:62ch;}
-  .ug-hero .meta{margin-top:18px; display:flex; gap:10px; flex-wrap:wrap;}
-  .ug-hero .meta span{font-size:12.5px; background:rgba(180,220,0,.14); color:#dCE98f; border:1px solid rgba(180,220,0,.3);
-     padding:5px 11px; border-radius:20px; display:inline-flex; align-items:center; gap:6px;}
-
-  /* layout */
-  .ug-wrap{max-width:1120px; margin:0 auto; padding:0 20px; display:grid; grid-template-columns:250px 1fr; gap:34px; align-items:start;}
-  .ug-toc{position:sticky; top:16px; padding:22px 0; font-size:14px; max-height:calc(100vh - 24px); overflow:auto;}
-  .ug-toc .lbl{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:14px 6px 8px;}
-  .ug-toc a{display:flex; align-items:center; gap:8px; color:var(--ink); text-decoration:none; padding:6px 10px; border-radius:8px; border-left:2px solid transparent;}
-  .ug-toc a:hover{background:var(--card-2); border-left-color:var(--lime);}
-  .ug-toc a .ic{color:var(--lime-deep); flex-shrink:0;}
-  .ug-main{padding:28px 0 60px; min-width:0;}
-
-  /* section cards */
-  .sec{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:24px 26px; margin-bottom:20px; scroll-margin-top:16px;}
-  .sec .eyebrow{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--lime-deep); font-weight:700;}
-  .sec h2{font-size:22px; font-weight:800; margin:4px 0 4px; display:flex; align-items:center; gap:10px;}
-  .sec .num{display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:11px;
-     background:var(--lime-bright); color:#182200; flex-shrink:0;}
-  .sec .num .ic{width:20px;height:20px;stroke-width:2.2;}
-  .sec .lead{color:var(--muted); margin:2px 0 16px;}
-  .sec h3{font-size:15.5px; font-weight:700; margin:20px 0 8px; padding-left:11px; border-left:3px solid var(--lime-bright); display:flex; align-items:center; gap:8px;}
-  .sec h3 .ic{color:var(--lime-deep);}
-
-  ol.steps{margin:0; padding:0; list-style:none;}
-  ol.steps li{position:relative; display:flex; gap:14px; padding:11px 0; border-bottom:1px dashed var(--line);}
-  ol.steps li:last-child{border-bottom:none;}
-  ol.steps li .icwrap{flex-shrink:0; width:38px; height:38px; border-radius:11px; background:var(--card-2); border:1.5px solid var(--lime);
-     color:var(--lime-deep); display:flex; align-items:center; justify-content:center;}
-  ol.steps li .icwrap .ic{width:19px;height:19px;}
-  ol.steps li .body{flex:1; padding-top:2px;}
-  ol.steps li .sub{display:block; color:var(--muted); font-size:14px; margin-top:2px;}
-  ul.plain{margin:6px 0; padding-left:20px;} ul.plain li{margin:5px 0;}
-
-  .btn{display:inline-flex; align-items:center; gap:5px; background:var(--lime-bright); color:#182200; font-weight:700; font-size:13px;
-     padding:2px 10px; border-radius:7px; white-space:nowrap;}
-  .btn .ic{width:13px;height:13px;stroke-width:2.6;}
-  .chip{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; padding:2px 9px; border-radius:6px; background:var(--card-2); color:var(--muted); border:1px solid var(--line);}
-  .k{font-weight:700; color:var(--ink);}
-  code{background:var(--card-2); padding:1px 6px; border-radius:5px; font-size:.9em; font-family:"IBM Plex Mono",ui-monospace,monospace;}
-
-  .tip{display:flex; gap:11px; padding:12px 14px; border-radius:11px; margin:14px 0 2px; font-size:14.5px; line-height:1.55;}
-  .tip.g{background:color-mix(in srgb,var(--ok) 12%,transparent); border:1px solid color-mix(in srgb,var(--ok) 30%,transparent);}
-  .tip.w{background:color-mix(in srgb,var(--warn) 13%,transparent); border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);}
-  .tip.c{background:color-mix(in srgb,var(--crit) 12%,transparent); border:1px solid color-mix(in srgb,var(--crit) 32%,transparent);}
-  .tip.i{background:var(--card-2); border:1px solid var(--line);}
-  .tip .ic{width:19px;height:19px;flex-shrink:0;margin-top:1px;}
-
-  .role{display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:3px 10px; border-radius:20px; vertical-align:middle;}
-  .role.mgr{background:color-mix(in srgb,var(--lime) 22%,transparent); color:var(--lime-deep);}
-  .role.drv{background:color-mix(in srgb,var(--warn) 18%,transparent); color:var(--warn);}
-
-  table.t{width:100%; border-collapse:collapse; margin:10px 0; font-size:14px;}
-  table.t th,table.t td{text-align:left; padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top;}
-  table.t th{color:var(--muted); font-weight:700; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em;}
-  table.t td .k{white-space:nowrap;}
-  .t-wrap{overflow-x:auto;}
-  .badge{display:inline-block; font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px;}
-  .b-gray{background:#e7e9ee;color:#556}
-  .b-violet{background:#efe7ff;color:#6d28d9}
-  .b-blue{background:#e6efff;color:#1d4ed8}
-  .b-green{background:#e4f8ec;color:#12a150}
-  .b-red{background:#fdecec;color:#e23b3b}
-  .b-amber{background:#fff2df;color:#c77700}
-
-  /* ---- icon-nav grid (4 main menus) ---- */
-  .nav4{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:14px 0 4px;}
-  .nav4 a{display:flex; flex-direction:column; align-items:center; gap:8px; text-decoration:none; color:var(--ink);
-     background:var(--card-2); border:1px solid var(--line); border-radius:12px; padding:16px 8px; font-size:13px; font-weight:700;}
-  .nav4 a .icwrap{width:42px;height:42px;border-radius:11px;background:var(--lime-bright);color:#182200;display:flex;align-items:center;justify-content:center;}
-  .nav4 a .icwrap .ic{width:22px;height:22px;stroke-width:2.2;}
-  .nav4 a span.sub{font-size:11.5px;font-weight:500;color:var(--muted);}
-  @media(max-width:560px){ .nav4{grid-template-columns:repeat(2,1fr);} }
-
-  /* ---- workflow diagram (icon boxes + arrows) ---- */
-  .wf{display:flex; align-items:stretch; gap:0; margin:18px 0 6px; overflow-x:auto; padding-bottom:6px;}
-  .wf-step{display:flex; flex-direction:column; align-items:center; gap:8px; min-width:104px; text-align:center; padding:4px 6px;}
-  .wf-step .icwrap{width:52px;height:52px;border-radius:50%;background:var(--lime-bright);color:#182200;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-  .wf-step .icwrap .ic{width:24px;height:24px;stroke-width:2.2;}
-  .wf-step b{font-size:13px;line-height:1.3;}
-  .wf-step span{font-size:11.5px;color:var(--muted);}
-  .wf-arrow{display:flex; align-items:center; color:var(--lime-deep); flex-shrink:0; padding-top:22px;}
-  .wf-arrow .ic{width:22px;height:22px;stroke-width:2.4;}
-
-  /* ---- auto-split demo diagram ---- */
-  .split-demo{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:16px 0 4px;}
-  .split-demo .col{border:1.5px dashed var(--line); border-radius:12px; padding:14px; text-align:center;}
-  .split-demo .col .truck{width:44px;height:44px;border-radius:50%;background:var(--card-2);border:2px solid var(--lime);color:var(--lime-deep);
-     display:flex;align-items:center;justify-content:center;margin:0 auto 8px;}
-  .split-demo .col .truck .ic{width:22px;height:22px;}
-  .split-demo .col .pins{display:flex;justify-content:center;gap:6px;margin-top:10px;flex-wrap:wrap;}
-  .split-demo .col .pins .ic{width:16px;height:16px;color:var(--crit);}
-  .split-demo .col b{display:block;font-size:13px;}
-  .split-demo .col span{font-size:12px;color:var(--muted);}
-  @media(max-width:640px){ .split-demo{grid-template-columns:1fr;} }
-
-  /* ---- phone mock for driver bottom-nav ---- */
-  .phone-mock{max-width:230px;margin:16px auto 6px;border:3px solid var(--navy);border-radius:26px;overflow:hidden;background:var(--card);box-shadow:0 8px 24px rgba(0,0,0,.12);}
-  .phone-mock .screen{padding:18px 12px 0;min-height:150px;background:var(--card-2);}
-  .phone-mock .screen .row{height:8px;border-radius:4px;background:var(--line);margin-bottom:8px;}
-  .phone-mock .screen .row.w60{width:60%;} .phone-mock .screen .row.w80{width:80%;} .phone-mock .screen .row.w40{width:40%;}
-  .phone-mock .card{background:var(--card);border-radius:8px;padding:10px;margin-bottom:8px;border:1px solid var(--line);}
-  .phone-mock .dnav{display:flex;background:var(--navy);}
-  .phone-mock .dnav div{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0 8px;color:#9aa5b8;font-size:10px;font-weight:700;}
-  .phone-mock .dnav div.on{color:var(--lime-bright);}
-  .phone-mock .dnav .ic{width:18px;height:18px;}
-
-  .road{list-style:none; margin:6px 0 0; padding:0;}
-  .road li{display:flex; gap:14px; padding:12px 0; border-bottom:1px solid var(--line);}
-  .road li:last-child{border-bottom:none;}
-  .road li .icwrap{width:38px;height:38px;border-radius:11px;background:var(--lime-bright);color:#182200;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-  .road li .icwrap .ic{width:19px;height:19px;}
-  .road b{display:block; font-size:15px;}
-  .road span{color:var(--muted); font-size:14px;}
-
-  .ug-foot{max-width:1120px; margin:0 auto; padding:24px 20px 48px; color:var(--muted); font-size:13px; border-top:1px solid var(--line);}
-
-  @media (max-width:860px){
-    .ug-wrap{grid-template-columns:1fr; gap:0;}
-    .ug-toc{position:static; border-bottom:1px solid var(--line); padding:16px 0; max-height:none;}
-    .ug-toc .cols{display:grid; grid-template-columns:1fr 1fr; gap:0 12px;}
-  }
+  ol.steps b{display:block;font-size:15px;margin-bottom:2px}
+  ol.steps .d{color:var(--muted);font-size:14px}
+  .btn{display:inline-block;background:var(--lime-bright);color:#182200;font-weight:700;font-size:12.5px;padding:2px 8px;border-radius:6px}
+  .tip{margin:12px 0 0;padding:12px 14px;border-radius:11px;font-size:14px}
+  .tip.ok{background:#e8f8ee;border:1px solid #b7e7c8}
+  .tip.warn{background:#fff6e8;border:1px solid #f0d3a0}
+  .check{margin:0;padding:0;list-style:none}
+  .check li{padding:8px 0 8px 28px;position:relative;border-bottom:1px dashed var(--line);font-size:14.5px}
+  .check li:last-child{border-bottom:0}
+  .check li::before{content:"☐";position:absolute;left:0;top:8px;font-size:16px}
+  .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .menu div{background:#F4F7EA;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px}
+  .menu b{display:block;font-size:14px}
+  .menu span{color:var(--muted);font-size:12.5px}
+  .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:18px}
+  .foot a{color:inherit}
+  @media(max-width:520px){.menu{grid-template-columns:1fr}}
   @media print{
-    .ug-toc{display:none;} .ug-wrap{grid-template-columns:1fr; max-width:none;}
-    .ug-hero{background:#0f1608 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
-    .sec{break-inside:avoid; border-color:#ccc;}
+    .hero{border:0;padding:16px}
+    .card{break-inside:avoid}
+    body{background:#fff}
   }
 </style>
+</head>
+<body>
 
-<!-- ===== ไอคอน (inline SVG, ไม่ต้องพึ่ง JS/อินเทอร์เน็ต) ===== -->
-<svg width="0" height="0" style="position:absolute">
-<defs>
-<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9"/></symbol>
-<symbol id="i-package" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5-9-5z"/><path d="M3 8v9l9 5 9-5V8"/><path d="M12 13v9"/></symbol>
-<symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.7 7-12.2A7 7 0 105 9.8C5 15.3 12 22 12 22z"/><circle cx="12" cy="9.6" r="2.4"/></symbol>
-<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V11"/><path d="M11 20V4"/><path d="M18 20v-7"/><path d="M2 20h20"/></symbol>
-<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M4.2 6l2.3 1.7M17.5 16.3l2.3 1.7M2 12h3M19 12h3M4.2 18l2.3-1.7M17.5 7.7l2.3-1.7"/></symbol>
-<symbol id="i-truck" viewBox="0 0 24 24"><rect x="1" y="7" width="13" height="9" rx="1"/><path d="M14 10h4l4 3.2V16h-8z"/><circle cx="6" cy="18.2" r="1.7"/><circle cx="17.5" cy="18.2" r="1.7"/></symbol>
-<symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="6.5" r="2.4"/><circle cx="18" cy="17.5" r="2.4"/><path d="M6 9c0 6.2 12 2.8 12 8.5" stroke-dasharray="2.6 2.6"/></symbol>
-<symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3.2L8.6 6h6.8L16.8 8H20a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.6"/></symbol>
-<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M8 12.3l3 3 5.5-6.5"/></symbol>
-<symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2" width="11" height="20" rx="2.4"/><path d="M10 18h4"/></symbol>
-<symbol id="i-wallet" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10.5h20"/><circle cx="17" cy="15.2" r="1.3"/></symbol>
-<symbol id="i-printer" viewBox="0 0 24 24"><rect x="5" y="8.5" width="14" height="6.5" rx="1"/><path d="M7.5 8.5V4.5h9v4"/><path d="M7.5 15.5H16.5V20h-9z"/></symbol>
-<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10.5l5 5 5-5"/><path d="M4 19.5h16"/></symbol>
-<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
-<symbol id="i-edit" viewBox="0 0 24 24"><path d="M15 4l4.2 4.2L8 19.4H4v-4z"/><path d="M13 6l4 4"/></symbol>
-<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.3h6V7"/><path d="M6.2 7l1 12.6h9.6l1-12.6"/></symbol>
-<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2 5.3"/><path d="M20 5v6h-6"/></symbol>
-<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.2l9.5 17H2.5z"/><path d="M12 10v4.4"/><circle cx="12" cy="17.6" r=".6" fill="currentColor" stroke="none"/></symbol>
-<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 11v5.4"/><circle cx="12" cy="7.8" r=".6" fill="currentColor" stroke="none"/></symbol>
-<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.2"/><path d="M20 20l-5-5"/></symbol>
-<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/></symbol>
-<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 10.5a6 6 0 0112 0c0 4 2 5 2 5H4s2-1 2-5z"/><path d="M9.6 19a2.4 2.4 0 004.8 0"/></symbol>
-<symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.2 4-6.4 8-6.4s8 2.2 8 6.4"/></symbol>
-<symbol id="i-tap" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2"/><path d="M12 3v3.5"/><path d="M12 17.5V21"/><path d="M3 12h3.5"/><path d="M17.5 12H21"/></symbol>
-<symbol id="i-nav" viewBox="0 0 24 24"><path d="M12 2.5l5.5 17-5.5-4-5.5 4z"/></symbol>
-<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 7v5.4l4 2.2"/></symbol>
-<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6.5h16"/><path d="M4 12h16"/><path d="M4 17.5h10"/></symbol>
-<symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 2.5h12v19l-2-1.4-1.7 1.4-1.7-1.4-1.6 1.4-1.7-1.4-1.6 1.4-1.7-1.4z"/><path d="M9 8h6"/><path d="M9 12h6"/></symbol>
-<symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9.5l1.2-5.5h15.6l1.2 5.5"/><path d="M4 9.5v11h16v-11"/><path d="M9.5 20.5v-6.5h5v6.5"/></symbol>
-<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.3"/><path d="M2.5 20c0-3.6 3-5.5 6.5-5.5s6.5 1.9 6.5 5.5"/><path d="M16 5.3a3.3 3.3 0 010 6.4"/><path d="M18.5 14.8c2.3.6 3.5 2.2 3.5 5.2"/></symbol>
-<symbol id="i-satellite" viewBox="0 0 24 24"><path d="M8 12.5L4 16.5l3 3 4-4"/><path d="M14.5 6L18 2.5l3.5 3.5L18 9.5"/><path d="M9.5 14.5l4-4 4 4-4 4z"/><path d="M2.5 21.5l3-3"/></symbol>
-<symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4.5h7a2 2 0 012 2v13a2 2 0 00-2-2H4z"/><path d="M20 4.5h-7a2 2 0 00-2 2v13a2 2 0 012-2h7z"/></symbol>
-<symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12"/><path d="M11 12V4a1.5 1.5 0 013 0v8"/><path d="M14 12.2V6a1.5 1.5 0 013 0v8"/><path d="M17 10.5a1.5 1.5 0 013 0V15c0 4-2.5 6.5-6 6.5h-2c-3 0-4.3-1-5.7-2.8L3 14.6c-.6-.9-.3-2 .6-2.4.8-.4 1.6 0 2.1.7L8 15.5"/></symbol>
-</defs>
-</svg>
+<header class="hero">
+  <div class="brand">GV DISPATCH</div>
+  <h1>ขั้นตอนส่งงานประจำวัน</h1>
+  <p>อ่านสั้น ๆ ทำตามลำดับ — เพื่อไม่ลืมว่าร้านไหนต้องส่ง กี่ร้าน และใบส่งพิมพ์ที่ไหน</p>
+</header>
 
-<div class="ug">
+<div class="wrap">
 
-  <header class="ug-hero">
-    <div class="brand"><div class="gv">GV<small>DISPATCH</small></div></div>
-    <h1>คู่มือใช้งานระบบจัดส่ง<br>อ่านง่าย ใช้งานได้จริง</h1>
-    <p>คู่มือฉบับอัปเดต — อธิบายทีละขั้นตอนด้วยภาพประกอบและไอคอน ตั้งแต่เปิดเว็บครั้งแรก ไปจนถึงสร้างงานส่ง จัดเส้นทางอัตโนมัติ ให้คนขับรับงานบนมือถือ และดึงรายงาน</p>
-    <div class="meta">
-      <span><svg class="ic"><use href="#i-users"/></svg> สำหรับผู้จัดการ + คนขับ</span>
-      <span><svg class="ic"><use href="#i-phone"/></svg> เปิดผ่านมือถือ/แท็บเล็ต/คอมได้หมด</span>
-      <span><svg class="ic"><use href="#i-check"/></svg> ไม่ต้องใส่รหัสสำหรับผู้จัดการ</span>
-    </div>
-  </header>
-
-  <div class="ug-wrap">
-    <nav class="ug-toc">
-      <div class="cols">
-        <div class="lbl">เริ่มต้น</div>
-        <a href="#start"><svg class="ic"><use href="#i-info"/></svg> การเข้าใช้งาน</a>
-        <a href="#roadmap"><svg class="ic"><use href="#i-route"/></svg> ภาพรวมขั้นตอนทำงาน</a>
-        <div class="lbl">ตั้งค่าครั้งเดียว</div>
-        <a href="#settings"><svg class="ic"><use href="#i-gear"/></svg> A · ตั้งค่าระบบ</a>
-        <a href="#master"><svg class="ic"><use href="#i-store"/></svg> B · ลูกค้า / สาขา</a>
-        <a href="#emp"><svg class="ic"><use href="#i-users"/></svg> C · พนักงานส่งสินค้า</a>
-        <a href="#fleet"><svg class="ic"><use href="#i-truck"/></svg> D · รถบริษัท / รถนอก</a>
-        <div class="lbl">งานประจำวัน</div>
-        <a href="#dash"><svg class="ic"><use href="#i-home"/></svg> 1 · หน้า "วันนี้"</a>
-        <a href="#del"><svg class="ic"><use href="#i-package"/></svg> 2 · สร้างงานส่ง</a>
-        <a href="#plan"><svg class="ic"><use href="#i-route"/></svg> 3 · จัดเส้นทางอัตโนมัติ</a>
-        <a href="#driver"><svg class="ic"><use href="#i-phone"/></svg> 4 · โหมดคนขับ</a>
-        <a href="#track"><svg class="ic"><use href="#i-pin"/></svg> 5 · ติดตาม</a>
-        <div class="lbl">การเงิน &amp; รายงาน</div>
-        <a href="#finance"><svg class="ic"><use href="#i-wallet"/></svg> 6 · ค่าใช้จ่าย</a>
-        <a href="#report"><svg class="ic"><use href="#i-chart"/></svg> 7 · รายงาน &amp; พิมพ์</a>
-        <div class="lbl">อ้างอิง</div>
-        <a href="#status"><svg class="ic"><use href="#i-list"/></svg> ตารางสถานะงาน</a>
-        <a href="#faq"><svg class="ic"><use href="#i-info"/></svg> คำถามที่พบบ่อย</a>
-      </div>
-    </nav>
-
-    <main class="ug-main">
-
-      <!-- ============ START ============ -->
-      <section class="sec" id="start">
-        <div class="eyebrow">เริ่มต้น</div>
-        <h2><span class="num"><svg class="ic"><use href="#i-info"/></svg></span> การเข้าใช้งานระบบ</h2>
-        <p class="lead">เปิดเว็บได้จากคอมพิวเตอร์ แท็บเล็ต หรือมือถือ ผ่านลิงก์ของบริษัท — <b>ฝั่งผู้จัดการไม่ต้องใส่รหัสผ่านเลย</b> เปิดลิงก์แล้วใช้งานได้ทันที</p>
-
-        <h3><svg class="ic"><use href="#i-nav"/></svg> เมนูหลัก 4 อัน</h3>
-        <p class="lead" style="margin-bottom:6px">อยู่แถบซ้าย (คอม) หรือแถบล่างจอ (มือถือ)</p>
-        <div class="nav4">
-          <a href="#dash"><span class="icwrap"><svg class="ic"><use href="#i-home"/></svg></span>วันนี้<span class="sub">ภาพรวมวันนี้</span></a>
-          <a href="#del"><span class="icwrap"><svg class="ic"><use href="#i-package"/></svg></span>งานส่ง<span class="sub">สร้าง/ดูสถานะงาน</span></a>
-          <a href="#track"><span class="icwrap"><svg class="ic"><use href="#i-pin"/></svg></span>ติดตาม<span class="sub">รถ + พัสดุ</span></a>
-          <a href="#report"><span class="icwrap"><svg class="ic"><use href="#i-chart"/></svg></span>รายงาน<span class="sub">สรุป/พิมพ์</span></a>
-        </div>
-        <p class="lead" style="margin:10px 0 0"><svg class="ic"><use href="#i-gear"/></svg> เมนู <b>ตั้งค่า</b> อยู่มุมล่างซ้าย — รวมเมนูที่ไม่ได้ใช้ทุกวัน (ลูกค้า/รถ/พนักงาน/วางแผนส่ง/ค่าใช้จ่าย/โหมดคนขับ/Cartrack) ไว้ที่เดียว</p>
-
-        <h3><svg class="ic"><use href="#i-satellite"/></svg> สัญญาณการเชื่อมต่อ (มุมบนขวา)</h3>
-        <div class="t-wrap"><table class="t">
-          <tr><th>สัญญาณ</th><th>ความหมาย</th><th>ต้องทำอะไร</th></tr>
-          <tr><td><span class="chip">🟢 เชื่อมต่อแล้ว</span></td><td>ใช้ข้อมูลจริง บันทึกขึ้นเซิร์ฟเวอร์ปกติ</td><td>ใช้งานได้เลย</td></tr>
-          <tr><td><span class="chip">🟡 กำลังเชื่อมต่อ…</span></td><td>กำลังโหลดข้อมูล (ตอนเปิดครั้งแรก)</td><td>รอสักครู่</td></tr>
-          <tr><td><span class="chip">🟡 กำลังลองเชื่อมต่อใหม่…</span></td><td>เน็ตสะดุด/เซิร์ฟเวอร์ตอบช้าชั่วคราว</td><td>ไม่ต้องทำอะไร ระบบเชื่อมกลับให้เอง</td></tr>
-        </table></div>
-        <div class="tip g"><svg class="ic"><use href="#i-check"/></svg><div><b>บันทึกไวขึ้นแล้ว</b> — กดบันทึก/แก้ไข/ลบ ข้อมูลขึ้นทันที ไม่ต้องรอ และสถานะที่คนขับอัปเดตจากมือถือจะเด้งขึ้นหน้าออฟฟิศเองทุกไม่กี่วินาที</div></div>
-        <div class="tip w"><svg class="ic"><use href="#i-refresh"/></svg><div>เปิดครั้งแรกแล้วข้อมูลไม่ขึ้น? กด <b>Ctrl + Shift + R</b> (ค้างพร้อมกัน) เพื่อล้างแคชแล้วโหลดใหม่ · บนมือถือ: ปิดแท็บแล้วเปิดใหม่</div></div>
-
-        <h3><svg class="ic"><use href="#i-search"/></svg> ปุ่มที่ใช้บ่อยด้านบน</h3>
-        <ul class="plain">
-          <li><span class="k"><svg class="ic"><use href="#i-calendar"/></svg> ปฏิทิน</span> (มุมบนซ้าย) — เลือกวันที่ทำงาน ข้อมูลทั้งหน้าเปลี่ยนตามวันที่เลือก</li>
-          <li><span class="k"><svg class="ic"><use href="#i-search"/></svg> ช่องค้นหา</span> — พิมพ์ชื่อลูกค้า/เลขบิล เพื่อกรองรายการในหน้าที่กำลังดู</li>
-          <li><span class="k"><svg class="ic"><use href="#i-bell"/></svg> กระดิ่ง</span> — ตัวเลขคือจำนวนงานที่ยัง "รอจัดส่ง"</li>
-        </ul>
-        <div class="tip i"><svg class="ic"><use href="#i-users"/></svg><div>ระบบมี 2 บทบาท: <span class="role mgr">ผู้จัดการ/แอดมิน</span> ใช้ 4 เมนูหลัก + ตั้งค่า บนคอม/แท็บเล็ต (ไม่ต้องล็อกอิน) · <span class="role drv">คนขับ</span> ใช้ "โหมดคนขับ" บนมือถือ (แค่แตะเลือกชื่อตัวเอง ไม่ต้องพิมพ์รหัส)</div></div>
-      </section>
-
-      <!-- ============ ROADMAP ============ -->
-      <section class="sec" id="roadmap">
-        <div class="eyebrow">ภาพรวม</div>
-        <h2><span class="num"><svg class="ic"><use href="#i-route"/></svg></span> ขั้นตอนทำงานทั้งหมด (ภาพเดียวเข้าใจ)</h2>
-        <p class="lead">ตั้งแต่สร้างงาน จนถึงลูกค้าได้ของ แล้วดูรายงานสรุป</p>
-        <div class="wf">
-          <div class="wf-step"><span class="icwrap"><svg class="ic"><use href="#i-package"/></svg></span><b>สร้างงานส่ง</b><span>ใส่บิล + ที่อยู่</span></div>
-          <div class="wf-arrow"><svg class="ic"><use href="#i-nav" style="transform:rotate(90deg)"/></svg></div>
-          <div class="wf-step"><span class="icwrap"><svg class="ic"><use href="#i-route"/></svg></span><b>จัดเส้นทาง</b><span>กดปุ่มเดียว</span></div>
-          <div class="wf-arrow"><svg class="ic"><use href="#i-nav" style="transform:rotate(90deg)"/></svg></div>
-          <div class="wf-step"><span class="icwrap"><svg class="ic"><use href="#i-truck"/></svg></span><b>แบ่งรถอัตโนมัติ</b><span>ระบบจัดให้เอง</span></div>
-          <div class="wf-arrow"><svg class="ic"><use href="#i-nav" style="transform:rotate(90deg)"/></svg></div>
-          <div class="wf-step"><span class="icwrap"><svg class="ic"><use href="#i-tap"/></svg></span><b>คนขับรับงาน</b><span>แตะชื่อ + รับงาน</span></div>
-          <div class="wf-arrow"><svg class="ic"><use href="#i-nav" style="transform:rotate(90deg)"/></svg></div>
-          <div class="wf-step"><span class="icwrap"><svg class="ic"><use href="#i-camera"/></svg></span><b>ส่งสำเร็จ</b><span>ถ่ายรูปยืนยัน</span></div>
-          <div class="wf-arrow"><svg class="ic"><use href="#i-nav" style="transform:rotate(90deg)"/></svg></div>
-          <div class="wf-step"><span class="icwrap"><svg class="ic"><use href="#i-chart"/></svg></span><b>ดูรายงาน</b><span>สรุป+พิมพ์</span></div>
-        </div>
-        <p class="lead" style="margin-top:14px">ลูกศรหมุน 90° เพราะไอคอนถูกใช้ซ้ำ — ทิศทางจริงคือ "ซ้ายไปขวา" ตามลำดับงาน</p>
-
-        <h3 style="margin-top:22px"><svg class="ic"><use href="#i-list"/></svg> ลำดับเริ่มใช้งานครั้งแรก</h3>
-        <p class="lead">ทำตามลำดับนี้ครั้งเดียวตอนเริ่มระบบ หลังจากนั้นงานประจำวันเริ่มที่ข้อ 5 เป็นต้นไป</p>
-        <ol class="road">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-gear"/></svg></span><div><b>ตั้งค่าระบบ</b><span>ข้อมูลบริษัท พิกัดคลัง ค่าน้ำมัน/กม. → หัวข้อ A</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-store"/></svg></span><div><b>เพิ่มลูกค้า / สาขา</b><span>ระบบหาพิกัด GPS ให้อัตโนมัติ → หัวข้อ B</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-users"/></svg></span><div><b>เพิ่มพนักงานส่งสินค้า</b><span>ชื่อ เบอร์ ตำแหน่ง คนขับ → หัวข้อ C</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-truck"/></svg></span><div><b>เพิ่มรถบริษัท / รถจ้างภายนอก</b><span>ความจุ + ค่าน้ำมัน/เรตราคา → หัวข้อ D</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-package"/></svg></span><div><b>สร้างงานส่งสินค้า</b><span>บันทึกออเดอร์วันนั้น → หัวข้อ 2</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-route"/></svg></span><div><b>จัดเส้นทางอัตโนมัติ</b><span>เลือกงาน → กดปุ่มเดียว → หัวข้อ 3</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-phone"/></svg></span><div><b>คนขับรับงานบนมือถือ</b><span>แตะชื่อ → รับงาน → หัวข้อ 4</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-pin"/></svg></span><div><b>ติดตามงาน</b><span>ดูตำแหน่งรถ + สถานะพัสดุ → หัวข้อ 5</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-chart"/></svg></span><div><b>ดึงรายงาน &amp; พิมพ์เอกสาร</b><span>สรุปงาน/ต้นทุน → หัวข้อ 7</span></div></li>
-        </ol>
-      </section>
-
-      <!-- ============ A · SETTINGS ============ -->
-      <section class="sec" id="settings">
-        <div class="eyebrow">ตั้งค่าครั้งเดียว · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">A</span> ตั้งค่าระบบ</h2>
-        <p class="lead">ไปที่ <span class="k"><svg class="ic"><use href="#i-gear"/></svg> ตั้งค่า</span> (มุมล่างซ้าย) → <span class="k">ตั้งค่าระบบ · คลัง · ต้นทุน</span> — ตั้งให้ครบ "ก่อน" ใช้งานจริง เพราะเป็นฐานที่ระบบใช้คำนวณระยะทาง/ราคาทุกเส้นทาง</p>
-
-        <h3><svg class="ic"><use href="#i-store"/></svg> 1) ข้อมูลบริษัท &amp; คลังสินค้า</h3>
-        <div class="t-wrap"><table class="t">
-          <tr><th>ช่อง</th><th>ใส่อะไร / มีผลอย่างไร</th></tr>
-          <tr><td><span class="k">ชื่อบริษัท</span></td><td>ขึ้นหัวเอกสารทุกใบที่พิมพ์ (ใบส่งของ/ใบเบิก/รายงาน)</td></tr>
-          <tr><td><span class="k">ชื่อ + ที่อยู่คลัง</span></td><td>ขึ้นบนแผนที่ที่หมุด 🏭 และหัวเอกสาร</td></tr>
-          <tr><td><span class="k">พิกัดคลัง Lat/Lng</span></td><td><b>สำคัญมาก</b> — จุดเริ่ม/สิ้นสุดของทุกเส้นทาง ต้องตรงคลังจริง</td></tr>
-        </table></div>
-        <div class="tip i"><svg class="ic"><use href="#i-pin"/></svg><div>หาพิกัดคลัง: เปิด Google Maps → คลิกขวาตำแหน่งคลัง → ตัวเลขคู่แรกคือ Latitude, Longitude คัดลอกมาใส่ได้เลย</div></div>
-
-        <h3><svg class="ic"><use href="#i-wallet"/></svg> 2) ต้นทุน</h3>
-        <div class="t-wrap"><table class="t">
-          <tr><th>ช่อง</th><th>ใส่อะไร / มีผลอย่างไร</th></tr>
-          <tr><td><span class="k">ค่าน้ำมัน/กม.</span></td><td>บาท/กม. — คิดค่าน้ำมันอัตโนมัติ (ถ้ารถคันนั้นตั้งไว้เฉพาะ ใช้ของคันนั้นแทน)</td></tr>
-          <tr><td><span class="k">ความเร็วเฉลี่ย</span></td><td>กม./ชม. — ใช้ประเมินเวลาที่จะใช้ (เมืองหนาแน่นตั้ง 25–30)</td></tr>
-          <tr><td><span class="k">ค่าทางด่วนเริ่มต้น</span></td><td>บาท — ค่าตั้งต้น แก้รายรอบได้</td></tr>
-          <tr><td><span class="k">ค่าจอดรถเริ่มต้น</span></td><td>บาท/จุด — คิดเฉพาะปลายทางเป็นห้าง/ศูนย์การค้า</td></tr>
-        </table></div>
-
-        <h3><svg class="ic"><use href="#i-check"/></svg> 3) บันทึก</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-edit"/></svg></span><div class="body">แก้ค่าในช่องต่าง ๆ ให้ครบ</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-check"/></svg></span><div class="body">กด <span class="btn"><svg class="ic"><use href="#i-check"/></svg>บันทึกการตั้งค่าทั้งหมด</span><span class="sub">ค่าจะถูกบันทึกทันที</span></div></li>
-        </ol>
-        <div class="tip w"><svg class="ic"><use href="#i-satellite"/></svg><div><span class="k">Cartrack Integration</span> (ในหน้าตั้งค่า) ใช้ผูก GPS ติดตามรถแบบเรียลไทม์ — รหัสเชื่อมต่อตั้งในระบบหลังบ้านเท่านั้น ผู้ใช้ทั่วไปดูแค่สถานะว่าเชื่อมต่ออยู่หรือไม่</div></div>
-      </section>
-
-      <!-- ============ B · CUSTOMERS ============ -->
-      <section class="sec" id="master">
-        <div class="eyebrow">ตั้งค่าครั้งเดียว · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">B</span> ลูกค้า / สาขา</h2>
-        <p class="lead">ตั้งค่า → <span class="k">ลูกค้า / สาขา</span> — ทะเบียนร้าน/สาขาปลายทางไว้ล่วงหน้า เพื่อเลือกได้เร็วตอนสร้างงานส่ง</p>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-plus"/></svg></span><div class="body">กด <span class="btn"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มลูกค้า</span> มุมขวาบน</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-store"/></svg></span><div class="body">กรอก <span class="k">ชื่อร้าน · สาขา · ที่อยู่</span><span class="sub">ใส่ที่อยู่ให้ครบ ระบบจะหาพิกัดได้แม่นขึ้น</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-pin"/></svg></span><div class="body">ระบบหาพิกัด GPS ให้อัตโนมัติจากที่อยู่<span class="sub">ไม่ต้องกรอก Lat/Lng เอง</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-check"/></svg></span><div class="body">กด <span class="btn">บันทึก</span></div></li>
-        </ol>
-        <ul class="plain">
-          <li><svg class="ic"><use href="#i-edit"/></svg> = แก้ไข · <svg class="ic"><use href="#i-trash"/></svg> = ลบ (ซ่อนออกจากรายการ กู้คืนได้)</li>
-        </ul>
-        <div class="tip w"><svg class="ic"><use href="#i-alert"/></svg><div>ลูกค้าที่ <b>ไม่มีพิกัด GPS</b> จะไม่ขึ้นบนแผนที่ และจัดเส้นทางอัตโนมัติไม่ได้ — ควรหาพิกัดให้เรียบร้อยก่อนบันทึก</div></div>
-      </section>
-
-      <!-- ============ C · EMPLOYEES ============ -->
-      <section class="sec" id="emp">
-        <div class="eyebrow">ตั้งค่าครั้งเดียว · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">C</span> พนักงานส่งสินค้า</h2>
-        <p class="lead">ตั้งค่า → <span class="k">พนักงานส่งสินค้า</span> — รายชื่อคนขับที่จะขึ้นให้เลือกตอนจัดเส้นทาง และให้คนขับแตะเลือกชื่อตัวเองในโหมดคนขับ</p>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-plus"/></svg></span><div class="body">กด <span class="btn"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มพนักงาน</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-user"/></svg></span><div class="body">กรอก <span class="k">ชื่อ-นามสกุล · เบอร์โทร</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-list"/></svg></span><div class="body">เลือก <span class="k">ตำแหน่ง</span> เป็น <b>คนขับ (DRIVER)</b> — เฉพาะคนที่ตั้งเป็นคนขับเท่านั้นที่จะขึ้นในหน้าเลือกชื่อของโหมดคนขับ</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-truck"/></svg></span><div class="body">เลือก <span class="k">รถประจำ</span> (ถ้ามี) แล้วกดบันทึก<span class="sub">ชื่อคนขับจะเติมให้อัตโนมัติเมื่อเลือกรถคันนั้นตอนจัดเส้นทาง</span></div></li>
-        </ol>
-      </section>
-
-      <!-- ============ D · FLEET ============ -->
-      <section class="sec" id="fleet">
-        <div class="eyebrow">ตั้งค่าครั้งเดียว · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num">D</span> รถบริษัท &amp; รถจ้างภายนอก</h2>
-
-        <h3><svg class="ic"><use href="#i-truck"/></svg> รถบริษัท</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-plus"/></svg></span><div class="body">ตั้งค่า → <span class="k">รถบริษัท</span> → กด <span class="btn"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มรถ</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-truck"/></svg></span><div class="body">กรอก <span class="k">ชื่อรถ · ทะเบียน · ประเภท</span> (กระบะ/หกล้อ/ตู้)</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-package"/></svg></span><div class="body">ตั้ง <span class="k">ความจุ (กล่อง)</span> — ระบบใช้เช็กว่ารถรับงานไหวไหม และใช้แบ่งงานให้หลายคันอัตโนมัติ</div></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-satellite"/></svg></span><div class="body">ช่อง <span class="k">Cartrack Registration</span> = ทะเบียนที่ผูกกล่อง GPS ต้องตรงจึงเห็นตำแหน่งสด</div></li>
-        </ol>
-        <div class="tip i"><svg class="ic"><use href="#i-refresh"/></svg><div>สถานะรถขึ้น<b>อัตโนมัติจากตำแหน่ง GPS</b>: 🟢กำลังวิ่ง / 🟡จอดอยู่ / 🟠สัญญาณขาด (เชื่อมต่อได้ แต่พิกัดล่าสุดเก่าเกิน 10 นาที) / ⚪ออฟไลน์ (ไม่มีพิกัดเลยตั้งแต่แรก) — ไม่ต้องตั้งเอง</div></div>
-
-        <h3><svg class="ic"><use href="#i-truck"/></svg> รถจ้างภายนอก</h3>
-        <ul class="plain">
-          <li>ตั้งค่า → <span class="k">รถจ้างภายนอก</span> — บันทึกผู้ให้บริการ/คนขับ/เบอร์/ทะเบียน/ความจุ</li>
-          <li>ตั้ง <span class="k">เรตราคา</span> (ต่อเที่ยว/กม./วัน) — ระบบใช้คิดต้นทุนอัตโนมัติเมื่อเลือกรถภายนอก</li>
-        </ul>
-      </section>
-
-      <!-- ============ 1 · DASHBOARD ============ -->
-      <section class="sec" id="dash">
-        <div class="eyebrow">งานประจำวัน · ภาพรวม</div>
-        <h2><span class="num"><svg class="ic"><use href="#i-home"/></svg></span> หน้า "วันนี้"</h2>
-        <p class="lead">หน้าแรกที่เจอทุกครั้งที่เปิดเว็บ — สรุปงานของวันในหน้าเดียว</p>
-        <ul class="plain">
-          <li><span class="k"><svg class="ic"><use href="#i-package"/></svg> การ์ดสรุป</span> — งานวันนี้ / ส่งแล้ว / ค้างส่ง / ค่าใช้จ่ายวันนี้</li>
-          <li><span class="k"><svg class="ic"><use href="#i-list"/></svg> งานที่ต้องส่งวันนี้</span> — ตารางงานค้าง มีปุ่ม <span class="btn"><svg class="ic"><use href="#i-route"/></svg>ไปจัดเส้นทาง</span></li>
-          <li><span class="k"><svg class="ic"><use href="#i-truck"/></svg> สถานะรถ</span> — 🟢กำลังส่ง / 🟡จอดอยู่ / ⚪ยังไม่เริ่ม พร้อมจุดที่กำลังไปส่งตอนนี้ (ถ้ามีรอบวิ่งอยู่)</li>
-        </ul>
-        <div class="tip i"><svg class="ic"><use href="#i-refresh"/></svg><div>ปุ่ม <span class="btn"><svg class="ic"><use href="#i-refresh"/></svg>รีเฟรช</span> ดึงข้อมูลล่าสุดทั้งหมด · ตำแหน่งรถอัปเดตอัตโนมัติทุกไม่กี่วินาทีอยู่แล้ว</div></div>
-      </section>
-
-      <!-- ============ 2 · CREATE DELIVERY ============ -->
-      <section class="sec" id="del">
-        <div class="eyebrow">งานประจำวัน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num"><svg class="ic"><use href="#i-package"/></svg></span> สร้างงานส่งสินค้า</h2>
-        <p class="lead">เมนู <span class="k">งานส่ง</span> — บันทึกออเดอร์ที่ต้องส่ง · <b>1 รายการ = 1 บิล</b> · มี 4 แท็บแยกตามสถานะ</p>
-
-        <h3><svg class="ic"><use href="#i-list"/></svg> 4 แท็บสถานะ</h3>
-        <ul class="plain">
-          <li><span class="badge b-gray">รอจัดส่ง</span> งานใหม่ ยังไม่จัดรถ</li>
-          <li><span class="badge b-violet">วางแผนแล้ว</span> เข้า Route แล้ว รอออกรถ</li>
-          <li><span class="badge b-blue">กำลังส่ง</span> รถออกวิ่งแล้ว</li>
-          <li><span class="badge b-green">เสร็จแล้ว</span> ส่งสำเร็จ/ไม่สำเร็จ</li>
-        </ul>
-
-        <h3><svg class="ic"><use href="#i-plus"/></svg> ขั้นตอนสร้างงาน</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-calendar"/></svg></span><div class="body">เลือก<span class="k">วันที่ส่ง</span>ให้ตรงก่อน (ปุ่มปฏิทินบนซ้าย)</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-plus"/></svg></span><div class="body">กด <span class="btn"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มงานส่ง</span> มุมขวาบน</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-store"/></svg></span><div class="body">เลือก<span class="k">ลูกค้า/สาขา</span>จากรายการ<span class="sub">ระบบเติมที่อยู่+พิกัดให้อัตโนมัติ หรือพิมพ์เองก็ได้</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-receipt"/></svg></span><div class="body">กรอก<span class="k">เลขบิล</span>และ<span class="k">จำนวนกล่อง</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-alert"/></svg></span><div class="body">เลือก<span class="k">Priority</span> — <span class="badge b-red">ด่วน</span>/<span class="badge b-amber">ปกติ</span>/<span class="badge b-green">ไม่เร่งด่วน</span><span class="sub">มีผลกับการจัดลำดับจุดส่งตอนวางแผนเส้นทาง</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-check"/></svg></span><div class="body">กด <span class="btn">บันทึก</span><span class="sub">งานขึ้นในแท็บ "รอจัดส่ง" ทันที</span></div></li>
-        </ol>
-        <ul class="plain">
-          <li><svg class="ic"><use href="#i-edit"/></svg> = แก้ไข (แก้สถานะเองได้ที่นี่ด้วย) · <svg class="ic"><use href="#i-trash"/></svg> = ลบ</li>
-          <li>คอลัมน์ <span class="k">รถ</span> จะขึ้นชื่อรถทันทีที่งานถูกจัดเข้า Route แล้ว</li>
-        </ul>
-        <div class="tip g"><svg class="ic"><use href="#i-nav"/></svg><div><span class="k">จัดรถด่วน</span> — งานในแท็บ "รอจัดส่ง" มีปุ่มนี้ กดแล้วเลือกรถ+คนขับ ระบบคำนวณระยะ/ต้นทุนให้ทันที เหมาะกับส่งด่วนใบเดียวไม่ต้องรวมรอบ</div></div>
-      </section>
-
-      <!-- ============ 3 · AUTO ROUTE ============ -->
-      <section class="sec" id="plan">
-        <div class="eyebrow">งานประจำวัน · <span class="role mgr">ผู้จัดการ/แอดมิน</span> · ฟีเจอร์สำคัญที่สุด</div>
-        <h2><span class="num"><svg class="ic"><use href="#i-route"/></svg></span> จัดเส้นทางอัตโนมัติ</h2>
-        <p class="lead">รวมหลายงานเป็นรอบส่ง ระบบจัดลำดับจุด คำนวณระยะทางถนนจริง ต้นทุน และ <b>แบ่งให้รถหลายคันโดยอัตโนมัติ</b>ถ้างานเยอะเกินรถคันเดียวรับไหว</p>
-
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-package"/></svg></span><div class="body">ที่แท็บ <span class="badge b-gray">รอจัดส่ง</span> ของหน้างานส่ง <span class="k">ติ๊กเลือกงาน</span> ที่จะส่งรอบนี้ (หรือกด "เลือกทั้งหมด" ที่หน้าวางแผนส่ง)</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-route"/></svg></span><div class="body">กดปุ่ม <span class="btn"><svg class="ic"><use href="#i-route"/></svg>จัดเส้นทางอัตโนมัติ</span><span class="sub">ระบบจัดลำดับจุด (ลดการย้อนทาง) วาดเส้นทางตามถนนจริงบนแผนที่ คำนวณระยะ/เวลา/ต้นทุน</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-truck"/></svg></span><div class="body">ถ้ารถคันเดียวรับไม่ไหว ระบบจะ<span class="k">แบ่งเป็นหลาย Route ให้อัตโนมัติ</span> (ดูตัวอย่างด้านล่าง) — เลือกรถ+คนขับให้แต่ละ Route ได้ (หรือปล่อยว่าง ให้คนขับกดรับงานเอง)</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-check"/></svg></span><div class="body">ตรวจค่าทางด่วน/ค่าจอดให้ตรงจริง แล้วกด <span class="btn"><svg class="ic"><use href="#i-check"/></svg>ยืนยันการส่งทั้งหมด</span><span class="sub">งานทุกใบเปลี่ยนเป็น "วางแผนแล้ว" ทันที</span></div></li>
-        </ol>
-
-        <h3><svg class="ic"><use href="#i-truck"/></svg> ตัวอย่าง: 20 จุดส่ง เกินความจุรถคันเดียว → แบ่งเป็น 3 คัน</h3>
-        <div class="split-demo">
-          <div class="col"><span class="truck"><svg class="ic"><use href="#i-truck"/></svg></span><b>Route 1</b><span>6 จุด · รถกระบะ</span>
-            <div class="pins"><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg></div></div>
-          <div class="col"><span class="truck"><svg class="ic"><use href="#i-truck"/></svg></span><b>Route 2</b><span>7 จุด · รถกระบะ</span>
-            <div class="pins"><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg></div></div>
-          <div class="col"><span class="truck"><svg class="ic"><use href="#i-truck"/></svg></span><b>Route 3</b><span>7 จุด · รถหกล้อ</span>
-            <div class="pins"><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg><svg class="ic"><use href="#i-pin"/></svg></div></div>
-        </div>
-        <p class="lead" style="margin-top:6px">ระบบแบ่งจุดตามพื้นที่ใกล้เคียงกัน ให้แต่ละคันวิ่งเป็นวงไม่ย้อนทาง แล้วเลือกรถที่ความจุพอดีให้เอง</p>
-
-        <div class="t-wrap"><table class="t">
-          <tr><th>ระบบคิดต้นทุนอย่างไร</th><th>วิธีคิด</th></tr>
-          <tr><td>ค่าน้ำมัน</td><td>ระยะทางถนนจริง × เรตค่าน้ำมันของรถ (อัตโนมัติ)</td></tr>
-          <tr><td>ค่าจอดรถ</td><td>คิดเฉพาะปลายทางเป็นห้าง/ศูนย์การค้า · ร้านเดี่ยว = 0 (แก้เองได้)</td></tr>
-          <tr><td>ค่าทางด่วน</td><td>ใส่ตามจริง — ไม่ขึ้นทางด่วนใส่ 0</td></tr>
-        </table></div>
-        <div class="tip i"><svg class="ic"><use href="#i-nav"/></svg><div>มี <span class="k">ทางเลือกเพิ่มเติม</span> ให้เปรียบเทียบ (รถคันเดียว / รถ+รถนอก / แบ่งหลายคัน) ถ้าอยากลองแบบอื่นแตะดูใต้ "⚙️ ตัวเลือกเส้นทางเพิ่มเติม"</div></div>
-      </section>
-
-      <!-- ============ 4 · DRIVER ============ -->
-      <section class="sec" id="driver">
-        <div class="eyebrow">งานประจำวัน · <span class="role drv">คนขับ</span> · ใช้บนมือถือ</div>
-        <h2><span class="num"><svg class="ic"><use href="#i-phone"/></svg></span> โหมดคนขับ</h2>
-        <p class="lead">ออกแบบให้กดง่ายด้วยมือเดียวระหว่างวิ่งงาน — <b>ไม่ต้องพิมพ์รหัสผ่านใด ๆ</b> เพราะงานถูกระบบคำนวณและมอบหมายไว้ให้แล้ว แค่แตะบอกว่าเป็นใคร</p>
-
-        <h3><svg class="ic"><use href="#i-tap"/></svg> เข้าสู่ระบบแบบไม่ต้องพิมพ์รหัส</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-phone"/></svg></span><div class="body">เปิดเว็บบนมือถือ → แตะเมนู <span class="btn"><svg class="ic"><use href="#i-phone"/></svg>คนขับ</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-tap"/></svg></span><div class="body"><span class="k">แตะชื่อของตัวเอง</span> จากรายชื่อคนขับที่ขึ้นมา — เสร็จ เข้าใช้งานได้ทันที</div></li>
-        </ol>
-
-        <h3><svg class="ic"><use href="#i-list"/></svg> เมนูล่างจอ 3 อัน</h3>
-        <div class="phone-mock">
-          <div class="screen">
-            <div class="card"><div class="row w60"></div><div class="row w80"></div></div>
-            <div class="card"><div class="row w40"></div><div class="row w60"></div></div>
-          </div>
-          <div class="dnav">
-            <div class="on"><svg class="ic"><use href="#i-home"/></svg>วันนี้</div>
-            <div><svg class="ic"><use href="#i-truck"/></svg>งาน</div>
-            <div><svg class="ic"><use href="#i-user"/></svg>ฉัน</div>
-          </div>
-        </div>
-        <ul class="plain">
-          <li><span class="k"><svg class="ic"><use href="#i-home"/></svg> วันนี้</span> — จุดที่ต้องไปส่ง<b>ตอนนี้</b> จุดเดียว พร้อมแผนที่เล็กและปุ่มนำทาง/เช็คอิน/ส่งเสร็จ</li>
-          <li><span class="k"><svg class="ic"><use href="#i-truck"/></svg> งาน</span> — ถ้ายังไม่รับงาน จะเห็น "งานของฉัน" (มอบหมายไว้แล้ว) กับ "งานที่รอรับ" (ใครก็แตะรับได้) · ถ้ารับแล้วจะเห็นรายการจุดส่งทั้งหมดของรอบนั้น</li>
-          <li><span class="k"><svg class="ic"><use href="#i-user"/></svg> ฉัน</span> — ชื่อตัวเอง, ปุ่ม<span class="k">บันทึกค่าใช้จ่าย</span>, ปุ่มออกจากระบบ</li>
-        </ul>
-
-        <h3><svg class="ic"><use href="#i-nav"/></svg> ขั้นตอนส่งสินค้าแต่ละจุด</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-hand"/></svg></span><div class="body">แท็บ <b>งาน</b> → กด <span class="btn"><svg class="ic"><use href="#i-hand"/></svg>รับงานนี้</span><span class="sub">สถานะขึ้น "กำลังส่ง" อัตโนมัติ ผู้จัดการเห็นทันที</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-nav"/></svg></span><div class="body">แท็บ <b>วันนี้</b> → กด <span class="btn"><svg class="ic"><use href="#i-nav"/></svg>เปิดแผนที่</span> เพื่อนำทางไปจุดปัจจุบัน</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-pin"/></svg></span><div class="body">ถึงจุดแล้วกด <span class="btn"><svg class="ic"><use href="#i-pin"/></svg>Check-in</span> — ระบบเช็ก GPS ว่าอยู่ใกล้จุดหรือยัง</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-camera"/></svg></span><div class="body">ส่งเสร็จ → กด <span class="btn"><svg class="ic"><use href="#i-check"/></svg>ส่งเสร็จ</span> → ถ่ายรูปหลักฐาน → ยืนยัน<span class="sub">สถานะขึ้น "ส่งสำเร็จ" พร้อมแนบรูปทันที</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-alert"/></svg></span><div class="body">ส่งไม่ได้ → กด <span class="btn">ส่งไม่สำเร็จ</span> แล้วใส่เหตุผล (ร้านปิด/ลูกค้าไม่รับ)</div></li>
-        </ol>
-        <div class="t-wrap"><table class="t">
-          <tr><th>สัญญาณ Check-in</th><th>ความหมาย</th></tr>
-          <tr><td>🟢 ถึงจุดส่ง</td><td>อยู่ห่างจุดส่งไม่เกินระยะสีเขียว (ค่าเริ่มต้น 100 ม.)</td></tr>
-          <tr><td>🟡 ใกล้จุดส่ง</td><td>ห่างระหว่างระยะเขียว–เหลือง (100–500 ม.)</td></tr>
-          <tr><td>🔴 ยังไม่ถึง</td><td>ห่างเกินระยะสีเหลือง</td></tr>
-        </table></div>
-
-        <h3><svg class="ic"><use href="#i-wallet"/></svg> บันทึกค่าใช้จ่าย</h3>
-        <p class="lead">แท็บ <b>ฉัน</b> → กด <span class="btn"><svg class="ic"><use href="#i-wallet"/></svg>บันทึกค่าใช้จ่าย</span> → เลือกประเภท (น้ำมัน/ทางด่วน/จอดรถ/อื่นๆ) → ใส่จำนวนเงิน → ถ่ายรูปใบเสร็จ (ถ้ามี) → บันทึก — ขึ้นในระบบให้ผู้จัดการเห็นทันที ไม่ต้องรอกลับออฟฟิศ</p>
-        <div class="tip w"><svg class="ic"><use href="#i-pin"/></svg><div>ครั้งแรกมือถือจะขออนุญาตเข้าถึงตำแหน่ง — ต้องกด "อนุญาต" ไม่งั้น Check-in และนำทางจะใช้ไม่ได้</div></div>
-      </section>
-
-      <!-- ============ 5 · TRACK ============ -->
-      <section class="sec" id="track">
-        <div class="eyebrow">งานประจำวัน · ติดตามงาน</div>
-        <h2><span class="num"><svg class="ic"><use href="#i-pin"/></svg></span> ติดตาม</h2>
-        <p class="lead">เมนู <span class="k">ติดตาม</span> — มี 2 แท็บ: <b>ภาพรวมรถ</b> (ดูตำแหน่ง/สถานะรถทุกคัน) และ <b>ค้นหาพัสดุ</b> (เช็คบิลรายชิ้น)</p>
-
-        <h3><svg class="ic"><use href="#i-truck"/></svg> แท็บภาพรวมรถ</h3>
-        <ul class="plain">
-          <li>ตัวกรองด้านบน: ทั้งหมด / กำลังวิ่ง / จอดอยู่ / ออฟไลน์</li>
-          <li>การ์ดรถแต่ละคันแสดง: สถานะ · ความเร็ว · <span class="k">แหล่งพิกัด</span> (📡 Cartrack หรือ 📱 มือถือคนขับ) · อัปเดตล่าสุดกี่วินาทีที่แล้ว · <span class="k">จุดที่กำลังส่งอยู่ตอนนี้</span></li>
-          <li>ถ้ารถกำลังวิ่งอยู่ จะมีปุ่ม <span class="btn"><svg class="ic"><use href="#i-route"/></svg>เส้นทางจริง</span> — เปิดแผนที่เทียบ<span class="k">เส้นทางที่วางแผนไว้</span>(เส้นประ) กับ<span class="k">เส้นทางที่วิ่งจริง</span>(เส้นทึบ) พร้อมบอกจุดที่จอดนิ่งนานผิดปกติ</li>
-        </ul>
-        <div class="tip i"><svg class="ic"><use href="#i-alert"/></svg><div>ถ้าไม่มีสัญญาณ GPS อัปเดตเกิน 10 นาที รถจะขึ้น "ออฟไลน์" ทันที — ไม่มีทางเห็นเป็น "กำลังวิ่ง" ค้างอยู่ทั้งที่สัญญาณขาดแล้ว</div></div>
-
-        <h3><svg class="ic"><use href="#i-search"/></svg> แท็บค้นหาพัสดุ</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-search"/></svg></span><div class="body">พิมพ์<span class="k">เลขบิล / เลขที่ PO / ชื่อลูกค้า</span> แล้วกดค้นหา</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-clock"/></svg></span><div class="body">ดูไทม์ไลน์: สร้างงาน → วางแผน → กำลังส่ง → เช็คอิน (GPS) → ส่งสำเร็จ/ไม่สำเร็จ (พร้อมรูปหลักฐาน)</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-printer"/></svg></span><div class="body">กด 🖨️ เพื่อพิมพ์<span class="k">ใบติดตามพัสดุ</span></div></li>
-        </ol>
-      </section>
-
-      <!-- ============ 6 · FINANCE ============ -->
-      <section class="sec" id="finance">
-        <div class="eyebrow">การเงิน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num"><svg class="ic"><use href="#i-wallet"/></svg></span> ค่าใช้จ่าย &amp; เงินทดรองจ่าย</h2>
-        <p class="lead">อยู่ในเมนู <span class="k"><svg class="ic"><use href="#i-gear"/></svg> ตั้งค่า</span> กลุ่ม "ปฏิบัติการเพิ่มเติม" — ค่าใช้จ่ายที่คนขับบันทึกจากมือถือจะขึ้นที่นี่ให้เห็นทันที</p>
-        <h3><svg class="ic"><use href="#i-receipt"/></svg> ค่าใช้จ่าย</h3>
-        <ul class="plain"><li>บันทึกค่าน้ำมัน/ทางด่วน/จอดรถ/อื่น ๆ ผูกกับ Route ได้ · ดาวน์โหลด CSV ได้</li></ul>
-        <h3><svg class="ic"><use href="#i-wallet"/></svg> เงินทดรองจ่าย (เคลียร์เงินคนขับ)</h3>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-plus"/></svg></span><div class="body">เมนู <span class="k">เงินทดรองจ่าย</span> → กด <span class="btn">เคลียร์เงินทดรอง</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-truck"/></svg></span><div class="body">เลือก Route + ใส่ชื่อคนขับ</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-wallet"/></svg></span><div class="body">ใส่ <span class="k">เบิกเงินทดรอง</span> และ <span class="k">ใช้จริง</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-check"/></svg></span><div class="body">ระบบคำนวณ<span class="k">เงินทอน</span>หรือ<span class="k">เบิกเพิ่ม</span>ให้อัตโนมัติ</div></li>
-        </ol>
-      </section>
-
-      <!-- ============ 7 · REPORT ============ -->
-      <section class="sec" id="report">
-        <div class="eyebrow">รายงาน · <span class="role mgr">ผู้จัดการ/แอดมิน</span></div>
-        <h2><span class="num"><svg class="ic"><use href="#i-chart"/></svg></span> รายงาน &amp; การพิมพ์</h2>
-        <ol class="steps">
-          <li><span class="icwrap"><svg class="ic"><use href="#i-calendar"/></svg></span><div class="body">เมนู <span class="k">รายงาน</span> → เลือก<span class="k">ช่วงวันที่</span> (หรือปุ่มลัด วันนี้/7 วัน/เดือนนี้) → กด <span class="btn">สร้างรายงาน</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-list"/></svg></span><div class="body">เลือกประเภท: <span class="k">สรุป Route</span> (มีคอลัมน์ "เวลาวิ่ง" + ปุ่มดู<span class="k">เส้นทางจริง/เวลาจอด</span>รายคัน) · <span class="k">รายการจัดส่ง</span> · <span class="k">ค่าใช้จ่าย</span></div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-printer"/></svg></span><div class="body">เลือกกระดาษ A4/A5 แล้วกด <span class="btn"><svg class="ic"><use href="#i-printer"/></svg>พิมพ์รายงาน</span> หรือปุ่ม 🖨️ ท้ายแต่ละ Route เพื่อพิมพ์ใบส่งสินค้า/ใบเบิกค่าใช้จ่ายรายคัน</div></li>
-          <li><span class="icwrap"><svg class="ic"><use href="#i-download"/></svg></span><div class="body">ต้องการไฟล์ตาราง กด <span class="btn"><svg class="ic"><use href="#i-download"/></svg>CSV</span> หรือ <span class="btn">Excel</span></div></li>
-        </ol>
-        <div class="tip i"><svg class="ic"><use href="#i-printer"/></svg><div>เมื่อกดพิมพ์ ระบบเปิดหน้าเอกสารพร้อมหัวโลโก้ Gadget Villa — กดปุ่ม "พิมพ์" ในหน้านั้นเพื่อสั่งเครื่องพิมพ์ หรือ "บันทึกเป็น PDF" ก็ได้</div></div>
-      </section>
-
-      <!-- ============ STATUS REFERENCE ============ -->
-      <section class="sec" id="status">
-        <div class="eyebrow">อ้างอิง</div>
-        <h2><svg class="ic" style="width:22px;height:22px"><use href="#i-list"/></svg> ตารางสถานะงาน</h2>
-        <p class="lead">ความหมายของสถานะที่เห็นในระบบ เรียงตามลำดับการทำงานจริง</p>
-        <div class="t-wrap"><table class="t">
-          <tr><th>สถานะ</th><th>หมายถึง</th><th>เกิดตอนไหน</th></tr>
-          <tr><td><span class="badge b-gray">ร่าง</span></td><td>เพิ่งบันทึกงาน ยังไม่จัดรถ</td><td>สร้างงานส่งใหม่</td></tr>
-          <tr><td><span class="badge b-violet">วางแผนแล้ว</span></td><td>เข้า Route แล้ว แต่ยังไม่ออกรถ</td><td>ยืนยันเส้นทาง</td></tr>
-          <tr><td><span class="badge b-blue">กำลังส่ง</span></td><td>รถออกวิ่งแล้ว</td><td>คนขับกดรับงาน/เริ่มรอบ</td></tr>
-          <tr><td><span class="badge b-green">ส่งสำเร็จ</span></td><td>ส่งถึงมือลูกค้าแล้ว (มีรูปหลักฐาน)</td><td>คนขับกดส่งเสร็จ + แนบรูป</td></tr>
-          <tr><td><span class="badge b-red">ไม่สำเร็จ</span></td><td>ส่งไม่ได้ (มีเหตุผลกำกับ)</td><td>คนขับกดส่งไม่สำเร็จ</td></tr>
-          <tr><td><span class="badge b-gray">ยกเลิก</span></td><td>ยกเลิกงาน</td><td>ผู้จัดการปรับสถานะ</td></tr>
-        </table></div>
-      </section>
-
-      <!-- ============ FAQ ============ -->
-      <section class="sec" id="faq">
-        <div class="eyebrow">ช่วยเหลือ</div>
-        <h2><svg class="ic" style="width:22px;height:22px"><use href="#i-info"/></svg> คำถามที่พบบ่อย</h2>
-
-        <h3><svg class="ic"><use href="#i-user"/></svg> ทำไมคนขับไม่ต้องใส่รหัสผ่าน?</h3>
-        <p class="lead" style="margin-bottom:8px">เพราะงานถูกระบบคำนวณและมอบหมายไว้ให้อยู่แล้วก่อนที่คนขับจะเปิดมือถือ — แค่แตะเลือกชื่อตัวเองก็รู้แล้วว่าใครเป็นคนกดรับ/ส่งสำเร็จ ไม่ต้องมีรหัสผ่านมาเพิ่มขั้นตอน</p>
-
-        <h3><svg class="ic"><use href="#i-clock"/></svg> บันทึกแล้วต้องรอนานไหม?</h3>
-        <p class="lead" style="margin-bottom:8px">ไม่ต้องรอ — ข้อมูลขึ้นทันทีที่กดบันทึก ถ้ามีปัญหาเชื่อมต่อ ระบบจะแจ้งเตือนและลองใหม่ให้เอง</p>
-
-        <h3><svg class="ic"><use href="#i-refresh"/></svg> เปิดมาไม่เห็นข้อมูล</h3>
-        <p class="lead" style="margin-bottom:8px">ลองกด <code>Ctrl+Shift+R</code> เพื่อล้างแคชแล้วโหลดใหม่ · บนมือถือปิดแท็บแล้วเปิดใหม่</p>
-
-        <h3><svg class="ic"><use href="#i-calendar"/></svg> เห็นข้อมูลไม่ครบ / วันที่ไม่ตรง</h3>
-        <p class="lead" style="margin-bottom:8px">ตรวจว่าเลือก<span class="k">วันที่</span>ถูก (ปุ่มปฏิทินบนซ้าย) — ข้อมูลแสดงตามวันที่เลือกเท่านั้น</p>
-
-        <h3><svg class="ic"><use href="#i-truck"/></svg> รถขึ้น "สัญญาณขาด" ทั้งที่คนขับกำลังวิ่งอยู่</h3>
-        <p class="lead" style="margin-bottom:8px">🟠 <b>สัญญาณขาด</b> = เคยเชื่อมต่อได้ แต่พิกัดล่าสุดเก่าเกิน 10 นาที (คนละอย่างกับ ⚪ <b>ออฟไลน์</b> ที่แปลว่าไม่มีพิกัดเลยตั้งแต่แรก) — เช็คว่ามือถือคนขับเปิดหน้า "โหมดคนขับ" อยู่ไหม (ต้องเปิดแอปค้างไว้ระหว่างวิ่งงานเพื่อส่งพิกัดต่อเนื่อง) หรือกล่อง Cartrack มีสัญญาณไหม</p>
-
-        <h3><svg class="ic"><use href="#i-refresh"/></svg> คนขับส่งเสร็จแล้ว แต่หน้าออฟฟิศยังไม่เปลี่ยน</h3>
-        <p class="lead" style="margin-bottom:8px">รอไม่กี่วินาที ระบบซิงค์ให้อัตโนมัติ — หรือกดปุ่ม "รีเฟรช" ที่หน้า "วันนี้" เพื่อดึงทันที</p>
-
-        <div class="tip c"><svg class="ic"><use href="#i-alert"/></svg><div><span class="k">แอดมิน/ผู้ดูแลระบบเท่านั้น:</span> รหัสเชื่อมต่อ Cartrack และค่าตั้งค่าหลังบ้าน ห้ามพิมพ์/แปะในเว็บหรือแชทที่ไม่ปลอดภัย</div></div>
-      </section>
-
-    </main>
+  <div class="flow">
+    <span>1 ดึงงาน</span>
+    <span>2 นับร้าน</span>
+    <span>3 จัดรถ</span>
+    <span>4 พิมพ์ใบส่ง</span>
+    <span>5 คนขับส่ง</span>
+    <span>6 เช็คครบ</span>
   </div>
 
-  <footer class="ug-foot">
-    Gadget Villa · GV Dispatch — คู่มือใช้งานฉบับอัปเดตสำหรับพนักงาน ·
-    สงสัยการใช้งาน ติดต่อผู้ดูแลระบบ
-  </footer>
+  <!-- STEP BLOCK 1 -->
+  <section class="card">
+    <h2>ตอนเช้า — เตรียมงาน</h2>
+    <p class="sub">เปิดระบบ → ดูว่าวันนี้ต้องส่งกี่ร้าน</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <b>เปิดเว็บ GV Dispatch</b>
+          <div class="d">เลือกวันที่ทำงานมุมบน (ปฏิทิน) ให้ตรงกับวันส่งจริง</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>เข้าเมนู <span class="btn">งานส่ง</span></b>
+          <div class="d">กดปุ่ม <span class="btn">ดึงจาก TRCloud</span> เพื่อดึงบิล / เลข PO เข้ามาอัตโนมัติ<br>
+          (หรือกด <span class="btn">+ เพิ่มงานส่ง</span> ถ้ามีบิลนอกระบบ)</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>ดูแท็บ “รอจัดส่ง”</b>
+          <div class="d">ตัวเลขหลังแท็บ = <b>จำนวนร้านที่ต้องส่งวันนี้</b> ที่ยังไม่ได้จัดรถ<br>
+          ตัวอย่าง: รอจัดส่ง (24) = ต้องส่ง 24 ร้าน</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>เช็คเลข PO / เลขบิล</b>
+          <div class="d">คอลัมน์ <b>เลข PO / บิล</b> แสดง PO ลูกค้าก่อน แล้วตามด้วย KSO/BSO — ใช้ค้นหาด้านบนได้</div>
+        </div>
+      </li>
+    </ol>
+    <div class="tip ok"><b>จำไว้:</b> ก่อนจัดรถ ดูตัวเลข “รอจัดส่ง” ให้รู้ว่าวันนี้มีกี่ร้าน ห้ามข้ามขั้นตอนนี้</div>
+  </section>
+
+  <!-- STEP BLOCK 2 -->
+  <section class="card">
+    <h2>จัดรถ — รวมร้านเป็นรอบส่ง</h2>
+    <p class="sub">เลือกงาน → ให้ระบบจัดเส้นทาง → ยืนยันรอบ</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <b>งานด่วน 1 ร้าน</b>
+          <div class="d">ที่แถวงาน กด <span class="btn">จัดทีละงาน</span> → เลือกรถ + คนขับ → ยืนยัน</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>หลายร้านพร้อมกัน</b>
+          <div class="d">ติ๊กเลือกร้านในแท็บรอจัดส่ง → กด <span class="btn">ไปวางแผน</span><br>
+          หรือเข้าเมนู <span class="btn">จัดรถ</span> → แท็บ <b>วางแผนจัดรถ</b></div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>กด “จัดเส้นทางอัตโนมัติ”</b>
+          <div class="d">ระบบจัดลำดับร้าน / แบ่งคันให้ · ตรวจจำนวนจุดกับจำนวนร้านที่เลือกให้ตรงกัน</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>กด “ยืนยันการส่ง”</b>
+          <div class="d">งานจะเปลี่ยนเป็น “วางแผนแล้ว” · สลับไปแท็บ <b>รอบส่งวันนี้</b> ในหน้าจัดรถเพื่อดูทุกรอบ</div>
+        </div>
+      </li>
+    </ol>
+    <div class="tip warn"><b>เช็คไม่ให้ส่งไม่ครบ:</b> รวมจุดส่งทุกคัน ต้องเท่ากับจำนวนร้านที่ติ๊กไว้ ถ้าไม่เท่า = ยังมีร้านหลุด</div>
+  </section>
+
+  <!-- STEP BLOCK 3 -->
+  <section class="card">
+    <h2>พิมพ์ใบส่ง — พิมพ์ที่ไหน</h2>
+    <p class="sub">พิมพ์ก่อนออกรถ ให้คนขับถือไปส่งทีละร้าน</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <b>ใบส่งต่อรอบ (แนะนำ)</b>
+          <div class="d">เมนู <span class="btn">รายงาน</span> → ประเภท <b>สรุปรอบส่ง</b> → กดสร้างรายงาน<br>
+          ที่แถวรอบส่ง กดปุ่ม <span class="btn">🖨️ พิมพ์</span> = พิมพ์ใบส่งของรอบนั้น (มีรายชื่อร้าน / ลำดับจุด)</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>ดูรอบก่อนพิมพ์</b>
+          <div class="d">เมนู <span class="btn">จัดรถ</span> → แท็บ <b>รอบส่งวันนี้</b> → กด <b>รายละเอียด</b> ดูว่ารอบนี้กี่ร้าน / กี่ชิ้น</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>พิมพ์ติดตามพัสดุรายบิล (ถ้าต้องการ)</b>
+          <div class="d">เมนู <span class="btn">ติดตาม</span> → แท็บ <b>ค้นหาพัสดุ</b> → พิมพ์เลข PO หรือเลขบิล → กดพิมพ์</div>
+        </div>
+      </li>
+    </ol>
+    <div class="tip ok"><b>จำที่พิมพ์:</b> ใบส่งรอบรถ = หน้า <b>รายงาน</b> (ปุ่มพิมพ์ที่แถวรอบ) · ใบรายบิล = หน้า <b>ติดตาม → ค้นหาพัสดุ</b></div>
+  </section>
+
+  <!-- STEP BLOCK 4 -->
+  <section class="card">
+    <h2>คนขับ — ส่งของบนมือถือ</h2>
+    <p class="sub">ให้คนขับอัปเดตทีละร้าน จะได้รู้ว่าร้านไหนส่งแล้ว / ยังไม่ส่ง</p>
+    <ol class="steps">
+      <li>
+        <div>
+          <b>เปิดโหมดคนขับ</b>
+          <div class="d">มุมบนขวา กด <span class="btn">โหมดคนขับ</span> → ส่งลิงก์ / ให้สแกน QR บนมือถือคนขับ<br>
+          คนขับแตะเลือกชื่อตัวเอง (ไม่ต้องใส่รหัส)</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>รับรอบส่ง → ไปทีละร้านตามลำดับ</b>
+          <div class="d">ถึงร้านแล้วกดเช็คอิน / ส่งสำเร็จ (ถ่ายรูปได้)<br>
+          ถ้าส่งไม่ได้ ให้บันทึก “ส่งไม่สำเร็จ” พร้อมเหตุผล</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <b>สำนักงานดูความคืบหน้า</b>
+          <div class="d">เมนู <span class="btn">ติดตาม</span> → แท็บ <b>ภาพรวมรถ</b> ดูว่ารถอยู่ไหน / ส่งถึงร้านไหนแล้ว</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- STEP BLOCK 5 -->
+  <section class="card">
+    <h2>จบวัน — เช็คว่าส่งครบหรือยัง</h2>
+    <p class="sub">อย่าปิดงานวันนั้นจนกว่าตัวเลขจะเคลียร์</p>
+    <ul class="check">
+      <li>เปิดเมนู <b>วันนี้</b> — ดู “ค้างส่ง” เหลือกี่งาน ต้องเป็น 0 หรือรู้สาเหตุทุกใบ</li>
+      <li>เปิดเมนู <b>งานส่ง</b> — แท็บ <b>กำลังส่ง</b> ต้องว่าง (หรือรู้ว่าร้านไหนค้าง)</li>
+      <li>แท็บ <b>เสร็จแล้ว</b> — นับจำนวนร้านที่ส่งสำเร็จ เทียบกับที่จัดรถตอนเช้า</li>
+      <li>ถ้ามีร้านค้าง: จัดรอบเย็น / เลื่อนวัน / หรือบันทึกส่งไม่สำเร็จให้ครบ อย่าปล่อยเป็นรอจัดส่งเฉย ๆ</li>
+    </ul>
+    <div class="tip warn"><b>กฎสั้น ๆ:</b> จำนวนร้านตอนเช้า (รอจัดส่ง) ≈ ส่งสำเร็จ + ส่งไม่สำเร็จ + ค้างที่รู้สาเหตุ — ห้ามมีร้านหายเงียบ</div>
+  </section>
+
+  <!-- QUICK MENU -->
+  <section class="card">
+    <h2>เมนูที่ต้องใช้ประจำ</h2>
+    <p class="sub">จำแค่เมนูเหล่านี้ก็ส่งงานได้ทั้งวัน</p>
+    <div class="menu">
+      <div><b>วันนี้</b><span>ภาพรวม · ค้างส่งกี่งาน</span></div>
+      <div><b>งานส่ง</b><span>ดึงบิล · นับร้าน · เพิ่มงาน</span></div>
+      <div><b>จัดรถ</b><span>วางแผน + ดูรอบส่งวันนี้</span></div>
+      <div><b>ติดตาม</b><span>แผนที่รถ + ค้นหา PO/บิล</span></div>
+      <div><b>รายงาน</b><span>พิมพ์ใบส่งรอบรถ</span></div>
+      <div><b>โหมดคนขับ</b><span>ปุ่มมุมบนขวา → ให้มือถือคนขับ</span></div>
+    </div>
+  </section>
+
+  <p class="foot">
+    <a href="./">← กลับระบบจัดส่ง</a>
+    · พิมพ์หน้านี้เก็บไว้ที่โต๊ะได้ (Ctrl+P)
+  </p>
 </div>
-</body></html>
+
+</body>
+</html>

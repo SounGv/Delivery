@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สรุปโปรเจกต์ GV Dispatch — Gadget Villa</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root{
+    --lime:#A9CF00; --lime-bright:#B4DC00; --ink:#0f1608; --ground:#FBFCF6;
+    --card:#fff; --muted:#5f6753; --line:#E6EBD8; --ok:#12a150; --navy:#0B1220;
+    --font:"Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:var(--ground);color:var(--ink);line-height:1.7;font-size:16px}
+  .hero{background:linear-gradient(135deg,#0f1608,#1b2410);color:#fff;padding:40px 20px 32px;border-bottom:4px solid var(--lime-bright)}
+  .hero .brand{font-size:12px;letter-spacing:.22em;color:var(--lime-bright);font-weight:700}
+  .hero h1{margin:12px 0 8px;font-size:clamp(22px,4vw,34px);font-weight:800;line-height:1.25}
+  .hero p{margin:0;color:#c9d4ac;max-width:42rem}
+  .wrap{max-width:780px;margin:0 auto;padding:24px 16px 56px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 20px;margin:0 0 14px}
+  .card h2{margin:0 0 10px;font-size:18px;font-weight:800}
+  .card h3{margin:18px 0 8px;font-size:15px;font-weight:700;color:#3d5200}
+  .lead{color:var(--muted);margin:0 0 12px;font-size:15px}
+  ul{margin:8px 0;padding-left:1.25rem}
+  li{margin:6px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+  .box{border:1px solid var(--line);border-radius:12px;padding:14px 14px 10px;background:#F4F7EA}
+  .box.before{background:#fff6e8;border-color:#f0d3a0}
+  .box.after{background:#e8f8ee;border-color:#b7e7c8}
+  .box b{display:block;margin-bottom:6px;font-size:14px}
+  .box ul{margin:0;padding-left:1.1rem;font-size:14px}
+  .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+  .kpi div{background:#eef6cf;border-radius:12px;padding:14px 12px;text-align:center}
+  .kpi strong{display:block;font-size:20px;font-weight:800;color:#3d5200;line-height:1.2}
+  .kpi span{font-size:12.5px;color:var(--muted)}
+  .tag{display:inline-block;background:#eef6cf;color:#3d5200;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;margin:0 6px 6px 0}
+  .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:20px}
+  .foot a{color:inherit}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  @media(max-width:640px){
+    .grid2,.kpi{grid-template-columns:1fr}
+  }
+  @media print{
+    .hero{padding:20px;border:0}
+    .card{break-inside:avoid}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="brand">GADGET VILLA · PROJECT SUMMARY</div>
+  <h1>สรุปโปรเจกต์ระบบจัดส่ง<br>GV Dispatch</h1>
+  <p>รายงานสั้น ๆ สำหรับผู้บริหารและทีมงาน — ทำไมต้องมี ก่อนใช้เป็นอย่างไร หลังใช้ได้อะไร และช่วยงานวันต่อวันอย่างไร</p>
+</header>
+
+<div class="wrap">
+
+  <section class="card">
+    <h2>1. โปรเจกต์นี้คืออะไร</h2>
+    <p class="lead">GV Dispatch คือ <b>ศูนย์ควบคุมงานจัดส่งประจำวัน</b> ของ Gadget Villa — ดึงบิลจาก TRCloud มาจัดรถ ส่งคนขับติดตามสถานะ และสรุปรายงานในที่เดียว</p>
+    <div>
+      <span class="tag">งานส่ง</span>
+      <span class="tag">จัดรถ / รอบส่ง</span>
+      <span class="tag">เลข PO ลูกค้า</span>
+      <span class="tag">โหมดคนขับ</span>
+      <span class="tag">ติดตาม GPS</span>
+      <span class="tag">รายงาน & พิมพ์ใบส่ง</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. ทำไมต้องมีระบบนี้</h2>
+    <p class="lead">งานส่งของบริษัทมีหลายร้านต่อวัน หลายบิล (KSO/BSO) และต้องประสานระหว่างออฟฟิศ–คลัง–คนขับ ถ้าไม่มีระบบกลาง จะเกิดปัญหาเหล่านี้บ่อย:</p>
+    <ul>
+      <li><b>ไม่รู้วันนี้ต้องส่งกี่ร้าน</b> — นับจากกระดาษ / แชท / Excel ไม่ตรงกัน</li>
+      <li><b>ลืมบิล / ส่งไม่ครบ</b> — ไม่มีสถานะชัดว่า รอจัดส่ง / กำลังส่ง / เสร็จแล้ว</li>
+      <li><b>หาเลข PO ลูกค้ายาก</b> — ลูกค้าถามด้วย PO แต่ในระบบเดิมเห็นแค่เลขบิลภายใน</li>
+      <li><b>จัดรถช้า</b> — คิดเส้นทางและแบ่งคันด้วยมือ กินเวลาหัวหน้างาน</li>
+      <li><b>คนขับกับออฟฟิศคนละข้อมูล</b> — โทรถามไปมาว่าส่งถึงไหนแล้ว</li>
+      <li><b>พิมพ์ใบส่งไม่เป็นระบบ</b> — ไม่รู้จะพิมพ์รายการร้านต่อรอบจากที่ไหน</li>
+    </ul>
+    <p style="margin:12px 0 0">ระบบนี้จึงถูกสร้างขึ้นเพื่อให้ <b>มีที่เดียวที่ถูกต้อง</b> สำหรับงานส่งทั้งวัน ตั้งแต่เช้าถึงเย็น</p>
+  </section>
+
+  <section class="card">
+    <h2>3. ก่อนใช้ vs หลังใช้</h2>
+    <div class="grid2">
+      <div class="box before">
+        <b>ก่อนมีระบบ</b>
+        <ul>
+          <li>ดึงบิลจาก TRCloud แล้วคัดลอกเอง</li>
+          <li>จัดรถด้วยประสบการณ์ / กระดาษ</li>
+          <li>สถานะงานกระจัดกระจายในแชท</li>
+          <li>คนขับรายงานด้วยโทรศัพท์</li>
+          <li>สรุปวันทำงานช้า ตรวจครบยาก</li>
+        </ul>
+      </div>
+      <div class="box after">
+        <b>หลังมี GV Dispatch</b>
+        <ul>
+          <li>กดดึงจาก TRCloud ได้ทั้ง KSO + BSO</li>
+          <li>จัดเส้นทางอัตโนมัติ / จัดทีละงานด่วน</li>
+          <li>สถานะงานเห็นชัดเป็นแท็บ</li>
+          <li>คนขับอัปเดตจากมือถือ + ดูแผนที่</li>
+          <li>เช็คค้างส่งจบวันได้ในไม่กี่นาที</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4. ได้ประโยชน์อะไรบ้าง</h2>
+    <div class="kpi">
+      <div><strong>เร็วขึ้น</strong><span>ดึงบิล + จัดรถ<br>ไม่ต้องคีย์ซ้ำ</span></div>
+      <div><strong>ครบขึ้น</strong><span>เห็นจำนวนร้าน<br>กันส่งหลุด</span></div>
+      <div><strong>ชัดขึ้น</strong><span>สถานะงาน<br>ออฟฟิศ–คนขับตรงกัน</span></div>
+    </div>
+
+    <h3>ประหยัดเวลาทำงาน</h3>
+    <ul>
+      <li><b>เช้า:</b> ดึงออเดอร์จาก TRCloud แทนการคัดลอกทีละใบ → ลดเวลาเตรียมงาน</li>
+      <li><b>จัดรถ:</b> ระบบช่วยจัดลำดับร้าน/แบ่งคัน → หัวหน้างานตัดสินใจเร็วขึ้น</li>
+      <li><b>ระหว่างวัน:</b> ไม่ต้องโทรถามสถานะบ่อย — ดูจากหน้าติดตามได้เลย</li>
+      <li><b>เย็น:</b> เทียบ “รอจัดส่ง / กำลังส่ง / เสร็จแล้ว” จบวันเร็ว ไม่ไล่เช็คทีละแชท</li>
+    </ul>
+
+    <h3>ลดความผิดพลาด</h3>
+    <ul>
+      <li>เห็นชัดว่าวันนี้ต้องส่งกี่ร้าน (ตัวเลขแท็บรอจัดส่ง)</li>
+      <li>เลข PO ลูกค้าขึ้นก่อนเลขบิล → คุยกับลูกค้า/ค้นหาบิลง่าย</li>
+      <li>บิลเก่าที่ส่งเสร็จแล้วไม่มารบกวนคิววันนี้</li>
+      <li>คนขับบันทึกส่งสำเร็จ/ไม่สำเร็จเป็นหลักฐาน</li>
+    </ul>
+
+    <h3>ทำงานเป็นทีมได้ดีขึ้น</h3>
+    <ul>
+      <li>ออฟฟิศใช้คอม/แท็บเล็ต · คนขับใช้มือถือโหมดคนขับ</li>
+      <li>มีคู่มือขั้นตอนสั้น ๆ ให้ทีมทำตามได้โดยไม่ต้องจำเมนูเยอะ</li>
+      <li>พิมพ์ใบส่งรอบรถจากหน้ารายงาน ก่อนออกรถ</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>5. ขั้นตอนทำงานประจำวัน (สรุป)</h2>
+    <table>
+      <thead><tr><th>ลำดับ</th><th>ทำอะไร</th><th>ผลที่ได้</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>ดึงงานจาก TRCloud / เพิ่มงาน</td><td>รู้รายการบิล + PO ของวัน</td></tr>
+        <tr><td>2</td><td>ดูแท็บรอจัดส่ง</td><td>รู้ว่าต้องส่งกี่ร้าน</td></tr>
+        <tr><td>3</td><td>จัดรถ (ทีละงานหรือหลายงาน)</td><td>ได้รอบส่ง + คนขับ + เส้นทาง</td></tr>
+        <tr><td>4</td><td>พิมพ์ใบส่งที่หน้ารายงาน</td><td>คนขับมีรายการร้านติดรถ</td></tr>
+        <tr><td>5</td><td>คนขับส่งของ + อัปเดตสถานะ</td><td>ออฟฟิศเห็นความคืบหน้าสด</td></tr>
+        <tr><td>6</td><td>จบวันเช็คค้างส่ง</td><td>มั่นใจว่าส่งครบ ไม่มีร้านหาย</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>6. สิ่งสำคัญที่ระบบรองรับแล้ว</h2>
+    <ul>
+      <li>เชื่อม <b>TRCloud</b> — ดึง Sale Order (KSO + BSO) เป็นงานส่ง</li>
+      <li>แสดง <b>เลข PO ลูกค้า</b> เด่นก่อนเลขบิลภายใน</li>
+      <li>จัดรถอัตโนมัติ + จัดทีละงานเร่งด่วน</li>
+      <li>โหมดคนขับบนมือถือ (เช็คอิน / ส่งสำเร็จ / รูปหลักฐาน)</li>
+      <li>ติดตามรถและค้นหาพัสดุด้วย PO / เลขบิล</li>
+      <li>รายงานและพิมพ์ใบส่งต่อรอบ</li>
+      <li>เมนูเหลือเฉพาะที่ใช้จริง — วันนี้ · งานส่ง · จัดรถ · ติดตาม · รายงาน</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>7. สรุปสั้น ๆ สำหรับผู้บริหาร</h2>
+    <p style="margin:0">
+      GV Dispatch เปลี่ยนงานจัดส่งจาก <b>“ไล่ตามข้อมูลกระจัดกระจาย”</b>
+      เป็น <b>“คุมงานทั้งวันจากหน้าจอเดียว”</b> —
+      ช่วยให้ทีมรู้ว่าต้องส่งกี่ร้าน จัดรถเร็วขึ้น ติดตามสถานะได้ทันที
+      และปิดวันโดยเช็คว่าส่งครบหรือยัง จึงลดเวลาซ้ำซ้อนและลดโอกาสส่งหลุด
+    </p>
+  </section>
+
+  <p class="foot">
+    เว็บระบบ: <a href="https://gadgetvilla-delivery.pages.dev">gadgetvilla-delivery.pages.dev</a>
+    · คู่มือขั้นตอน: <a href="user-guide.html">user-guide.html</a>
+    · พิมพ์รายงานนี้ได้ด้วย Ctrl+P
+  </p>
+</div>
+
+</body>
+</html>

@@ -271,7 +271,7 @@ function doPost(e) {
       createExpense, updateExpense, createClaim, updateClaim,
       updateSetting, syncCartrack,
       logGPS, checkIn, startRoute, completeDelivery, failDelivery, uploadPOD,
-      setDriverPin, driverLogin, driverLogout, getMyRoutes
+      setDriverPin, driverLogin, driverSelect, driverLogout, getMyRoutes
     };
     if (!map[action]) return json({ ok:false, error:'unknown action: '+action });
     const out = map[action](body);
@@ -802,6 +802,15 @@ function driverLogin(b){
   const token = Utilities.getUuid();
   CacheService.getScriptCache().put('drv:'+token, emp.EmployeeID, DRIVER_SESSION_TTL);
   logActivity('DRIVER_LOGIN', emp.EmployeeID, 'คนขับเข้าสู่ระบบ', emp.EmployeeName);
+  return { token, employee:{ EmployeeID:emp.EmployeeID, EmployeeName:emp.EmployeeName, Phone:emp.Phone } };
+}
+/** เลือกชื่อคนขับเข้าใช้งานโดยไม่ต้องใส่ PIN (เทียบเท่า Cloudflare driverSelect) */
+function driverSelect(b){
+  const emp = readAll('Employees').find(function(e){ return String(e.EmployeeID)===String(b.employeeId) && !e.IsDeleted; });
+  if (!emp) throw new Error('ไม่พบพนักงาน');
+  const token = Utilities.getUuid();
+  CacheService.getScriptCache().put('drv:'+token, emp.EmployeeID, DRIVER_SESSION_TTL);
+  logActivity('DRIVER_LOGIN', emp.EmployeeID, 'คนขับเข้าสู่ระบบ (เลือกชื่อ)', emp.EmployeeName);
   return { token, employee:{ EmployeeID:emp.EmployeeID, EmployeeName:emp.EmployeeName, Phone:emp.Phone } };
 }
 function driverLogout(b){

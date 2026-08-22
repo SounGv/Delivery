@@ -121,9 +121,12 @@ create index idx_extveh_active on external_vehicles (is_deleted);
 create table deliveries (
   delivery_id   text primary key,
   delivery_date text not null,
+  document_date text,              -- วันที่เปิดบิล/ออกเอกสาร (TRCloud issue_date)
+  due_date      text,              -- วันกำหนดส่ง (TRCloud delivery_due)
   customer_name text,
   branch_name   text,
   invoice_no    text,
+  po_no         text,              -- เลขที่ PO ลูกค้า (TRCloud reference)
   address       text,
   latitude      real,
   longitude     real,

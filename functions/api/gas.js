@@ -58,9 +58,14 @@ const GET_ACTIONS = {
   getSettings: reads.getSettings,
   getRealtime: reads.getRealtime,
   getCartrackStatus: reads.getCartrackStatus,
+  getTrcloudStatus: (env) => trcloud.getTrcloudStatus(env),
   geocode: reads.geocode,
   ping: async () => reads.ping(),
   debugTrcloudSearch, debugTrcloudRead,
+  debugTrcloudUpdateProbe: (env, p) => require('../../lib/actions/trcloud').debugUpdateProbe(env, p),
+  debugTrcloudIvSearch: (env, p) => require('../../lib/actions/trcloud').searchInvoices(env, {
+    dateFrom: p.dateFrom, dateTo: p.dateTo, limit: p.limit, companyFormat: p.companyFormat, keyword: p.keyword,
+  }),
 };
 
 const POST_ACTIONS = {
@@ -77,6 +82,9 @@ const POST_ACTIONS = {
   createClaim: writes.createClaim, updateClaim: writes.updateClaim,
   updateSetting: writes.updateSetting,
   syncCartrack: syncCartrackViaWorker,
+  syncTrcloudOrders: (env, b) => trcloud.syncOrders(env, Object.assign({}, b, b.data || {})),
+  importTrcloudOrder: (env, b) => trcloud.importById(env, b.id || (b.data && b.data.id), { user: b.user || 'trcloud' }),
+  pushTrcloudDelivered: (env, b) => trcloud.pushDeliveryCompleted(env, b.id || b.deliveryId || (b.data && (b.data.id || b.data.deliveryId))),
   logGPS: (env, b) => driver.logGPS(env, b.data || {}),
   driverPing: driver.driverPing,
   startRoute: driver.startRoute, checkIn: driver.checkIn,
@@ -110,8 +118,15 @@ export async function onRequestGet(context) {
 }
 
 export async function onRequestPost(context) {
+  // Frontend posts as text/plain (Apps Script CORS habit) — json() usually
+  // still works, but fall back to text()+JSON.parse so actions like
+  // driverSelect never surface as "unknown action" from an empty body.
   let body = {};
-  try { body = await context.request.json(); } catch (e) {}
+  try {
+    body = await context.request.json();
+  } catch (e) {
+    try { body = JSON.parse(await context.request.text()); } catch (_) { body = {}; }
+  }
   const action = body.action;
   const reqId = body.requestId || null;
   const DB = context.env.DB;
