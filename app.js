@@ -103,9 +103,8 @@ const NAV = [
     { id:'planning',   label:'จัดรถ',   icon:'route' },
     { id:'livemap',    label:'ติดตาม',   icon:'map-pin' },
   ]},
-  { group:'รายงาน & ระบบ', items:[
+  { group:'อื่นๆ', items:[
     { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
-    { id:'settings', label:'ตั้งค่า', icon:'settings' },
     { id:'guide',    label:'คู่มือ', icon:'book-open', href:'user-guide.html', external:true },
   ]},
 ];
@@ -731,7 +730,7 @@ function buildNav(){
     g.items.forEach(it => { html += navLink(it); });
   });
   nav.innerHTML = html;
-  // mobile bottom nav — 4 งานหลัก (รายงาน/ตั้งค่า เปิดจากเมนูซ้าย)
+  // mobile bottom nav — 4 งานหลัก (รายงาน/คู่มือ เปิดจากเมนูซ้าย)
   const m = el('mnav');
   const mItems = [
     {id:'dashboard',icon:'home',label:'วันนี้'},
