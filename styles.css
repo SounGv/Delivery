@@ -201,7 +201,7 @@ input,select,textarea{font-family:inherit;}
 .m-card{padding:14px;border:1px solid var(--border);border-radius:12px;background:#fff;}
 .m-card .strong{font-size:var(--fs-shop);}
 
-.plan-wizard-steps{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:wrap;}
+.plan-mobile-stack{display:flex;flex-direction:column;gap:14px;}
 .plan-wizard-steps .pw-step{flex:0 0 auto;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#EEF1F5;color:var(--muted);}
 .plan-wizard-steps .pw-step.on{background:var(--brand);color:var(--brand-ink-dark);}
 .plan-wizard-steps .pw-step.done{background:var(--green-soft);color:var(--green-ink);}
