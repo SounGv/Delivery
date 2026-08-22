@@ -41,15 +41,9 @@
           <i data-lucide="search"></i>
           <input id="globalSearch" placeholder="ค้นหา PO, เลขบิล, ลูกค้า…" autocomplete="off">
         </div>
-        <div class="spacer"></div>
-        <div class="chip-sync"><span class="sync-dot" id="syncDot2" style="background:#9AA3B2"></span><span id="syncText2">—</span></div>
-        <button class="btn btn-sm" id="driverModeBtn" title="เปิดโหมดคนขับ / QR ให้สแกน" style="gap:6px">
-          <i data-lucide="smartphone"></i><span class="dtext">โหมดคนขับ</span>
-        </button>
-        <button class="bell"><i data-lucide="bell"></i><span class="badge" id="bellBadge">0</span></button>
-        <div class="user">
-          <div class="avatar"><i data-lucide="user"></i></div>
-          <span class="dtext" style="font-size:14px;font-weight:500;color:#1F2533">หัวหน้างาน</span>
+        <div class="topbar-actions">
+          <button class="icon-btn" id="driverModeBtn" title="โหมดคนขับ / QR"><i data-lucide="smartphone"></i></button>
+          <div class="avatar topbar-user" title="หัวหน้างาน"><i data-lucide="user"></i></div>
         </div>
       </header>
       <main class="view scrolly" id="view"></main>

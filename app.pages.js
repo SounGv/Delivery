@@ -53,16 +53,33 @@ function vehStatusCard(v){
     ${stLabel?`<div class="small muted tab veh-status-meta">${stLabel}</div>`:''}
   </div>`;
 }
-/** ดึงชื่อเขต/อำเภอจากที่อยู่ TRCloud — ไม่ใช้ทิศเข็มทิศ */
+/** ดึงชื่อเขต/อำเภอจากที่อยู่ TRCloud — รองรับทั้งแบบเต็มและแบบย่อ */
 function districtFromAddress(addr){
-  const s = String(addr || '');
-  if (!s) return '';
-  const m1 = s.match(/เขต\s*([ก-๙A-Za-z0-9.\-]+)/);
-  if (m1) return 'เขต' + m1[1];
-  const m2 = s.match(/อำเภอ\s*([ก-๙A-Za-z0-9.\-]+)/);
-  if (m2) return 'อำเภอ' + m2[1];
-  const m3 = s.match(/อ\.\s*([ก-๙A-Za-z0-9.\-]+)/);
-  if (m3) return 'อำเภอ' + m3[1];
+  const s = String(addr || '').replace(/\s+/g, ' ').trim();
+  if (!s || /^MARKETING$/i.test(s)) return '';
+
+  // เขตXXX / เขต XXX
+  let m = s.match(/(?:^|\s)เขต\s*([\u0E00-\u0E7F][\u0E00-\u0E7F\s.-]{0,40})/);
+  if (m) return 'เขต' + m[1].trim().split(/\s+/)[0];
+
+  // อำเภอXXX
+  m = s.match(/(?:^|\s)อำเภอ\s*([\u0E00-\u0E7F][\u0E00-\u0E7F\s.-]{0,40})/);
+  if (m) return 'อำเภอ' + m[1].trim().split(/\s+/)[0];
+
+  // อ.XXX
+  m = s.match(/(?:^|\s)อ\.\s*([\u0E00-\u0E7F][\u0E00-\u0E7F.-]{0,40})/);
+  if (m) return 'อำเภอ' + m[1].trim().split(/\s+/)[0];
+
+  // เมืองXXX (อำเภอเมือง…) — มักไม่มีคำว่า อำเภอ
+  m = s.match(/(?:^|\s)เมือง([\u0E00-\u0E7F][\u0E00-\u0E7F.-]{0,40})/);
+  if (m) return 'อำเภอเมือง' + m[1].trim().split(/\s+/)[0];
+
+  // กรุงเทพฯ แบบไม่มีคำว่า "เขต": … แขวง… <ชื่อเขต> กรุงเทพ…
+  if (/กรุงเทพ/.test(s) && /แขวง/.test(s)) {
+    m = s.match(/([\u0E00-\u0E7F]+)\s+กรุงเทพ/);
+    if (m && m[1] !== 'แขวง') return 'เขต' + m[1].trim();
+  }
+
   return '';
 }
 function shortAddr(addr, max){

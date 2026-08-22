@@ -95,19 +95,19 @@ function liveVehicles(){
 }
 const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อกิโลเมตร', PER_DAY:'ต่อวัน', CUSTOM:'กำหนดเอง' };
 
-// เมนูหลัก + โหมดคนขับไว้ในแถบข้าง (คนขับไม่ต้องเข้าตั้งค่าเพื่อหาลิงก์)
+// เมนูแยกหมวด — งานประจำวัน + รายงาน/ระบบ (ไม่กระจายที่ footer)
 const NAV = [
-  { group:'', items:[
+  { group:'งานประจำวัน', items:[
     { id:'dashboard',  label:'วันนี้',   icon:'home' },
     { id:'deliveries', label:'งานส่ง',   icon:'package' },
     { id:'planning',   label:'จัดรถ',   icon:'route' },
     { id:'livemap',    label:'ติดตาม',   icon:'map-pin' },
   ]},
-];
-const NAV_FOOT = [
-  { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
-  { id:'settings', label:'ตั้งค่า', icon:'settings' },
-  { id:'guide',    label:'คู่มือใช้งาน', icon:'book-open', href:'user-guide.html', external:true },
+  { group:'รายงาน & ระบบ', items:[
+    { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
+    { id:'settings', label:'ตั้งค่า', icon:'settings' },
+    { id:'guide',    label:'คู่มือ', icon:'book-open', href:'user-guide.html', external:true },
+  ]},
 ];
 
 /* ---------------- STATE ---------------- */
@@ -725,19 +725,13 @@ function openDriverAccessModal(){
    ================================================================ */
 function buildNav(){
   const nav = el('nav');
-  let html='';
-  NAV.forEach(g=>{
-    if(g.group) html += `<div class="nav-group">${g.group}</div>`;
-    g.items.forEach(it=>{ html += navLink(it); });
+  let html = '';
+  NAV.forEach((g, gi) => {
+    if (g.group) html += `<div class="nav-group${gi ? ' nav-group-sep' : ''}">${esc(g.group)}</div>`;
+    g.items.forEach(it => { html += navLink(it); });
   });
   nav.innerHTML = html;
-  const foot = $('.sidebar-foot');
-  if(!$('#footLinks')){
-    const div = document.createElement('div'); div.id='footLinks'; div.className='nav-foot-block';
-    div.innerHTML = `<div class="nav-group">เมนูเพิ่มเติม</div>${NAV_FOOT.map(navLink).join('')}`;
-    foot.insertBefore(div, foot.firstChild);
-  } else { $('#footLinks').innerHTML = `<div class="nav-group">เมนูเพิ่มเติม</div>${NAV_FOOT.map(navLink).join('')}`; }
-  // mobile bottom nav
+  // mobile bottom nav — 4 งานหลัก (รายงาน/ตั้งค่า เปิดจากเมนูซ้าย)
   const m = el('mnav');
   const mItems = [
     {id:'dashboard',icon:'home',label:'วันนี้'},
@@ -760,10 +754,9 @@ function updateSync(){
   const connecting = API.configured() && !Store.live && Store.connecting;
   const dot = live ? '#10B981' : (connecting ? '#F59E0B' : (API.configured()? '#F59E0B':'#F59E0B'));
   const txt = live ? 'เชื่อมต่อแล้ว' : (connecting ? 'กำลังเชื่อมต่อ…' : (API.configured()? 'กำลังลองเชื่อมต่อใหม่…' : 'โหมดทดลอง (Mock)'));
-  ['syncDot','syncDot2'].forEach(id=>{ if(el(id)) el(id).style.background=dot; });
-  ['syncText','syncText2'].forEach(id=>{ if(el(id)) el(id).textContent=txt; });
+  ['syncDot'].forEach(id=>{ if(el(id)) el(id).style.background=dot; });
+  ['syncText'].forEach(id=>{ if(el(id)) el(id).textContent=txt; });
   if(el('syncSub')) el('syncSub').textContent = Store.lastSync ? ('อัพเดท '+ago(Store.lastSync)) : '—';
-  const badge = el('bellBadge'); if(badge){ const n=(Store.data.dashboard&&Store.data.dashboard.kpi)?Store.data.dashboard.kpi.draft.count:0; badge.textContent=n; badge.style.display=n?'flex':'none'; }
 }
 function setDateLabel(){ if(el('dateLabel')) el('dateLabel').textContent = thDate(Store.date); }
 
