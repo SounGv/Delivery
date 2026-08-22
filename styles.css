@@ -208,6 +208,10 @@ input,select,textarea{font-family:inherit;}
 .plan-wizard-nav .btn{flex:1;}
 .plan-panel[hidden]{display:none !important;}
 .plan-2{grid-template-columns:1fr minmax(340px,420px);gap:16px;align-items:start;}
+.plan-single{width:100%;}
+@media(max-width:720px){
+  .plan-kpi-row{grid-template-columns:1fr !important;}
+}
 .plan-3{grid-template-columns:300px 1fr 360px;gap:16px;align-items:start;}
 
 @media(max-width:1200px){

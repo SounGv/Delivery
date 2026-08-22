@@ -99,7 +99,6 @@ const RATE_TYPE = { PER_TRIP:'ต่อเที่ยว', PER_KM:'ต่อก
 const NAV = [
   { group:'งานประจำวัน', items:[
     { id:'dashboard',  label:'วันนี้',   icon:'home' },
-    { id:'deliveries', label:'งานส่ง',   icon:'package' },
     { id:'planning',   label:'จัดรถ',   icon:'route' },
     { id:'livemap',    label:'ติดตาม',   icon:'map-pin' },
   ]},
@@ -547,7 +546,7 @@ async function silentSync(){
     const data = await API.get('getBootstrap', { date: Store.date }, 0, 45000);
     if(Store.pending) return; // มีการแก้ไขแทรกระหว่างดึงข้อมูล → ทิ้งชุดนี้
     const sig = dataSignature(data);
-    Store.data = data; Store.live = true; Store.lastSync = new Date().toISOString(); updateSync();
+    Store.data = applyDeliveryDedupe(data); Store.live = true; Store.lastSync = new Date().toISOString(); updateSync();
     if(sig !== Store._sig){ Store._sig = sig; if(SYNC_PAGES.includes(Store.page)) render(); }
   }catch(e){ Store.live = false; updateSync(); scheduleReconnect(); }
   finally{ Store._syncing = false; }
@@ -734,7 +733,6 @@ function buildNav(){
   const m = el('mnav');
   const mItems = [
     {id:'dashboard',icon:'home',label:'วันนี้'},
-    {id:'deliveries',icon:'package',label:'งานส่ง'},
     {id:'planning',icon:'route',label:'จัดรถ'},
     {id:'livemap',icon:'map-pin',label:'ติดตาม'},
   ];
@@ -759,6 +757,39 @@ function updateSync(){
 }
 function setDateLabel(){ if(el('dateLabel')) el('dateLabel').textContent = thDate(Store.date); }
 
+/** บิลซ้ำในฐานข้อมูล (sync หลายรอบ) → แสดงแค่ 1 รายการต่อเลขบิล */
+function normalizeDeliveries(list){
+  if (!list || !list.length) return list || [];
+  const rank = (d) => {
+    let s = 0;
+    if (d.RouteID) s += 100;
+    const st = d.Status || '';
+    if (st && st !== 'Draft' && st !== 'Pending' && st !== '') s += 50;
+    if (d.Latitude && d.Longitude) s += 10;
+    const amt = Number(d.Amount ?? d.GrandTotal ?? d.Total);
+    if (Number.isFinite(amt) && amt > 0) s += 5;
+    if (d.Address) s += 3;
+    return s;
+  };
+  const byInv = new Map();
+  const noInv = [];
+  const seenId = new Set();
+  for (const d of list) {
+    const id = d.DeliveryID;
+    if (id && seenId.has(id)) continue;
+    if (id) seenId.add(id);
+    const inv = String(d.InvoiceNo || '').trim().toLowerCase();
+    if (!inv) { noInv.push(d); continue; }
+    const prev = byInv.get(inv);
+    if (!prev || rank(d) > rank(prev)) byInv.set(inv, d);
+  }
+  return [...byInv.values(), ...noInv];
+}
+function applyDeliveryDedupe(data){
+  if (data && Array.isArray(data.deliveries)) data.deliveries = normalizeDeliveries(data.deliveries);
+  return data;
+}
+
 /* ================================================================
    BOOTSTRAP / REFRESH
    ================================================================ */
@@ -771,7 +802,7 @@ async function loadBootstrap(){
   Store.loading = true; Store.connecting = true; updateSync();
   try{
     const data = await API.get('getBootstrap', { date: Store.date }, 2, 45000); // ลองได้ถึง 3 ครั้ง · timeout 45 วิ (bootstrap ~13 วิ)
-    Store.data = data;
+    Store.data = applyDeliveryDedupe(data);
     Store.live = true;
     Store.lastSync = new Date().toISOString();
     Store._sig = dataSignature(data);
@@ -798,7 +829,7 @@ function scheduleReconnect(){
     attempt++;
     try{
       const data = await API.get('getBootstrap', { date: Store.date }, 0);
-      Store.data = data; Store.live = true; Store.error = null; Store.lastSync = new Date().toISOString();
+      Store.data = applyDeliveryDedupe(data); Store.live = true; Store.error = null; Store.lastSync = new Date().toISOString();
       _reconnecting = false; updateSync(); render();
       toast('เชื่อมต่อเซิร์ฟเวอร์แล้ว ข้อมูลเป็นปัจจุบัน','ok');
     }catch(e){
@@ -814,7 +845,10 @@ function scheduleReconnect(){
    ROUTER
    ================================================================ */
 const ROUTES = {}; // filled below
-function currentRoute(){ const h = location.hash.replace(/^#\//,''); return h || 'dashboard'; }
+function currentRoute(){
+  const h = location.hash.replace(/^#\//,'') || 'dashboard';
+  return h === 'deliveries' ? 'dashboard' : h;
+}
 async function render(){
   const page = currentRoute();
   Store.page = page;
