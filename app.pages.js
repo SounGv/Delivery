@@ -127,46 +127,58 @@ function uniqueDocParts(d){
 function actIcon(a){ return {CREATE_DELIVERY:'package-plus',CREATE_ROUTE:'route',CREATE_CUSTOMER:'store',SYNC_CARTRACK:'satellite-dish',COMPLETE_DELIVERY:'check-circle-2',FAILED_DELIVERY:'x-circle',START_ROUTE:'play',CREATE_EXPENSE:'receipt',CREATE_CLAIM:'hand-coins',SEED:'database'}[a]||'activity'; }
 
 ROUTES.dashboard = async function(view){
-  const open = (Store.data.deliveries || []).filter(d => DelView.isOpen(d));
+  const allDel = Store.data.deliveries || [];
+  const open = allDel.filter(d => DelView.isOpen(d));
+  const done = allDel.filter(d => DelView.isDone(d));
+  const viewMode = dPick.viewMode || 'queue';
+  const baseList = viewMode === 'done' ? done : open;
   const dispatchable = open.filter(d => DelView.isNoRoute(d));
-  const searched = open.filter(d => {
+  const searched = baseList.filter(d => {
     if (!Store.search) return true;
     if (matchSearch(d, ['CustomerName','BranchName','InvoiceNo','PoNo','Address'])) return true;
     return DelView.zone(d).toLowerCase().includes(Store.search);
   });
   const rows = applyDeliveryFilter(searched);
-  const districts = districtCounts(dispatchable);
-  const staffList = staffCounts(open);
-  const zoneList = districtCounts(open);
-  const selIds = [...dPick.sel].filter(id => open.some(d => d.DeliveryID === id));
+  const districts = districtCounts(viewMode === 'done' ? done : dispatchable);
+  const staffList = staffCounts(baseList);
+  const zoneList = districtCounts(baseList);
+  const selIds = viewMode === 'queue' ? [...dPick.sel].filter(id => open.some(d => d.DeliveryID === id)) : [];
   const selN = selIds.length;
   const selAmount = selIds.reduce((n, id) => {
     const d = open.find(x => x.DeliveryID === id);
     return n + (d ? (DelView.amount(d) || 0) : 0);
   }, 0);
-  const allChecked = rows.length > 0 && rows.every(d => dPick.sel.has(d.DeliveryID));
+  const allChecked = viewMode === 'queue' && rows.length > 0 && rows.every(d => dPick.sel.has(d.DeliveryID));
+  const headSub = viewMode === 'done'
+    ? `${thDate(Store.date)} · ส่งแล้ว ${int(done.length)} ที่`
+    : `${thDate(Store.date)} · รอส่ง ${int(open.length)} ที่ · ${int(districts.length)} เขต`;
 
   page(view, `
-    ${head('วันนี้', `${thDate(Store.date)} · ${int(open.length)} ที่ · ${int(districts.length)} เขต`,
+    ${head('วันนี้', headSub,
       `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}
-    <div class="notice info mb14"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>
+    ${delViewTabsHtml(open.length, done.length)}
+    ${viewMode === 'queue' ? `<div class="notice info mb14"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>` : `<div class="notice ok mb14"><i data-lucide="check-circle-2"></i><div>บิลที่<strong>ส่งแล้ว</strong> — ไม่แสดงในคิวจัดรถ · sync จาก TRCloud จะข้ามบิลที่มีเครื่องหมาย <span class="mono">[DISPATCH:DELIVERED]</span> แล้ว</div></div>`}
     <div class="del-search mb14">
       <i data-lucide="search"></i>
       <input id="delSearch" class="input" placeholder="กรอกเขต หรือค้นหาร้าน…" value="${esc(Store.search || '')}">
     </div>
-    ${districtChipsHtml(dispatchable)}
+    ${viewMode === 'queue' ? districtChipsHtml(dispatchable) : ''}
+    ${viewMode === 'done' ? delFilterChipsHtml() : ''}
     <div class="card del-list-card ${selN ? 'has-sel' : ''}" style="padding:0">
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
         ${rows.length ? `<table class="tbl del-tbl">
-          ${delTableHead(staffList, zoneList)}
+          ${delTableHead(staffList, zoneList, viewMode === 'done')}
           <tbody>${rows.map(d => {
             const zone = DelView.zone(d);
             const po = DelView.poNo(d);
             const inv = DelView.invoiceNo(d);
             const invShow = (inv && po && inv.replace(/\s+/g,'').toLowerCase() === po.replace(/\s+/g,'').toLowerCase()) ? '—' : (inv || '—');
+            const chk = viewMode === 'queue'
+              ? `<input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${dPick.sel.has(d.DeliveryID) ? 'checked' : ''}>`
+              : '';
             return `<tr class="${dPick.sel.has(d.DeliveryID) ? 'row-sel' : ''}">
-              <td class="c"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${dPick.sel.has(d.DeliveryID) ? 'checked' : ''}></td>
+              <td class="c">${chk}</td>
               <td class="strong">${esc(d.CustomerName || '—')}${d.Address ? `<div class="small muted" style="font-weight:400;margin-top:2px">${esc(shortAddr(d.Address, 64))}</div>` : ''}</td>
               <td>${delStaffBadge(d)}</td>
               <td>${zone ? esc(zone) : '<span class="muted">—</span>'}</td>
@@ -175,6 +187,7 @@ ROUTES.dashboard = async function(view){
               <td class="mono small">${esc(invShow)}</td>
               <td class="small tab">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</td>
               <td class="small tab">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</td>
+              ${viewMode === 'done' ? `<td>${delStatusBadge(d)}</td>` : ''}
             </tr>`;
           }).join('')}</tbody>
         </table>` : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขต / ชื่อร้าน / WALK-IN หรือรีเฟรชข้อมูล')}
@@ -184,9 +197,18 @@ ROUTES.dashboard = async function(view){
         ${rows.length ? `<div class="job-card-list">${rows.map(delMobileCard).join('')}</div>` : emptyState('ไม่มีงานตามเขตนี้','ลองเลือกเขตอื่น')}
       </div>
     </div>
-    ${delSelectionBar(selN, selAmount)}
+    ${viewMode === 'queue' ? delSelectionBar(selN, selAmount) : ''}
   `);
 
+  $$('[data-del-view]', view).forEach(b => b.onclick = () => {
+    dPick.viewMode = b.dataset.delView || 'queue';
+    if (dPick.viewMode === 'done') dPick.sel.clear();
+    ROUTES.dashboard(view);
+  });
+  $$('[data-dfilter]', view).forEach(b => b.onclick = () => {
+    dPick.filter = b.dataset.dfilter || 'all';
+    ROUTES.dashboard(view);
+  });
   const sy = view.querySelector('[data-act="sync"]'); if (sy) sy.onclick = async e => { e.target.closest('button').disabled = true; await loadBootstrap(); render(); toast('รีเฟรชข้อมูลแล้ว','ok'); };
   const ds = view.querySelector('#delSearch');
   if (ds) {
@@ -273,12 +295,13 @@ ROUTES.dashboard = async function(view){
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), districts: new Set(), filter: 'all', nameFilter: '', staffFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'all', viewMode: 'queue', nameFilter: '', staffFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
   { key:'all', label:'ทั้งหมด' },
   { key:'noRoute', label:'ยังไม่จัดรถ' },
   { key:'dueToday', label:'กำหนดส่งวันนี้' },
   { key:'overdue', label:'เลยกำหนด' },
+  { key:'syncArchive', label:'บิลเก่า sync' },
 ];
 
 /** View Model: อ่าน field เดิมเท่านั้น — ไม่เปลี่ยนชื่อ API */
@@ -286,6 +309,15 @@ const DelView = {
   dueIso(d){ return String(d.DueDate || d.DeliveryDate || '').slice(0, 10); },
   docIso(d){ return String(d.DocumentDate || '').slice(0, 10); },
   isOpen(d){ return ['Draft','Pending','Planned','Assigned','In Progress',''].includes(d.Status || ''); },
+  isDone(d){ return d.Status === 'Completed'; },
+  /** บิลเก่าที่ sync มาแล้วปิดเป็น Completed (ไม่ใช่งานที่ส่งวันนี้) */
+  isSyncArchive(d){
+    if (!this.isDone(d)) return false;
+    const due = this.dueIso(d);
+    if (due && due < Store.date) return true;
+    const note = String(d.Note || '');
+    return /auto-complete-past|trcloud-sync/i.test(note) || note.includes('[DISPATCH:DELIVERED]');
+  },
   isNoRoute(d){ return !(d.RouteID) && (d.Status === 'Draft' || d.Status === 'Pending' || !d.Status); },
   isDueToday(d){ return this.dueIso(d) === Store.date && this.isOpen(d); },
   isOverdue(d){ const due = this.dueIso(d); return !!(due && due < Store.date && this.isOpen(d)); },
@@ -321,7 +353,10 @@ const DelView = {
   },
   /** ป้ายสถานะสำหรับ UI ตาม mock (derive จาก Status + DueDate เดิม) */
   uiStatus(d){
-    if (d.Status === 'Completed') return { label:'ส่งแล้ว', cls:'b-green' };
+    if (d.Status === 'Completed') {
+      if (this.isSyncArchive(d)) return { label:'บิลเก่า sync', cls:'b-gray' };
+      return { label:'ส่งแล้ว', cls:'b-green' };
+    }
     if (d.Status === 'Failed') return { label:'ไม่สำเร็จ', cls:'b-red' };
     if (d.Status === 'Cancelled') return { label:'ยกเลิก', cls:'b-gray' };
     if (d.Status === 'In Progress' || d.Status === 'Assigned') return { label:'กำลังส่ง', cls:'b-blue' };
@@ -352,6 +387,7 @@ function applyDeliveryFilter(rows){
   if (f === 'noRoute') out = out.filter(d => DelView.isNoRoute(d));
   if (f === 'dueToday') out = out.filter(d => DelView.isDueToday(d));
   if (f === 'overdue') out = out.filter(d => DelView.isOverdue(d));
+  if (f === 'syncArchive') out = out.filter(d => DelView.isSyncArchive(d));
   if (f === 'selected') out = out.filter(d => dPick.sel.has(d.DeliveryID));
   if (dPick.districts.size) {
     out = out.filter(d => dPick.districts.has(deliveryDistrictKey(d)));
@@ -441,10 +477,20 @@ function delDistrictFilterHtml(districtList){
     </div>
   </div>`;
 }
-function delTableHead(staffList, districtList){
+function delViewTabsHtml(openN, doneN){
+  const mode = dPick.viewMode || 'queue';
+  const tab = (key, label, n) => `<button type="button" class="pw-step ${mode === key ? 'on' : ''}" data-del-view="${key}">${esc(label)} (${int(n)})</button>`;
+  return `<div class="plan-wizard-steps mb14" id="delViewTabs">${tab('queue', 'รอจัดส่ง', openN)}${tab('done', 'ส่งแล้ว', doneN)}</div>`;
+}
+function delFilterChipsHtml(){
+  const f = dPick.filter || 'all';
+  const chip = (key, label) => `<button type="button" class="pw-step ${f === key ? 'on' : ''}" data-dfilter="${key}">${esc(label)}</button>`;
+  return `<div class="flex gap8 wrap mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
+}
+function delTableHead(staffList, districtList, showStatus){
   return `<thead>
     <tr class="del-head-row">
-      <th class="c" style="width:42px"><input type="checkbox" id="dSelAll"></th>
+      <th class="c" style="width:42px">${showStatus ? '' : '<input type="checkbox" id="dSelAll">'}</th>
       <th>ชื่อร้าน</th>
       <th>WALK-IN / ชื่อ</th>
       <th>เขต</th>
@@ -453,13 +499,14 @@ function delTableHead(staffList, districtList){
       <th>เลขบิล</th>
       <th>วันที่ออกเอกสาร</th>
       <th>กำหนดส่งของ</th>
+      ${showStatus ? '<th>สถานะ</th>' : ''}
     </tr>
     <tr class="del-filter-row">
       <th class="c"></th>
       <th><input class="input del-filter-input" id="fName" placeholder="กรองชื่อร้าน…" value="${esc(dPick.nameFilter || '')}"></th>
       <th>${delStaffFilterHtml(staffList)}</th>
       <th>${delDistrictFilterHtml(districtList)}</th>
-      <th colspan="5"></th>
+      <th colspan="${showStatus ? 6 : 5}"></th>
     </tr>
   </thead>`;
 }
@@ -2286,7 +2333,7 @@ ROUTES.trcloud = async function(view){
         <div style="align-self:flex-end"><button class="btn btn-primary" id="tcSync"><i data-lucide="cloud-download"></i>ดึงออเดอร์ → งานส่ง</button></div>
         <div style="align-self:flex-end"><button class="btn" id="tcPing"><i data-lucide="activity"></i>ทดสอบการเชื่อมต่อ</button></div>
       </div>
-      <div class="small muted" style="margin-top:10px">ดึงทั้ง <b>KSO</b> และ <b>BSO</b> · สร้างงานสถานะ <b>รอจัดส่ง</b> · <b>เลข PO</b> = reference · เลขบิล = ref_no (เช่น KSO260800201) · บิลซ้ำที่ยังไม่จัดรถจะอัปเดต · ถ้าวางแผนแล้วจะข้าม</div>
+      <div class="small muted" style="margin-top:10px">ดึงทั้ง <b>KSO</b> และ <b>BSO</b> · สร้างงาน <b>รอจัดส่ง</b> · บิลที่ TRCloud มีเครื่องหมาย <span class="mono">[DISPATCH:DELIVERED]</span> หรือส่งครบแล้ว → บันทึกเป็น <b>ส่งแล้ว</b> ไม่โผล่ซ้ำในคิว · บิลเก่าเกิน 2 วัน → ปิดอัตโนมัติ</div>
       <div id="tcResult" class="mt16"></div>
     </div>
 
@@ -2313,6 +2360,8 @@ ROUTES.trcloud = async function(view){
       const fmtLine = Object.keys(byFmt).map(f=>`${f}: พบ ${int(byFmt[f].total)} (ใหม่ ${int(byFmt[f].imported)})`).join(' · ');
       el('tcResult').innerHTML=`<div class="notice ok"><i data-lucide="check-circle-2"></i><div>
         รูปแบบ ${(r.formats||[]).join('+')||'KSO+BSO'} · ช่วง ${esc(r.dateFrom||dateFrom)} → ${esc(r.dateTo||dateTo)} · พบรวม ${int(r.total)} ใบ · <b>ใหม่ ${int(r.imported)}</b> · อัปเดต ${int(r.updated)} · ข้าม ${int(r.skipped)}
+        ${r.markedDelivered ? ` · ส่งแล้วใน TRCloud ${int(r.markedDelivered)}` : ''}
+        ${r.skippedDelivered ? ` · ข้าม (ส่งแล้วในระบบ) ${int(r.skippedDelivered)}` : ''}
         ${fmtLine?`<br><span class="small muted">${esc(fmtLine)}</span>`:''}
         ${r.errors&&r.errors.length?`<br><span class="small">error ${r.errors.length}: ${esc((r.errors[0]&&r.errors[0].error)||'')}</span>`:''}
         <div style="margin-top:10px"><a class="btn btn-sm btn-primary" href="#/deliveries">ไปหน้างานส่ง</a></div>
