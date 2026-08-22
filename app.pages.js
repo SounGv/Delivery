@@ -53,22 +53,48 @@ function vehStatusCard(v){
     ${stLabel?`<div class="small muted tab veh-status-meta">${stLabel}</div>`:''}
   </div>`;
 }
+function addressShort(addr){
+  if (!addr) return '';
+  const parts = String(addr).split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2) return parts.slice(-2).join(' ');
+  const tokens = String(addr).trim().split(/\s+/);
+  return tokens.length > 3 ? tokens.slice(-3).join(' ') : String(addr).trim();
+}
 function todoMobileCards(rows){
   if (!rows.length) return '';
   return `<div class="m-card-list">${rows.map(d => {
-    const zone = typeof DelView !== 'undefined' ? DelView.zone(d) : '';
+    const loc = addressShort(d.Address) || d.BranchName || '';
+    const amt = typeof DelView !== 'undefined' ? DelView.amount(d) : null;
     return `<div class="m-card">
       <div class="flex between aic gap8">
-        <div class="strong" style="font-size:14px;min-width:0">${esc(d.CustomerName)}</div>
+        <div class="job-card-title" style="min-width:0">${esc(d.CustomerName || '—')}</div>
         ${typeof DelView !== 'undefined' ? delStatusBadge(d) : dstatusBadge(d.Status)}
       </div>
-      <div class="small muted" style="margin-top:4px">${esc(d.BranchName || '—')}${zone ? ' · ' + esc(zone) : ''}</div>
-      <div class="flex between aic gap8" style="margin-top:8px">
-        <span class="small tab">${int(d.BoxQty)} ชิ้น</span>
-        ${d.InvoiceNo || d.PoNo ? billInlineHtml(d) : ''}
+      ${loc ? `<div class="small muted" style="margin-top:4px">${esc(loc)}</div>` : ''}
+      <div class="job-card-grid" style="margin-top:10px">
+        <div><span class="lbl">เลขอ้างอิง</span><div class="val mono">${esc(d.PoNo || '—')}</div></div>
+        <div><span class="lbl">เลขบิล</span><div class="val mono">${esc(d.InvoiceNo || '—')}</div></div>
+        <div><span class="lbl">วันที่เอกสาร</span><div class="val">${d.DocumentDate ? thDate(d.DocumentDate) : '—'}</div></div>
+        <div><span class="lbl">วันครบกำหนด</span><div class="val">${d.DueDate ? thDate(d.DueDate) : '—'}</div></div>
+        <div><span class="lbl">รวมทั้งสิ้น</span><div class="val tab">${amt != null ? money(amt) : '—'}</div></div>
+        <div><span class="lbl">จำนวน</span><div class="val tab">${int(d.BoxQty)} ชิ้น</div></div>
       </div>
     </div>`;
   }).join('')}</div>`;
+}
+function dashTodoRow(d){
+  const loc = addressShort(d.Address) || d.BranchName || '—';
+  const amt = DelView.amount(d);
+  return `<tr>
+    <td><div class="strong">${esc(d.CustomerName || '—')}</div>
+      <div class="small muted">${esc(loc)}</div></td>
+    <td class="mono small">${esc(d.PoNo || '—')}</td>
+    <td class="mono small">${esc(d.InvoiceNo || '—')}</td>
+    <td class="small tab">${d.DocumentDate ? thDate(d.DocumentDate) : '—'}</td>
+    <td class="small tab">${d.DueDate ? thDate(d.DueDate) : '—'}</td>
+    <td class="r tab">${amt != null ? money(amt) : '—'}</td>
+    <td>${delStatusBadge(d)}</td>
+  </tr>`;
 }
 function dashboardOnboardingHtml(){
   if (localStorage.getItem('ddc_onboarding_off') === '1') return '';
@@ -103,7 +129,7 @@ function dashboardOnboardingHtml(){
 function dashStatusBar(kpi){
   const parts = [
     { n: kpi.done, label:'ส่งแล้ว', color:'#16A34A' },
-    { n: kpi.dueToday, label:'กำหนดส่งวันนี้', color:'#CA8A04' },
+    { n: kpi.dueToday, label:'กำหนดส่งวันนี้', color:'#EA580C' },
     { n: kpi.noRoute, label:'ยังไม่จัดรถ', color:'#2563EB' },
     { n: kpi.overdue, label:'เลยกำหนด', color:'#DC2626' },
   ];
@@ -116,39 +142,36 @@ function dashStatusBar(kpi){
 ROUTES.dashboard = async function(view){
   const dels = Store.data.deliveries || [];
   const kpi = DelView.kpi(dels);
-  const todo = dels.filter(d => DelView.isOpen(d)).slice(0, 12);
-  const vehs = liveVehicles().filter(v => v.VehicleName || v.LicensePlate);
+  const todo = dels.filter(d => DelView.isOpen(d)).slice(0, 20);
   page(view, `
     ${head('วันนี้', thDate(Store.date), `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>
       <a class="btn btn-primary" href="#/deliveries"><i data-lucide="package"></i>งานส่ง</a>`)}
     ${dashboardOnboardingHtml()}
     ${delKpiStrip(kpi)}
     ${dashStatusBar(kpi)}
-    <div class="grid dash-split">
-      <div class="card">
-        <div class="flex between aic wrap gap8 mb14"><span class="h-card">งานค้างส่ง (${int(todo.length)}${kpi.total > todo.length ? '+' : ''})</span>
-          <a class="btn btn-sm" href="#/deliveries">ดูทั้งหมด</a></div>
-        <div class="desk-only tbl-wrap">
-        ${todo.length ? `<table class="tbl"><thead><tr><th>ร้านค้า</th><th>สาขา</th><th class="r">จำนวน</th><th>สถานะ</th></tr></thead>
-          <tbody>${todo.map(d => `<tr>
-            <td class="strong">${esc(d.CustomerName)}</td>
-            <td class="muted small">${esc(d.BranchName || '—')}</td>
-            <td class="r tab">${int(d.BoxQty)}</td>
-            <td>${delStatusBadge(d)}</td>
-          </tr>`).join('')}</tbody></table>`
-          : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="package"></i>ไปงานส่ง</a>')}
-        </div>
-        <div class="m-only">
-        ${todo.length ? todoMobileCards(todo)
-          : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="package"></i>ไปงานส่ง</a>')}
-        </div>
+    <div class="card">
+      <div class="flex between aic wrap gap8 mb14">
+        <span class="h-card">งานค้างส่ง (${int(todo.length)}${kpi.total > todo.length ? '+' : ''})</span>
+        <a class="btn btn-sm" href="#/deliveries">ดูทั้งหมด</a>
       </div>
-      <div class="card">
-        <div class="flex between aic wrap gap8 mb14"><span class="h-card">สถานะรถ (${vehs.length})</span>
-          <a class="btn btn-sm" href="#/livemap"><i data-lucide="map-pin"></i>ติดตาม</a></div>
-        <div class="veh-status-list">
-        ${vehs.length ? vehs.map(vehStatusCard).join('') : emptyState('ยังไม่มีรถในระบบ','เพิ่มรถได้ที่หน้าตั้งค่า')}
-        </div>
+      <div class="desk-only tbl-wrap del-tbl-sticky">
+      ${todo.length ? `<table class="tbl del-tbl">
+        <thead><tr>
+          <th>ชื่อลูกค้า / ที่อยู่</th>
+          <th>เลขที่เอกสารอ้างอิง</th>
+          <th>เลขบิล</th>
+          <th>วันที่เอกสาร</th>
+          <th>วันครบกำหนด</th>
+          <th class="r">รวมทั้งสิ้น</th>
+          <th>สถานะ</th>
+        </tr></thead>
+        <tbody>${todo.map(dashTodoRow).join('')}</tbody>
+      </table>`
+        : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="package"></i>ไปงานส่ง</a>')}
+      </div>
+      <div class="m-only">
+      ${todo.length ? todoMobileCards(todo)
+        : emptyState('ไม่มีงานค้างส่ง','งานวันนี้ส่งครบแล้ว หรือยังไม่มีงานส่ง','<a class="btn btn-primary" href="#/deliveries"><i data-lucide="package"></i>ไปงานส่ง</a>')}
       </div>
     </div>
   `);
