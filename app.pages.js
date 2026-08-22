@@ -139,7 +139,6 @@ ROUTES.dashboard = async function(view){
     return DelView.zone(d).toLowerCase().includes(Store.search);
   });
   const rows = applyDeliveryFilter(searched);
-  const districts = districtCounts(viewMode === 'done' ? done : dispatchable);
   const staffList = staffCounts(baseList);
   const zoneList = districtCounts(baseList);
   const selIds = viewMode === 'queue' ? [...dPick.sel].filter(id => open.some(d => d.DeliveryID === id)) : [];
@@ -149,21 +148,24 @@ ROUTES.dashboard = async function(view){
     return n + (d ? (DelView.amount(d) || 0) : 0);
   }, 0);
   const allChecked = viewMode === 'queue' && rows.length > 0 && rows.every(d => dPick.sel.has(d.DeliveryID));
+  const statsBase = viewMode === 'done' ? done : open;
+  const zoneNamed = districtCounts(statsBase).filter(([n]) => n !== 'ไม่ระบุเขต').length;
   const headSub = viewMode === 'done'
-    ? `${thDate(Store.date)} · ส่งแล้ว ${int(done.length)} ที่`
-    : `${thDate(Store.date)} · รอส่ง ${int(open.length)} ที่ · ${int(districts.length)} เขต`;
+    ? `${thDate(Store.date)} · ส่งแล้ว ${int(done.length)} ร้าน`
+    : `${thDate(Store.date)} · รอส่ง ${int(open.length)} ร้าน${zoneNamed ? ` · ${int(zoneNamed)} เขต` : ''}`;
 
   page(view, `
-    ${head('วันนี้', headSub,
-      `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}
+    <div class="del-page">
+    ${delMobPageHead('วันนี้', headSub)}
     ${delViewTabsHtml(open.length, done.length)}
-    ${viewMode === 'queue' ? `<div class="notice info mb14"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>` : `<div class="notice ok mb14"><i data-lucide="check-circle-2"></i><div>บิลที่<strong>ส่งแล้ว</strong> — ไม่แสดงในคิวจัดรถ · sync จาก TRCloud จะข้ามบิลที่มีเครื่องหมาย <span class="mono">[DISPATCH:DELIVERED]</span> แล้ว</div></div>`}
-    <div class="del-search mb14">
-      <i data-lucide="search"></i>
-      <input id="delSearch" class="input" placeholder="กรอกเขต หรือค้นหาร้าน…" value="${esc(Store.search || '')}">
+    ${viewMode === 'queue' ? delMobQueueHint() : delMobDoneHint()}
+    <div class="del-mob-toolbar">
+      <div class="del-search mb14">
+        <i data-lucide="search"></i>
+        <input id="delSearch" class="input" placeholder="ค้นหาร้าน เขต PO บิล…" value="${esc(Store.search || '')}" enterkeyhint="search" autocomplete="off">
+      </div>
     </div>
-    ${viewMode === 'queue' ? districtChipsHtml(dispatchable) : ''}
-    ${viewMode === 'done' ? delFilterChipsHtml() : ''}
+    ${viewMode === 'queue' ? districtChipsHtml(open) : delFilterChipsHtml()}
     <div class="card del-list-card ${selN ? 'has-sel' : ''}" style="padding:0">
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
@@ -193,11 +195,12 @@ ROUTES.dashboard = async function(view){
         </table>` : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขต / ชื่อร้าน / WALK-IN หรือรีเฟรชข้อมูล')}
         </div>
       </div>
-      <div class="m-only" style="padding:12px">
-        ${rows.length ? `<div class="job-card-list">${rows.map(delMobileCard).join('')}</div>` : emptyState('ไม่มีงานตามเขตนี้','ลองเลือกเขตอื่น')}
+      <div class="m-only">
+        ${rows.length ? `<div class="job-card-list">${rows.map(d => delMobileCard(d, { viewMode })).join('')}</div>` : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขตหรือคำค้นหา')}
       </div>
     </div>
     ${viewMode === 'queue' ? delSelectionBar(selN, selAmount) : ''}
+    </div>
   `);
 
   $$('[data-del-view]', view).forEach(b => b.onclick = () => {
@@ -265,7 +268,7 @@ ROUTES.dashboard = async function(view){
     }, 0);
   }
   $$('[data-district]', view).forEach(b => b.onclick = () => {
-    toggleDistrictPick(b.dataset.district || '', dispatchable);
+    toggleDistrictPick(b.dataset.district || '', open);
     ROUTES.dashboard(view);
   });
   const selAll = view.querySelector('#dSelAll');
@@ -280,6 +283,21 @@ ROUTES.dashboard = async function(view){
   $$('.d-sel', view).forEach(cb => cb.onchange = () => {
     if (cb.checked) dPick.sel.add(cb.dataset.sel); else dPick.sel.delete(cb.dataset.sel);
     ROUTES.dashboard(view);
+  });
+  $$('.job-card[data-card]', view).forEach(card => {
+    card.onclick = (e) => {
+      if (viewMode !== 'queue') return;
+      if (e.target.closest('input,button,a,label')) return;
+      const cb = card.querySelector('.d-sel');
+      if (!cb) return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+  });
+  $$('[data-quick]', view).forEach(btn => btn.onclick = (e) => {
+    e.stopPropagation();
+    const d = rows.find(x => x.DeliveryID === btn.dataset.quick) || allDel.find(x => x.DeliveryID === btn.dataset.quick);
+    if (d) quickDispatch(d);
   });
   const planBtn = view.querySelector('#dselPlan');
   if (planBtn) planBtn.onclick = (e) => {
@@ -477,15 +495,38 @@ function delDistrictFilterHtml(districtList){
     </div>
   </div>`;
 }
+function delMobPageHead(title, sub){
+  return `<div class="del-mob-page-head m-only">
+    <div>
+      <div class="page-title">${esc(title)}</div>
+      <div class="page-sub">${sub}</div>
+    </div>
+    <div class="del-mob-actions">
+      <button type="button" class="icon-btn" data-act="sync" title="รีเฟรช" aria-label="รีเฟรช"><i data-lucide="refresh-cw"></i></button>
+    </div>
+  </div>
+  <div class="desk-only">${head(title, sub, `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}</div>`;
+}
+function delMobQueueHint(){
+  return `<details class="del-mob-tip m-only">
+    <summary>วิธีจัดรถอัตโนมัติ</summary>
+    <div class="del-mob-tip-body">1) ติ๊ก chip เขต (เลือกได้หลายเขต)<br>2) ติ๊กร้าน หรือแตะการ์ดเพื่อเลือก<br>3) กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ</div>
+  </details>
+  <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>`;
+}
+function delMobDoneHint(){
+  return `<div class="del-mob-banner ok m-only"><i data-lucide="check-circle-2"></i><div>บิล<strong>ส่งแล้ว</strong> — ไม่แสดงในคิวจัดรถ · sync ข้ามบิลที่มี <span class="mono">[DISPATCH:DELIVERED]</span></div></div>
+  <div class="notice ok mb14 desk-only"><i data-lucide="check-circle-2"></i><div>บิลที่<strong>ส่งแล้ว</strong> — ไม่แสดงในคิวจัดรถ · sync จาก TRCloud จะข้ามบิลที่มีเครื่องหมาย <span class="mono">[DISPATCH:DELIVERED]</span> แล้ว</div></div>`;
+}
 function delViewTabsHtml(openN, doneN){
   const mode = dPick.viewMode || 'queue';
-  const tab = (key, label, n) => `<button type="button" class="pw-step ${mode === key ? 'on' : ''}" data-del-view="${key}">${esc(label)} (${int(n)})</button>`;
-  return `<div class="plan-wizard-steps mb14" id="delViewTabs">${tab('queue', 'รอจัดส่ง', openN)}${tab('done', 'ส่งแล้ว', doneN)}</div>`;
+  const tab = (key, label, n) => `<button type="button" class="pw-step ${mode === key ? 'on' : ''}" data-del-view="${key}" role="tab" aria-selected="${mode === key}">${esc(label)} (${int(n)})</button>`;
+  return `<div class="del-view-tabs plan-wizard-steps mb14" id="delViewTabs" role="tablist">${tab('queue', 'รอจัดส่ง', openN)}${tab('done', 'ส่งแล้ว', doneN)}</div>`;
 }
 function delFilterChipsHtml(){
   const f = dPick.filter || 'all';
   const chip = (key, label) => `<button type="button" class="pw-step ${f === key ? 'on' : ''}" data-dfilter="${key}">${esc(label)}</button>`;
-  return `<div class="flex gap8 wrap mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
+  return `<div class="del-mob-chips plan-wizard-steps mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
 }
 function delTableHead(staffList, districtList, showStatus){
   return `<thead>
@@ -537,8 +578,14 @@ function districtChipsHtml(list){
     .concat(counts.filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) => chip(name, name, n)));
   if (noneN) chips.push(chip('__none__', 'ไม่ระบุเขต', noneN));
   const picked = ds.size ? `<span class="small strong" style="color:var(--brand-ink)">เลือก ${int(ds.size)} เขต</span>` : '';
-  return `<div class="flex between aic wrap gap8 mb8"><span class="small muted">chip เขต = ติ๊กเลือกบิลจัดรถ · dropdown ใต้หัวคอลัมน์ = กรองดู</span>${picked}</div>
-    <div class="plan-wizard-steps mb14" id="districtChips">${chips.join('')}</div>`;
+  return `<div class="del-district-bar">
+    <div class="del-district-cap">
+      <span class="small muted desk-only">chip เขต = ติ๊กเลือกบิลจัดรถ · dropdown ใต้หัวคอลัมน์ = กรองดู</span>
+      <span class="small muted m-only">${picked || 'เลื่อนซ้าย-ขวาเลือกเขต'}</span>
+      ${picked ? `<span class="small strong m-only" style="color:var(--brand-ink)">${int(ds.size)} เขต</span>` : ''}
+    </div>
+    <div class="del-mob-chips plan-wizard-steps" id="districtChips">${chips.join('')}</div>
+  </div>`;
 }
 function delKpiStrip(kpi){
   const cell = (label, val, color) => `<div class="del-kpi-card" style="--kpi:${color}">
@@ -578,29 +625,36 @@ function delSelectionBar(selN, selAmount){
     </div>
   </div>`;
 }
-function delMobileCard(d){
+function delMobileCard(d, opts){
+  const viewMode = (opts && opts.viewMode) || 'queue';
   const zone = DelView.zone(d);
   const selected = dPick.sel.has(d.DeliveryID);
   const po = DelView.poNo(d);
   const inv = DelView.invoiceNo(d);
   const invShow = (inv && po && inv.replace(/\s+/g,'').toLowerCase() === po.replace(/\s+/g,'').toLowerCase()) ? '' : inv;
+  const poLine = (po || invShow) ? `<div class="job-card-po">${po ? `<span class="muted">PO</span> ${esc(po)}` : ''}${po && invShow ? ' · ' : ''}${invShow ? `<span class="muted">บิล</span> ${esc(invShow)}` : ''}</div>` : '';
+  const showSel = viewMode === 'queue';
+  const foot = showSel && DelView.isNoRoute(d)
+    ? `<div class="job-card-foot"><button type="button" class="btn btn-sm" data-quick="${esc(d.DeliveryID)}">จัดทีละงาน</button></div>`
+    : '';
   return `<div class="job-card ${selected ? 'on' : ''}" data-card="${esc(d.DeliveryID)}">
     <div class="job-card-top">
-      <label class="job-check"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${selected ? 'checked' : ''}></label>
+      ${showSel ? `<label class="job-check"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${selected ? 'checked' : ''} aria-label="เลือก ${esc(d.CustomerName || 'ร้าน')}"></label>` : ''}
       <div class="job-card-main">
         <div class="job-card-title">${esc(d.CustomerName || 'ไม่ระบุร้าน')}</div>
-        <div class="job-card-sub">${esc(zone || 'ไม่ระบุเขต')}</div>
-        ${d.Address ? `<div class="small muted" style="margin-top:2px">${esc(shortAddr(d.Address, 80))}</div>` : ''}
+        <div class="job-card-sub">${esc(zone || 'ไม่ระบุเขต')}${DelView.isOverdue(d) ? ' · <span style="color:var(--red-ink)">เลยกำหนด</span>' : ''}</div>
+        ${d.Address ? `<div class="small muted" style="margin-top:2px;line-height:1.35">${esc(shortAddr(d.Address, 72))}</div>` : ''}
       </div>
-      ${delStatusBadge(d)}
+      ${viewMode === 'done' || !DelView.isNoRoute(d) ? delStatusBadge(d) : ''}
     </div>
     <div class="job-card-grid">
       <div><span class="lbl">มูลค่า</span><div class="val">${delAmountHtml(d)}</div></div>
       <div><span class="lbl">WALK-IN / ชื่อ</span><div class="val">${delStaffBadge(d)}</div></div>
-      <div><span class="lbl">เลขบิล</span><div class="val mono">${esc(invShow || inv || '—')}</div></div>
-      <div><span class="lbl">วันที่ออกเอกสาร</span><div class="val">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</div></div>
-      <div><span class="lbl">กำหนดส่งของ</span><div class="val">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</div></div>
+      <div><span class="lbl">กำหนดส่ง</span><div class="val">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</div></div>
+      <div><span class="lbl">วันออกบิล</span><div class="val">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</div></div>
     </div>
+    ${poLine}
+    ${foot}
   </div>`;
 }
 function delDesktopRow(d){
@@ -2258,7 +2312,7 @@ ROUTES.settings = async function(view){
       item('#/config','sliders-horizontal','ตั้งค่าระบบ · คลัง · ต้นทุน','บริษัท พิกัดคลัง ค่าน้ำมัน + เชื่อม Google'),
       item('#/trcloud','cloud-download','TRCloud ออเดอร์','ดึง Sale Order เป็นงานส่ง · webhook realtime'),
       item('#/cartrack','satellite-dish','Cartrack GPS','เชื่อมต่อ GPS ติดตามรถ'),
-      item('user-guide.html','book-open','คู่มือขั้นตอนส่งงาน','เช็คลิสต์ประจำวัน · พิมพ์ใบส่งที่ไหน',true)])}
+      item('user-guide.html','book-open','คู่มือขั้นตอนส่งงาน','TRCloud · เลือกเขต · ส่งแล้วไม่ซ้ำ · มีรูปประกอบ',true)])}
   `);
 };
 
