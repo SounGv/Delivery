@@ -612,7 +612,7 @@ const Plan = {
   tab:'plan', selected:new Set(), locked:false,
   result:null, chosen:null,
   sel:{type:'COMPANY',vehId:'',extId:'',driver:'',driverEmployeeId:''},
-  splitSel:[], map:null, layer:null
+  splitSel:[]
 };
 function persistPlanSelection(){
   try {
@@ -761,58 +761,28 @@ async function renderPlanTab(view){
     ${locked ? `<div class="notice info mb14"><i data-lucide="check-circle-2"></i><div>เลือกจากหน้า<b>วันนี้</b>แล้ว — กด <b>จัดเส้นทางอัตโนมัติ</b> แล้วยืนยัน (ไม่ต้องเลือกซ้ำ)</div></div>` : ''}
     ${noGeo.length ? `<div class="notice warn mb14"><i data-lucide="map-pin-off"></i><div>${int(noGeo.length)} บิลยังไม่มีพิกัด — จัดเส้นทางได้เฉพาะบิลที่มีพิกัด (${int(withGeo.length)} บิล)</div></div>` : ''}
 
-    <!-- Desktop: ซ้ายรายการ | กลาง Map | ขวายืนยัน -->
-    <div class="grid plan-3 desk-only">
+    <!-- Desktop: ซ้ายรายการ | ขวาวางแผน/ยืนยัน (แผนที่ดูที่หน้าติดตาม) -->
+    <div class="grid plan-2 desk-only">
       <div class="card" style="padding:14px">
         <div class="h-card mb14">รายการที่เลือก (${int(selCount)})</div>
-        <div style="max-height:520px;overflow-y:auto" class="scrolly">${listHtml}</div>
-      </div>
-      <div class="card" style="padding:14px">
-        <div class="flex between aic mb14"><span class="h-card">แผนที่จุดส่ง</span></div>
-        <div id="planMap" class="map" style="height:520px"></div>
+        <div style="max-height:min(720px,75vh);overflow-y:auto" class="scrolly">${listHtml}</div>
       </div>
       <div class="card" id="decision" style="padding:16px">
         ${Plan.result ? '' : decisionInitial(withGeo.length, withGeo.reduce((n,d)=>n+(+d.BoxQty||0),0))}
       </div>
     </div>
 
-    <!-- Mobile: หน้าเดียว เลื่อนลง — ไม่แยก wizard -->
+    <!-- Mobile: หน้าเดียว เลื่อนลง -->
     <div class="m-only plan-mobile-stack">
       <div class="card" style="padding:14px">
         <div class="h-card mb14">รายการที่เลือก (${int(selCount)})</div>
         <div class="scrolly" style="max-height:min(360px,45vh)">${listHtml}</div>
-      </div>
-      <div class="card" style="padding:14px">
-        <div class="h-card mb14">แผนที่จุดส่ง</div>
-        <div id="planMapMobile" class="map" style="height:min(320px,40vh)"></div>
       </div>
       <div class="card" id="decisionMobile" style="padding:16px">
         ${Plan.result ? '' : decisionInitial(withGeo.length, withGeo.reduce((n,d)=>n+(+d.BoxQty||0),0))}
       </div>
     </div>
   `);
-
-  setTimeout(() => {
-    const wh = warehouse();
-    const isMobile = window.matchMedia('(max-width:720px)').matches;
-    const mount = (id) => {
-      const node = el(id); if (!node) return null;
-      const mp = MapUtil.make(id, wh);
-      const layer = L.layerGroup().addTo(mp);
-      return { mp, layer };
-    };
-    const active = isMobile ? mount('planMapMobile') : mount('planMap');
-    if (!active) return;
-    Plan.map = active.mp;
-    Plan.layer = active.layer;
-    if (Plan.result && Plan.chosen === 'C') {
-      const splitOpt = (Plan.result.options || []).find(o => o.id === 'C');
-      if (splitOpt) drawPlanMap(null, null, splitOpt.split);
-      else drawPlanMap(withGeo);
-    } else if (Plan.result && Plan.result.seq) drawPlanMap(null, Plan.result.seq);
-    else drawPlanMap(withGeo);
-    setTimeout(() => { try { Plan.map.invalidateSize(); } catch (_) {} }, 80);
-  }, 60);
 
   $$('[data-unpick]', view).forEach(b => b.onclick = () => {
     Plan.selected.delete(b.dataset.unpick);
@@ -852,31 +822,6 @@ function miniStat(l,v,ic){ return `<div class="flex between aic" style="padding:
   <span class="strong tab">${v}</span></div>`; }
 
 const SPLIT_COLORS=['#6f9e0a','#2563EB','#DB2777','#D97706','#7C3AED','#0891B2'];
-function drawPlanMap(selDels, seq, splitGroups){
-  if(!Plan.map) return; Plan.layer.clearLayers();
-  const wh=warehouse();
-  MapUtil.whMarker(Plan.layer, wh);
-  (Store.data.vehicles||[]).filter(v=>v.CurrentLatitude).forEach(v=>{ const st=VSTATUS[v.VehicleStatus]||VSTATUS.Unknown; L.marker([+v.CurrentLatitude,+v.CurrentLongitude],{icon:L.divIcon({className:'veh-pin',html:`<div class="veh-dot" style="background:${st.dot}"><i data-lucide="truck"></i></div>`,iconSize:[28,28],iconAnchor:[14,14]})}).addTo(Plan.layer).bindPopup(esc(vehicleShortName(v))); });
-  const pts=[[wh.lat,wh.lng]];
-  if(splitGroups){
-    splitGroups.forEach((g,gi)=>{
-      const color=SPLIT_COLORS[gi%SPLIT_COLORS.length];
-      g.seq.forEach((d,i)=>{ if(d.Latitude){ MapUtil.stopMarker(Plan.layer,d,i+1,color); pts.push([+d.Latitude,+d.Longitude]); } });
-      const line=[[wh.lat,wh.lng],...g.seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]];
-      L.polyline(line,{color,weight:4,opacity:.85}).addTo(Plan.layer);
-    });
-  } else {
-    const list = seq || selDels;
-    list.forEach((d,i)=>{ if(d.Latitude){ MapUtil.stopMarker(Plan.layer,d,i+1,(PRIORITY[d.Priority]||PRIORITY.NORMAL).color); pts.push([+d.Latitude,+d.Longitude]); } });
-    if(seq){
-      const geo = Plan.result && Plan.result.metrics && Plan.result.metrics.geometry;
-      const line = (geo && geo.length) ? geo : [[wh.lat,wh.lng],...seq.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]];
-      L.polyline(line,{color:'#6f9e0a',weight:4,opacity:.85}).addTo(Plan.layer);
-    }
-  }
-  if(pts.length>1) Plan.map.fitBounds(pts,{padding:[30,30]});
-  icons();
-}
 
 async function runAutoPlan(){
   const btn=el('autoPlan'); if(btn){btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังวิเคราะห์…'; icons();}
@@ -899,7 +844,6 @@ async function runAutoPlan(){
     driver: rec?(rec.CurrentDriver || (emp&&emp.EmployeeName) || ''):'',
     driverEmployeeId: emp ? emp.EmployeeID : empIdByName(rec&&rec.CurrentDriver),
     toll: Planner.toll(), parking: Planner.autoParking(seq) };
-  drawPlanMap(null,seq);
   persistPlanSelection();
   renderDecision();
 }
@@ -925,8 +869,6 @@ function renderDecision(){
           g.seq.map((s,i)=>billLine(s).replace('VARBG',color).replace('>N<','>'+(i+1)+'<')).join('');
       }).join('')
     : seq.map((s,i)=>billLine(s).replace('VARBG',(PRIORITY[s.Priority]||PRIORITY.NORMAL).color).replace('>N<','>'+(i+1)+'<')).join('');
-
-  if(isSplit) drawPlanMap(null,null,splitOpt.split); else drawPlanMap(null,seq);
 
   const timeWarn = (!isSplit && m.durationMin > Planner.workDayMin())
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>คันเดียวใช้เวลา ~${Planner.fmtDur(m.durationMin)} เกินเวลาทำงาน ${workLbl} — แนะนำเลือกแบ่งตามเขต</div></div>` : '';
