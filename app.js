@@ -158,7 +158,6 @@ const NAV = [
   ]},
   { group:'อื่นๆ', items:[
     { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
-    { id:'guide',    label:'คู่มือ', icon:'book-open', href:'user-guide.html', external:true },
   ]},
 ];
 
@@ -218,6 +217,7 @@ const Mock = (() => {
       k('WAREHOUSE_LAT','13.6900321','company','พิกัดคลัง (Latitude)'),
       k('WAREHOUSE_LNG','100.5251873','company','พิกัดคลัง (Longitude)'),
       k('FUEL_COST_PER_KM','3.50','cost','ค่าน้ำมันต่อกิโลเมตร (บาท)'),
+      k('FUEL_PRICE_PER_LITER','33','cost','ราคาน้ำมัน (บาท/ลิตร) ใช้คำนวณลิตรในรายงานย้อนหลัง'),
       k('AVG_SPEED_KMH','30','cost','ความเร็วเฉลี่ย (กม./ชม.)'),
       k('DEFAULT_TOLL','300','cost','ค่าทางด่วนเริ่มต้น (บาท)'),
       k('DEFAULT_PARKING','130','cost','ค่าจอดรถเริ่มต้น (บาท)'),

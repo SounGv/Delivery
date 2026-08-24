@@ -1370,6 +1370,33 @@ function routeGpsFuelEst(route){
   if (!km) return null;
   return GpsTrack.fuelEst(km, route);
 }
+function fuelPricePerLiter(){ return Number(setting('FUEL_PRICE_PER_LITER', 33)) || 33; }
+function fuelLitersFromBaht(baht){
+  const p = fuelPricePerLiter();
+  if (!baht || !p) return null;
+  return +(Number(baht) / p).toFixed(2);
+}
+function routeGpsFuelLiters(route){
+  const baht = routeGpsFuelEst(route);
+  return baht == null ? null : fuelLitersFromBaht(baht);
+}
+function tripVehicleLabel(r){
+  if (!r) return '—';
+  const name = r.VehicleName || r.ProviderName || '';
+  const plate = r.LicensePlate || '';
+  return (name && plate && name !== plate) ? (name + ' · ' + plate) : (plate || name || '—');
+}
+function routeBillsLine(route, dels){
+  const bills = (dels || []).filter(d => String(d.RouteID) === String(route.RouteID));
+  if (!bills.length) return '—';
+  return bills.map(d => {
+    const po = DelView.poNo(d);
+    const inv = DelView.invoiceNo(d);
+    const shop = d.CustomerName || '—';
+    const doc = [po, inv].filter(Boolean).filter((v, i, a) => a.findIndex(x => String(x).replace(/\s+/g,'').toLowerCase() === String(v).replace(/\s+/g,'').toLowerCase()) === i).join(' / ');
+    return shop + (doc ? ' (' + doc + ')' : '');
+  }).join(' · ');
+}
 function gpsDiffPct(est, actual){
   est = Number(est); actual = Number(actual);
   if (!est || !actual) return '';
@@ -1671,25 +1698,25 @@ async function showRouteTrackModal(route){
   const gm = GpsTrack.metrics(track, { cartrack: useCt });
   const gpsSrc = route.GpsSource || (useCt ? 'cartrack' : (track.length ? 'driver' : 'none'));
   const gpsFuel = GpsTrack.fuelEst(gm.distanceKm, route);
-  const estKm = Number(route.TotalDistance) || 0;
-  const estFuel = Number(route.EstimatedFuelCost) || 0;
+  const gpsLiters = fuelLitersFromBaht(gpsFuel);
+  const bills = routeBillsLine(route, Store.data.deliveries || []);
   const statRow = (l, v, sub) => `<div class="flex between" style="padding:5px 0;font-size:13px"><span class="muted">${l}${sub?` <span class="small" style="color:#9AA3B2">${sub}</span>`:''}</span><span class="tab strong">${v}</span></div>`;
-  const m = modal({ title:'เส้นทางจริง vs วางแผน — '+esc(route.RouteID), body:`
+  const m = modal({ title:'ย้อนหลังรอบส่ง — '+esc(route.RouteID), body:`
     <div id="rtMap" class="map" style="height:300px;margin-bottom:12px"></div>
     <div class="flex gap12 small muted" style="margin-bottom:12px">
-      <span><span style="display:inline-block;width:14px;height:3px;background:#2563EB;vertical-align:middle;margin-right:5px"></span>วางแผน</span>
-      <span><span style="display:inline-block;width:14px;height:3px;background:#EF4444;vertical-align:middle;margin-right:5px"></span>วิ่งจริง (GPS)</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:#2563EB;vertical-align:middle;margin-right:5px"></span>จุดส่งตามใบงาน</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:#EF4444;vertical-align:middle;margin-right:5px"></span>เส้นทางที่วนจริง (GPS)</span>
     </div>
     <div style="border:1px solid var(--border);border-radius:11px;padding:12px;margin-bottom:12px">
-      <div class="small strong muted mb8">เปรียบเทียบระยะทาง / ค่าน้ำมัน</div>
+      <div class="small strong muted mb8">รถ · บิล · เวลา · น้ำมัน</div>
+      ${statRow('รถ', esc(tripVehicleLabel(route)), esc(route.DriverName||''))}
+      ${statRow('บิล / ร้าน', esc(bills), '')}
       ${statRow('แหล่ง GPS', gpsSourceLabel(gpsSrc), int(gm.pointCount)+' จุด')}
-      ${statRow('ออกจากคลัง (GPS)', fmtTimeShort(gm.startedAt), gm.startedAt ? thDate(gm.startedAt) : '')}
-      ${statRow('กลับถึงคลัง (GPS)', fmtTimeShort(gm.endedAt), gm.endedAt ? thDate(gm.endedAt) : '')}
-      ${statRow('เวลาวิ่งจริง', gm.durationMin ? Planner.fmtDur(gm.durationMin) : '—', '')}
-      ${statRow('ระยะประมาณ (ไป)', num1(estKm)+' กม.', 'จากแผนที่วางแผน')}
-      ${statRow('ระยะ GPS จริง', gm.distanceKm ? num1(gm.distanceKm)+' กม.' : '—', gm.distanceKm && estKm ? gpsDiffPct(estKm, gm.distanceKm) : 'ยังไม่มี track')}
-      ${statRow('น้ำมันประมาณ', money(estFuel)+' ฿', '')}
-      ${statRow('น้ำมันจาก GPS', gpsFuel ? money(gpsFuel)+' ฿' : '—', 'ระยะ GPS × อัตรา/กม.')}
+      ${statRow('ออก', fmtTimeShort(gm.startedAt), gm.startedAt ? thDate(gm.startedAt) : '')}
+      ${statRow('กลับ', fmtTimeShort(gm.endedAt), gm.endedAt ? thDate(gm.endedAt) : '')}
+      ${statRow('เวลาวิ่ง', gm.durationMin ? Planner.fmtDur(gm.durationMin) : '—', '')}
+      ${statRow('ระยะ GPS', gm.distanceKm ? num1(gm.distanceKm)+' กม.' : '—', 'จาก GPS จริง')}
+      ${statRow('น้ำมัน', gpsLiters != null ? num1(gpsLiters)+' ลิตร' : '—', gpsFuel ? money(gpsFuel)+' ฿' : '')}
     </div>
     <div class="h-card mb14">จุดที่จอดนิ่งนาน (${dwells.length})</div>
     ${dwells.length? dwells.map(d=>`<div class="flex between" style="padding:6px 0;border-bottom:1px solid #F3F5F8"><span class="small">${timeShort(d.from)}–${timeShort(d.to)}</span><span class="small strong">จอด ${int(d.minutes)} นาที</span></div>`).join('')
@@ -2031,7 +2058,7 @@ function employeeForm(e, veh){
 ROUTES.reports = async function(view){
   const to = Store.date; const from = new Date(new Date(to).getTime()-6*864e5).toISOString().slice(0,10);
   page(view, `
-    ${head('รายงาน', 'สรุปตามวันที่จัดส่ง — งานค้างที่เลื่อนมาวันทำงานจะนับในวันนั้น (ตรงกับหน้าวันนี้/งานส่ง)', '')}
+    ${head('รายงาน', 'ดูย้อนหลังว่ารถคันไหนวิ่งบิลไหน รอบไหน ระยะทาง เวลาออก-กลับ น้ำมันกี่ลิตร', '')}
     <div class="card mb14">
       <div class="flex gap12 wrap aic">
         <div><label class="label">จากวันที่</label><input type="date" class="input" id="rFrom" value="${from}"></div>
@@ -2041,9 +2068,9 @@ ROUTES.reports = async function(view){
           <button class="btn btn-sm" data-preset="today">วันนี้</button>
           <button class="btn btn-sm" data-preset="7">7 วัน</button>
           <button class="btn btn-sm" data-preset="month">เดือนนี้</button></div>
-        <div style="align-self:flex-end"><label class="label">ประเภทรายงาน</label><select class="select" id="rType" style="width:210px">
+        <div style="align-self:flex-end"><label class="label">ประเภทรายงาน</label><select class="select" id="rType" style="width:240px">
+          <option value="gpsactual">ดูย้อนหลัง (รถ · บิล · GPS)</option>
           <option value="routes">สรุปรอบส่ง</option>
-          <option value="gpsactual">เปรียบเทียบ GPS จริง</option>
           <option value="deliveries">รายการจัดส่ง (รายร้าน)</option>
           <option value="expenses">ค่าใช้จ่ายแยกประเภท</option></select></div>
         <div style="flex:1"></div>
@@ -2109,60 +2136,58 @@ function reportDetail(type, rep){
   const rmap={}; routes.forEach(r=>{ rmap[r.RouteID]=r; });
   if(type==='gpsactual'){
     const hasTrack = r => Number(r.GpsPointCount) > 1;
+    const priceL = fuelPricePerLiter();
     const rows = routes.map(r=>{
       const gpsFuel = routeGpsFuelEst(r);
+      const liters = fuelLitersFromBaht(gpsFuel);
       const receipt = Number(r.ActualFuelExpense) || routeFuelExpense(r, exps);
       return {
-        'รอบส่ง': r.RouteID, 'วันที่': r.DeliveryDate, 'คนขับ': r.DriverName||'',
+        'รอบส่ง': r.RouteID, 'วันที่': r.DeliveryDate, 'รถ': tripVehicleLabel(r), 'คนขับ': r.DriverName||'',
+        'บิล / ร้าน': routeBillsLine(r, dels),
         'ออก': r.GpsStartedAt||'', 'กลับ': r.GpsEndedAt||'',
-        'ระยะประมาณ (กม.)': Number(r.TotalDistance)||0,
-        'ระยะ GPS จริง (กม.)': Number(r.GpsDistanceKm)||0,
-        'ผลต่างระยะ %': gpsDiffPct(r.TotalDistance, r.GpsDistanceKm),
-        'น้ำมันประมาณ (บาท)': Number(r.EstimatedFuelCost)||0,
-        'น้ำมันจาก GPS (บาท)': gpsFuel != null ? gpsFuel : '',
+        'ระยะ GPS (กม.)': Number(r.GpsDistanceKm)||0,
+        'น้ำมัน (ลิตร)': liters != null ? liters : '',
+        'น้ำมัน GPS (บาท)': gpsFuel != null ? gpsFuel : '',
         'น้ำมันใบเสร็จ (บาท)': receipt || '',
-        'เวลาวิ่ง GPS (น.)': Number(r.GpsDurationMin)||0,
-        'จุด GPS': Number(r.GpsPointCount)||0,
+        'เวลาวิ่ง (น.)': Number(r.GpsDurationMin)||0,
         'แหล่ง GPS': gpsSourceLabel(r.GpsSource),
         'สถานะ': (DSTATUS[r.Status]||{}).label||r.Status,
       };
     });
-    const sumEst = routes.reduce((n,r)=>n+(Number(r.TotalDistance)||0),0);
     const sumGps = routes.reduce((n,r)=>n+(Number(r.GpsDistanceKm)||0),0);
+    const sumL = routes.reduce((n,r)=>{ const L=routeGpsFuelLiters(r); return n+(L||0); },0);
     const html=`    <div class="notice info mb14"><i data-lucide="satellite"></i><div>
-      <b>ระยะ GPS จริง</b> = ใช้ <b>Cartrack (GPS ติดรถ)</b> เป็นหลัก — ซิงก์ทุก ~1 นาที · ถ้าไม่มีใช้มือถือคนขับ<br>
-      <b>น้ำมันจาก GPS</b> = ระยะ GPS × อัตรา/กม. · <b>ใบเสร็จ</b> = บันทึกค่าใช้จ่ายประเภท ค่าน้ำมัน
+      ดูย้อนหลังว่ารถคันไหนวิ่งรอบไหน บิลไหน ออกกี่โมง กลับกี่โมง ระยะทางเท่าไร ใช้น้ำมันกี่ลิตร<br>
+      ระยะทาง/เวลา = GPS จริง (Cartrack เป็นหลัก) · ลิตร = ระยะ GPS × อัตราบาท/กม. ÷ ราคาน้ำมัน ${num1(priceL)} บาท/ลิตร · กดไอคอนแผนที่ดูเส้นทางที่วน
     </div></div>
-    <div class="card mt16"><div class="h-card mb14">เปรียบเทียบ GPS จริง · ${int(routes.length)} รอบ · ประมาณ ${num1(sumEst)} กม. vs GPS ${num1(sumGps)} กม.</div>
+    <div class="card mt16"><div class="h-card mb14">ย้อนหลัง ${int(routes.length)} รอบ · GPS ${num1(sumGps)} กม. · น้ำมันประมาณ ${num1(sumL)} ลิตร</div>
       <div class="tbl-wrap scrolly"><table class="tbl"><thead><tr>
-        <th>รอบส่ง</th><th>วันที่</th><th>คนขับ</th><th>ออก</th><th>กลับ</th>
-        <th class="r">กม.ประมาณ</th><th class="r">กม.GPS</th><th class="r">Δ%</th>
-        <th class="r">น้ำมันประมาณ</th>        <th class="r">น้ำมัน GPS</th><th class="r">ใบเสร็จ</th>
-        <th class="r">เวลา</th><th>แหล่ง</th><th>สถานะ</th><th class="r">แผนที่</th>
+        <th>รอบส่ง</th><th>วันที่</th><th>รถ</th><th>คนขับ</th><th>บิล / ร้าน</th>
+        <th>ออก</th><th>กลับ</th>
+        <th class="r">กม.GPS</th><th class="r">ลิตร</th><th class="r">น้ำมัน ฿</th><th class="r">ใบเสร็จ</th>
+        <th class="r">เวลา</th><th>สถานะ</th><th class="r">แผนที่</th>
       </tr></thead><tbody>${routes.map(r=>{
         const gpsFuel = routeGpsFuelEst(r);
+        const liters = fuelLitersFromBaht(gpsFuel);
         const receipt = Number(r.ActualFuelExpense) || routeFuelExpense(r, exps);
-        const diff = gpsDiffPct(r.TotalDistance, r.GpsDistanceKm);
-        const diffCls = diff && diff.startsWith('+') ? ' style="color:#D97706"' : (diff && diff.startsWith('-') ? ' style="color:#059669"' : '');
         return `<tr>
           <td class="mono strong">${esc(r.RouteID)}</td>
           <td class="small">${thDate(r.DeliveryDate)}</td>
+          <td class="small">${esc(tripVehicleLabel(r))}</td>
           <td>${esc(r.DriverName||'—')}</td>
+          <td class="small">${esc(routeBillsLine(r, dels))}</td>
           <td class="small tab">${fmtTimeShort(r.GpsStartedAt)}</td>
           <td class="small tab">${fmtTimeShort(r.GpsEndedAt)}</td>
-          <td class="r tab">${num1(r.TotalDistance)}</td>
           <td class="r tab strong">${r.GpsDistanceKm ? num1(r.GpsDistanceKm) : '<span class="muted">—</span>'}</td>
-          <td class="r tab small"${diffCls}>${diff || '—'}</td>
-          <td class="r tab">${money(r.EstimatedFuelCost)}</td>
+          <td class="r tab">${liters != null ? num1(liters) : '—'}</td>
           <td class="r tab">${gpsFuel != null ? money(gpsFuel) : '—'}</td>
           <td class="r tab">${receipt ? money(receipt) : '—'}</td>
           <td class="r tab small">${r.GpsDurationMin ? int(r.GpsDurationMin)+' น.' : '—'}</td>
-          <td class="small">${esc(gpsSourceLabel(r.GpsSource))}</td>
           <td>${dstatusBadge(r.Status)}</td>
-          <td class="r">${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="ดูเส้นทาง"><i data-lucide="route"></i></button>`:'<span class="muted small">ไม่มี GPS</span>'}</td>
+          <td class="r">${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="ดูเส้นทางที่วน"><i data-lucide="route"></i></button>`:'<span class="muted small">ไม่มี GPS</span>'}</td>
         </tr>`;
-      }).join('')||`<tr><td colspan="15">${emptyState('ไม่มีรอบส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
-    return { html, rows, filename:'report_gps_actual', title:'รายงานเปรียบเทียบ GPS จริง' };
+      }).join('')||`<tr><td colspan="14">${emptyState('ไม่มีรอบส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
+    return { html, rows, filename:'report_route_history', title:'รายงานย้อนหลัง รถ · บิล · GPS' };
   }
   if(type==='deliveries'){
     const totBox = dels.reduce((n,d)=>n+(+d.BoxQty||0),0);
@@ -2226,19 +2251,22 @@ function printReport(from,to,rep,type){
     <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td class="r">${money(r.EstimatedFuelCost)}</td><td class="r">${money(r.EstimatedTollCost)}</td><td class="r">${money(r.EstimatedParkingCost)}</td><td class="r">${money(r.EstimatedExternalCost)}</td><td class="r">${money(r.EstimatedOtherCost)}</td><td class="r">${money(r.EstimatedTotalCost)}</td></tr>`).join('')||'<tr><td colspan="8" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
     <tfoot><tr><th colspan="2" class="r">รวมทั้งสิ้น</th><th class="r">${money(sum(routes,'EstimatedFuelCost'))}</th><th class="r">${money(sum(routes,'EstimatedTollCost'))}</th><th class="r">${money(sum(routes,'EstimatedParkingCost'))}</th><th class="r">${money(sum(routes,'EstimatedExternalCost'))}</th><th class="r">${money(sum(routes,'EstimatedOtherCost'))}</th><th class="r">${money(total)}</th></tr></tfoot></table>`;
   } else if(type==='gpsactual'){
-    title='รายงานเปรียบเทียบ GPS จริง';
+    title='รายงานย้อนหลัง รถ · บิล · GPS';
     const exps = rep.expenses||[];
-    tbl=`<div class="sec-title">เปรียบเทียบระยะทาง / ค่าน้ำมัน (GPS จริง vs ประมาณการ)</div>
-    <table><thead><tr><th>รอบส่ง</th><th>วันที่</th><th>คนขับ</th><th>ออก</th><th>กลับ</th><th class="r">กม.ประมาณ</th><th class="r">กม.GPS</th><th class="r">น้ำมันประมาณ</th><th class="r">น้ำมัน GPS</th><th class="r">ใบเสร็จ</th><th class="r">เวลา</th></tr></thead>
+    tbl=`<div class="sec-title">รถคันไหนวิ่งรอบไหน บิลไหน ออก-กลับ ระยะทาง น้ำมัน</div>
+    <table><thead><tr><th>รอบส่ง</th><th>วันที่</th><th>รถ</th><th>คนขับ</th><th>บิล / ร้าน</th><th>ออก</th><th>กลับ</th><th class="r">กม.GPS</th><th class="r">ลิตร</th><th class="r">น้ำมัน ฿</th><th class="r">ใบเสร็จ</th><th class="r">เวลา</th></tr></thead>
     <tbody>${routes.map(r=>{
       const gpsFuel = routeGpsFuelEst(r);
+      const liters = fuelLitersFromBaht(gpsFuel);
       const receipt = Number(r.ActualFuelExpense) || routeFuelExpense(r, exps);
-      return `<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${esc(r.DriverName||'-')}</td>
+      return `<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td>${esc(tripVehicleLabel(r))}</td><td>${esc(r.DriverName||'-')}</td>
+        <td class="addr">${esc(routeBillsLine(r, dels))}</td>
         <td>${fmtTimeShort(r.GpsStartedAt)}</td><td>${fmtTimeShort(r.GpsEndedAt)}</td>
-        <td class="r">${num1(r.TotalDistance)}</td><td class="r">${r.GpsDistanceKm?num1(r.GpsDistanceKm):'-'}</td>
-        <td class="r">${money(r.EstimatedFuelCost)}</td><td class="r">${gpsFuel!=null?money(gpsFuel):'-'}</td>
+        <td class="r">${r.GpsDistanceKm?num1(r.GpsDistanceKm):'-'}</td>
+        <td class="r">${liters!=null?num1(liters):'-'}</td>
+        <td class="r">${gpsFuel!=null?money(gpsFuel):'-'}</td>
         <td class="r">${receipt?money(receipt):'-'}</td><td class="r">${r.GpsDurationMin?int(r.GpsDurationMin)+' น.':'-'}</td></tr>`;
-    }).join('')||'<tr><td colspan="11" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody></table>`;
+    }).join('')||'<tr><td colspan="12" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody></table>`;
   } else {
     tbl=`<div class="sec-title">รายการรอบส่ง</div>
     <table><thead><tr><th class="tl">รอบส่ง</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th>จุด</th><th>กล่อง</th><th>ระยะทาง</th><th>เวลาวิ่ง</th><th>ต้นทุน</th><th>สถานะ</th></tr></thead>
@@ -2257,7 +2285,6 @@ async function printRouteNote(r){
       Address:d.Address, Latitude:d.Latitude, Longitude:d.Longitude, BoxQty:d.BoxQty||0,
     }));
   }
-  stops = Planner.enrichStopCoords(stops, Store.data.deliveries, Store.data.customers);
   const deliveryForStop = s => (Store.data.deliveries||[]).find(x=>String(x.DeliveryID)===String(s.DeliveryID));
   const poForStop = s => {
     const d = deliveryForStop(s);
@@ -2280,53 +2307,28 @@ async function printRouteNote(r){
     return d || { CustomerName: s.CustomerName, BranchName: s.BranchName, Address: s.Address };
   };
   const addrForStop = s => trcAddressOnly(rowForStop(s)) || '—';
-  const legForStop = s => {
-    const km = Number(s._distPrev ?? s.DistanceFromPrevious);
-    return Number.isFinite(km) && km > 0 ? num1(km) : '—';
-  };
   const row=(l,v)=>`<div><span>${l}:</span> <b>${esc(v==null||v===''?'-':v)}</b></div>`;
-  let distOutKm = Number(r.TotalDistance) || 0;
-  let distRoundKm = 0;
-  let fuelCost = Number(r.EstimatedFuelCost) || 0;
-  let mapTag = '';
-  const mapCalc = await Planner.metricsForStops(stops, Store.data.deliveries, Store.data.customers);
-  const fullRoute = mapCalc && mapCalc.metrics && mapCalc.geoCount >= (mapCalc.totalCount || stops.length);
-  if(fullRoute){
-    const mm = mapCalc.metrics;
-    distOutKm = Planner.routeDisplayKm(mm);
-    distRoundKm = Planner.fuelDistanceKm(mm);
-    mapTag = mm.source === 'osrm' ? ' · ตามแผนที่' : ' · ประมาณ';
-    const veh = (Store.data.vehicles||[]).find(v => v.LicensePlate && r.LicensePlate && v.LicensePlate === r.LicensePlate);
-    fuelCost = r.RouteType === 'EXTERNAL_VEHICLE'
-      ? Number(r.EstimatedExternalCost) || 0
-      : Planner.fuelCost(distRoundKm, veh);
-  } else if (mapCalc && mapCalc.metrics && mapCalc.geoCount > 0) {
-    mapTag = ' · บางจุดไม่มีพิกัด';
-  }
+  const vehLbl = ((r.VehicleName||r.ProviderName||'') + (r.LicensePlate ? ' · '+r.LicensePlate : '')).trim() || '-';
   const body=`
     <div class="kv">
       ${row('รอบส่ง',r.RouteID)}${row('วันที่',thDate(r.DeliveryDate))}
-      ${row('คนขับ',r.DriverName)}${row('รถ',((r.VehicleName||r.ProviderName||'') + (r.LicensePlate ? ' · '+r.LicensePlate : '')).trim() || '-')}
-      ${row('จำนวนบิล',int(stops.length))}${row('จำนวนรวม',int(r.TotalBoxes))}
-      ${row('ระยะทาง (ไป'+mapTag+')',num1(distOutKm)+' กม.')}
-      ${distRoundKm ? row('ระยะทาง (ไป-กลับ'+mapTag+')',num1(distRoundKm)+' กม.') : ''}
-      ${row('ค่าน้ำมัน (ประมาณ · จากไป-กลับ)',money(fuelCost)+' บาท')}</div>
+      ${row('คนขับ',r.DriverName)}${row('รถ',vehLbl)}
+      ${row('จำนวนบิล',int(stops.length))}${row('จำนวนรวม',int(r.TotalBoxes))}</div>
     <div class="sec-title">รายการขึ้นของ / จุดส่ง — ให้คนขับเช็คก่อนออกรถ</div>
     <table class="slip-table">
-      <colgroup><col style="width:5%"><col style="width:4%"><col style="width:6%"><col style="width:18%"><col style="width:13%"><col style="width:13%"><col style="width:7%"><col></colgroup>
-      <thead><tr><th>☐</th><th>#</th><th class="r">กม.</th><th>ลูกค้า</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
-      <tbody>${stops.map(s=>{ const row = rowForStop(s); return `<tr>
+      <colgroup><col style="width:5%"><col style="width:5%"><col style="width:20%"><col style="width:14%"><col style="width:14%"><col style="width:8%"><col></colgroup>
+      <thead><tr><th>☐</th><th>#</th><th>ลูกค้า</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>ที่อยู่</th></tr></thead>
+      <tbody>${stops.map(s=>{ const stopRow = rowForStop(s); return `<tr>
         <td class="c">☐</td><td class="c">${s.StopOrder}</td>
-        <td class="r tab">${legForStop(s)}</td>
-        <td>${esc(trcCustomerName(row))}</td>
+        <td>${esc(trcCustomerName(stopRow))}</td>
         <td class="mono">${esc(poForStop(s))}</td>
         <td class="mono">${esc(invForStop(s))}</td>
         <td class="r">${int(qtyNumForStop(s))}</td>
         <td class="addr">${esc(addrForStop(s))}</td>
-      </tr>`; }).join('')||'<tr><td colspan="8" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
-      <tfoot><tr><th colspan="6" class="r">รวมจำนวน</th><th class="r">${int(stops.reduce((n,s)=>n+qtyNumForStop(s),0))}</th><th></th></tr></tfoot>
+      </tr>`; }).join('')||'<tr><td colspan="7" class="c muted">ไม่มีรายการ</td></tr>'}</tbody>
+      <tfoot><tr><th colspan="5" class="r">รวมจำนวน</th><th class="r">${int(stops.reduce((n,s)=>n+qtyNumForStop(s),0))}</th><th></th></tr></tfoot>
     </table>
-    <p class="small muted" style="margin:10px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตาม # · กม. = ระยะตามถนนจากจุดก่อนหน้า</p>
+    <p class="small muted" style="margin:10px 0 0">เช็ค ☐ ทุกบิลก่อนขึ้นของ · ลำดับส่งตาม # · ระยะทาง / เวลาออก-กลับ / น้ำมัน ดูที่รายงานย้อนหลัง</p>
     <div class="sign"><div>ผู้จัดงาน</div><div>คนขับ (เช็คขึ้นของ)</div></div>`;
   Printer.open('ใบงานส่ง — เช็ครายการขึ้นของ', rSize(), body);
 }
@@ -2356,8 +2358,7 @@ ROUTES.settings = async function(view){
     ${grp('ระบบ & การเชื่อมต่อ',[
       item('#/config','sliders-horizontal','ตั้งค่าระบบ · คลัง · ต้นทุน','บริษัท พิกัดคลัง ค่าน้ำมัน + เชื่อม Google'),
       item('#/trcloud','cloud-download','TRCloud ออเดอร์','ดึง Sale Order เป็นงานส่ง · webhook realtime'),
-      item('#/cartrack','satellite-dish','Cartrack GPS','เชื่อมต่อ GPS ติดตามรถ'),
-      item('user-guide.html','book-open','คู่มือขั้นตอนส่งงาน','TRCloud · เลือกเขต · ส่งแล้วไม่ซ้ำ · มีรูปประกอบ',true)])}
+      item('#/cartrack','satellite-dish','Cartrack GPS','เชื่อมต่อ GPS ติดตามรถ')])}
   `);
 };
 
@@ -2369,7 +2370,8 @@ ROUTES.config = async function(view){
   const url = API.url();
   // เติมค่าเวลาทำงานถ้ายังไม่มีใน settings (ใช้กับโลจิกแบ่งรถ)
   [['WORK_START_HOUR','9','cost','เริ่มงาน (ชั่วโมง 0–23) เช่น 9 = 09:00'],
-   ['WORK_END_HOUR','18','cost','เลิกงาน (ชั่วโมง 0–23) เช่น 18 = 18:00']].forEach(([Key,Value,Group,Label])=>{
+   ['WORK_END_HOUR','18','cost','เลิกงาน (ชั่วโมง 0–23) เช่น 18 = 18:00'],
+   ['FUEL_PRICE_PER_LITER','33','cost','ราคาน้ำมัน (บาท/ลิตร) ใช้คำนวณลิตรในรายงานย้อนหลัง']].forEach(([Key,Value,Group,Label])=>{
     if(!settings.find(s=>s.Key===Key)) settings.push({ Key, Value:String(setting(Key,Value)), Group, Label });
   });
   const group=(g)=>settings.filter(s=>s.Group===g);

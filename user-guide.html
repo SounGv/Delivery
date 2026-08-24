@@ -2,327 +2,243 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>คู่มือขั้นตอนใช้งาน — GV Dispatch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>คู่มือใช้งาน — GV Dispatch</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" href="favicon.ico">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>
   :root{
-    --lime:#A9CF00; --lime-bright:#B4DC00; --ink:#0f1608; --ground:#FBFCF6;
-    --card:#fff; --muted:#5f6753; --line:#E6EBD8; --ok:#12a150; --warn:#E08A00;
+    --lime:#B7E800; --ink:#0B1220; --muted:#5f6753; --line:#E6EBD8;
+    --ground:#FBFCF6; --card:#fff; --ok:#15803d; --warn:#C2410C;
     --font:"Noto Sans Thai","Leelawadee UI",Tahoma,system-ui,sans-serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:var(--font);background:var(--ground);color:var(--ink);line-height:1.65;font-size:16px}
-  a{color:#5f7a00}
-  .hero{background:linear-gradient(135deg,#0f1608,#1b2410);color:#fff;padding:36px 20px 28px;border-bottom:4px solid var(--lime-bright)}
-  .hero .brand{font-size:13px;letter-spacing:.2em;color:var(--lime-bright);font-weight:700}
-  .hero h1{margin:10px 0 6px;font-size:clamp(22px,4vw,32px);font-weight:800;line-height:1.25}
-  .hero p{margin:0;color:#c9d4ac;max-width:42rem}
-  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 48px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 18px;margin:0 0 14px}
+  body{margin:0;font-family:var(--font);background:var(--ground);color:var(--ink);line-height:1.6;font-size:16px}
+  a{color:#4F7A0A}
+  .hero{background:#0B1220;color:#fff;padding:28px 18px 22px;border-bottom:4px solid var(--lime)}
+  .hero .brand{font-size:12px;letter-spacing:.18em;color:var(--lime);font-weight:800}
+  .hero h1{margin:8px 0 6px;font-size:clamp(22px,5vw,30px);font-weight:800;line-height:1.25}
+  .hero p{margin:0;color:#c9d4ac;max-width:36rem}
+  .wrap{max-width:720px;margin:0 auto;padding:18px 14px 48px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 16px;margin:0 0 12px}
   .card h2{margin:0 0 4px;font-size:18px;font-weight:800}
-  .card .sub{margin:0 0 14px;color:var(--muted);font-size:14px}
-  .flow{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
-  .flow span{background:#eef6cf;color:#3d5200;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:999px}
+  .card .sub{margin:0 0 12px;color:var(--muted);font-size:14px}
+  .do{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
+  .do span{background:#eef6cf;color:#3d5200;font-size:13px;font-weight:700;padding:6px 10px;border-radius:999px}
   ol.steps{margin:0;padding:0;list-style:none;counter-reset:s}
   ol.steps li{counter-increment:s;display:flex;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
   ol.steps li:last-child{border-bottom:0}
   ol.steps li::before{
-    content:counter(s);flex-shrink:0;width:32px;height:32px;border-radius:10px;
-    background:var(--lime-bright);color:#182200;font-weight:800;font-size:14px;
+    content:counter(s);flex-shrink:0;width:30px;height:30px;border-radius:9px;
+    background:var(--lime);color:#152400;font-weight:800;font-size:14px;
     display:flex;align-items:center;justify-content:center;margin-top:2px
   }
   ol.steps b{display:block;font-size:15px;margin-bottom:2px}
   ol.steps .d{color:var(--muted);font-size:14px}
-  .btn{display:inline-block;background:var(--lime-bright);color:#182200;font-weight:700;font-size:12.5px;padding:2px 8px;border-radius:6px}
-  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:#eef6cf;padding:1px 6px;border-radius:4px}
+  .btn{display:inline-block;background:var(--lime);color:#152400;font-weight:700;font-size:12.5px;padding:2px 8px;border-radius:6px}
   .tip{margin:12px 0 0;padding:12px 14px;border-radius:11px;font-size:14px}
   .tip.ok{background:#e8f8ee;border:1px solid #b7e7c8}
   .tip.warn{background:#fff6e8;border:1px solid #f0d3a0}
   .tip.info{background:#eef6ff;border:1px solid #c8daf5}
-  .check{margin:0;padding:0;list-style:none}
-  .check li{padding:8px 0 8px 28px;position:relative;border-bottom:1px dashed var(--line);font-size:14.5px}
-  .check li:last-child{border-bottom:0}
-  .check li::before{content:"☐";position:absolute;left:0;top:8px;font-size:16px}
-  .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .faq{margin:0;padding:0;list-style:none}
+  .faq li{padding:10px 0;border-bottom:1px dashed var(--line)}
+  .faq li:last-child{border-bottom:0}
+  .faq b{display:block;margin-bottom:3px}
+  .faq span{color:var(--muted);font-size:14px}
+  .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .menu div{background:#F4F7EA;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px}
-  .menu b{display:block;font-size:14px}
+  .menu b{display:block}
   .menu span{color:var(--muted);font-size:12.5px}
-  .cats{display:grid;gap:8px;margin-top:8px}
-  .cats div{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
-  .cats .tag{flex-shrink:0;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px}
-  .cats .tag.q{background:#dbeafe;color:#1d4ed8}
-  .cats .tag.d{background:#dcfce7;color:#15803d}
-  .cats .tag.a{background:#f3f4f6;color:#4b5563}
-  .figure{margin:14px 0 0;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#fff}
-  .figure img{display:block;width:100%;height:auto;vertical-align:middle}
-  .figure figcaption{padding:10px 12px;font-size:13px;color:var(--muted);background:#F4F7EA;border-top:1px solid var(--line)}
-  .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:18px}
+  .check{margin:0;padding:0;list-style:none}
+  .check li{padding:8px 0 8px 26px;position:relative;border-bottom:1px dashed var(--line);font-size:14.5px}
+  .check li:last-child{border-bottom:0}
+  .check li::before{content:"☐";position:absolute;left:0;top:8px}
+  .foot{text-align:center;color:var(--muted);font-size:13px;margin-top:16px}
   .foot a{color:inherit}
   @media(max-width:520px){.menu{grid-template-columns:1fr}}
-  @media print{
-    .hero{border:0;padding:16px}
-    .card{break-inside:avoid}
-    .figure{break-inside:avoid}
-    body{background:#fff}
-  }
+  @media print{.hero{padding:16px}.card{break-inside:avoid}body{background:#fff}}
 </style>
 </head>
 <body>
 
 <header class="hero">
   <div class="brand">GV DISPATCH</div>
-  <h1>คู่มือขั้นตอนใช้งานประจำวัน</h1>
-  <p>ดึงบิลจาก TRCloud → จัดรถตามเขต → พิมพ์ใบส่ง → คนขับอัปเดต → เช็คครบไม่ซ้ำ · อัปเดตล่าสุด ส.ค. 2026</p>
+  <h1>คู่มือใช้งานประจำวัน</h1>
+  <p>เขียนตามปุ่มจริงในระบบ — เปิดวันนี้ → เลือกเขต → จัดรถ → พิมพ์ใบงาน → คนขับกดส่งเสร็จ</p>
 </header>
 
 <div class="wrap">
 
-  <div class="flow">
-    <span>1 ดึง TRCloud</span>
-    <span>2 นับร้าน</span>
-    <span>3 เลือกเขต</span>
-    <span>4 จัดรถ</span>
-    <span>5 พิมพ์ใบส่ง</span>
-    <span>6 คนขับส่ง</span>
-    <span>7 เช็คครบ</span>
+  <div class="do">
+    <span>1 เปิดวันนี้</span>
+    <span>2 เลือกเขต</span>
+    <span>3 จัดรถ</span>
+    <span>4 พิมพ์ใบงาน</span>
+    <span>5 คนขับส่งเสร็จ</span>
+    <span>6 เช็คจบวัน</span>
   </div>
 
-  <!-- หมวดบิล -->
   <section class="card">
-    <h2>รู้จักหมวดบิลในหน้า “วันนี้”</h2>
-    <p class="sub">แยกงานรอส่ง กับงานที่ส่งแล้ว — บิลเก่าจาก sync จะไม่รกคิว</p>
-    <div class="cats">
-      <div>
-        <span class="tag q">รอจัดส่ง</span>
-        <div><b>งานที่ยังต้องจัดรถวันนี้</b><br><span style="color:var(--muted);font-size:13.5px">ติ๊กเลือกได้ · มี chip เขต · กดจัดรถอัตโนมัติ</span></div>
-      </div>
-      <div>
-        <span class="tag d">ส่งแล้ว</span>
-        <div><b>ส่งสำเร็จแล้ววันนี้</b><br><span style="color:var(--muted);font-size:13.5px">คนขับกดส่งสำเร็จ · ระบบเขียนเครื่องหมายกลับ TRCloud</span></div>
-      </div>
-      <div>
-        <span class="tag a">บิลเก่า sync</span>
-        <div><b>บิลเก่าที่ดึงมาแล้วปิดอัตโนมัติ</b><br><span style="color:var(--muted);font-size:13.5px">เกิน 2 วัน หรือ TRCloud มีเครื่องหมาย <span class="mono">[DISPATCH:DELIVERED]</span> แล้ว — ไม่โผล่ซ้ำในคิว</span></div>
-      </div>
+    <h2>ใช้เมนูไหนบ้าง</h2>
+    <p class="sub">จำ 4 เมนูนี้ก็ทำงานได้ทั้งวัน (มือถือมีแถบล่าง: วันนี้ · จัดรถ · ติดตาม)</p>
+    <div class="menu">
+      <div><b>วันนี้</b><span>ดูร้านรอส่ง · เลือกเขต · กดจัดรถ</span></div>
+      <div><b>จัดรถ</b><span>เลือกรถ+คนขับ · บันทึก · พิมพ์ใบงาน</span></div>
+      <div><b>ติดตาม</b><span>ดูว่ารถ/งานไปถึงไหนแล้ว</span></div>
+      <div><b>รายงาน</b><span>ดูย้อนหลัง รถ · บิล · GPS · น้ำมัน</span></div>
     </div>
-    <figure class="figure">
-      <img src="docs/guide/guide-step1-dashboard.png" alt="หน้าวันนี้ แท็บรอจัดส่งและส่งแล้ว พร้อม chip เลือกเขต" width="760" height="428" loading="lazy">
-      <figcaption>รูปที่ 1 — หน้า <b>วันนี้</b>: สลับแท็บ <b>รอจัดส่ง</b> / <b>ส่งแล้ว</b> · ติ๊กเลือกหลายเขตจาก chip หรือ dropdown ใต้คอลัมน์เขต</figcaption>
-    </figure>
   </section>
 
-  <!-- STEP 1 -->
   <section class="card">
-    <h2>ตอนเช้า — เตรียมงาน</h2>
-    <p class="sub">เปิดระบบ → เลือกวันที่ → ดึงบิล → นับร้านที่ต้องส่ง</p>
+    <h2>1) ตอนเช้า — เปิดหน้า “วันนี้”</h2>
+    <p class="sub">ดูว่าร้านไหนต้องส่งวันนี้</p>
     <ol class="steps">
       <li>
         <div>
-          <b>เปิดเว็บ GV Dispatch</b>
-          <div class="d">เลือก <b>วันที่ทำงาน</b> มุมบน (ปฏิทิน) ให้ตรงกับวันส่งจริง</div>
+          <b>เลือกวันที่มุมบน</b>
+          <div class="d">กดปฏิทินให้ตรงวันส่งจริง</div>
         </div>
       </li>
       <li>
         <div>
-          <b>เข้าเมนู <span class="btn">วันนี้</span></b>
-          <div class="d">ดูตัวเลข <b>รอส่ง X ที่ · Y เขต</b> ใต้หัวข้อ — คือจำนวนร้านที่ยังต้องจัดรถ</div>
+          <b>ดูแท็บ <span class="btn">รอจัดส่ง</span></b>
+          <div class="d">ตัวเลขบนแท็บ = จำนวนร้านที่ยังต้องจัดรถ · แท็บ <b>ส่งแล้ว</b> คือร้านที่ส่งครบแล้ววันนี้</div>
         </div>
       </li>
       <li>
         <div>
-          <b>กด <span class="btn">รีเฟรช</span> หรือดึงจาก TRCloud</b>
-          <div class="d">ระบบ sync อัตโนมัติทุก 3 นาที · หรือเข้า <span class="btn">ตั้งค่า</span> → <span class="btn">TRCloud ออเดอร์</span> → กด <span class="btn">ดึงออเดอร์ → งานส่ง</span></div>
+          <b>กดปุ่มรีเฟรช (ลูกศรวน)</b>
+          <div class="d">บิลจาก TRCloud จะขึ้นเอง · ถ้ายังไม่ขึ้น ให้กดรีเฟรชอีกครั้ง แล้วรอสักครู่</div>
         </div>
       </li>
       <li>
         <div>
-          <b>เช็คเลข PO / เลขบิล / มูลค่า</b>
-          <div class="d">คอลัมน์ <b>เลขที่เอกสารอ้างอิง</b> = PO ลูกค้า · <b>เลขบิล</b> = KSO/BSO · ค้นหาด้วยชื่อร้านหรือเขตได้</div>
+          <b>ดูชื่อร้าน · เขต · มูลค่า · PO · เลขบิล</b>
+          <div class="d">ค้นหาได้จากช่องค้นหา · เลื่อน chip เขตเพื่อกรองร้าน</div>
         </div>
       </li>
     </ol>
-    <div class="tip ok"><b>จำไว้:</b> ก่อนจัดรถ ดูแท็บ <b>รอจัดส่ง (X)</b> ให้รู้ว่าวันนี้มีกี่ร้าน — อย่าข้ามขั้นตอนนี้</div>
+    <div class="tip info"><b>ระบบดึงบิลให้อัตโนมัติ</b> ไม่ต้องเข้า TRCloud ทุกเช้า · เข้าหน้า TRCloud เฉพาะตอนที่รีเฟรชแล้วยังไม่มีบิล (ผู้ดูแลระบบ)</div>
   </section>
 
-  <!-- TRCloud -->
   <section class="card">
-    <h2>ดึงบิลจาก TRCloud — ไม่ให้ซ้ำ</h2>
-    <p class="sub">ระบบจัดหมวดบิลอัตโนมัติตอน sync</p>
+    <h2>2) จัดรถ — เลือกเขตแล้วกดจัด</h2>
+    <p class="sub">เลือกเขตใกล้กันรวมเป็นรอบเดียว</p>
     <ol class="steps">
       <li>
         <div>
-          <b>บิลใหม่ → รอจัดส่ง</b>
-          <div class="d">SO วันนี้ / ย้อนหลังไม่เกิน 2 วัน จะเข้าแท็บ <b>รอจัดส่ง</b></div>
+          <b>กด chip เขต</b>
+          <div class="d">กดได้หลายเขต เช่น บางแค + หนองแขม · ร้านในเขตนั้นจะถูกเลือกให้</div>
         </div>
       </li>
       <li>
         <div>
-          <b>บิลที่ส่งแล้วใน TRCloud → ข้าม</b>
-          <div class="d">ถ้า <span class="mono">invoice_note</span> มี <span class="mono">[DISPATCH:DELIVERED]</span> หรือส่งครบใน TRCloud แล้ว → บันทึกเป็น <b>ส่งแล้ว</b> ไม่เข้าคิวซ้ำ</div>
+          <b>หลายร้าน → กด <span class="btn">จัดรถอัตโนมัติ</span></b>
+          <div class="d">แถบดำด้านล่างหลังเลือกเขต · ระบบพาไปหน้าจัดรถ จัดลำดับส่งให้อัตโนมัติ</div>
         </div>
       </li>
       <li>
         <div>
-          <b>บิลเก่าเกิน 2 วัน → ปิดอัตโนมัติ</b>
-          <div class="d">แสดงในแท็บ <b>ส่งแล้ว</b> ป้าย <b>บิลเก่า sync</b> — ไม่รบกวนการจัดรถวันนี้</div>
+          <b>ร้านเดียวเร่งด่วน → กด <span class="btn">จัดทีละงาน</span></b>
+          <div class="d">อยู่ในการ์ดร้าน (มือถือ) · เลือกรถ + คนขับ แล้วกด <b>ยืนยัน &amp; จ่ายรถ</b></div>
         </div>
       </li>
       <li>
         <div>
-          <b>อ่านผลหลังดึง</b>
-          <div class="d">หน้า TRCloud แสดง: <b>ใหม่ · อัปเดต · ข้าม · ส่งแล้วใน TRCloud</b> — ใช้เช็คว่ามีบิลซ้ำหรือไม่</div>
+          <b>เลือกรถ + คนขับ แล้วกด <span class="btn">บันทึกรายการ</span></b>
+          <div class="d">ดูจำนวนบิลให้ตรงกับที่เลือก · ถ้ามีร้านไม่มีพิกัด ระบบจะข้ามร้านนั้น ต้องแก้ที่อยู่ก่อน</div>
         </div>
       </li>
     </ol>
-    <figure class="figure">
-      <img src="docs/guide/guide-step2-trcloud-sync.png" alt="หน้าดึงออเดอร์ TRCloud และผลลัพธ์ sync" width="760" height="428" loading="lazy">
-      <figcaption>รูปที่ 2 — <b>ตั้งค่า → TRCloud ออเดอร์</b> · เลือกช่วงวันที่แล้วกดดึง · ดูจำนวนใหม่/ข้าม/ส่งแล้วใน TRCloud</figcaption>
-    </figure>
-    <div class="tip info"><b>หมายเหตุ:</b> อย่าเปลี่ยน webhook SO ใน TRCloud ที่ชี้ gvtools — ระบบนี้ดึงแยกโดยไม่แย่งของเขา</div>
+    <div class="tip warn"><b>ร้านชื่อเดียวกัน คนละเขต = คนละที่ส่ง</b> เช่น J.I.B. ลำลูกกา กับ ดอนเมือง เป็น 2 จุด ต้องจัดครบทั้งสอง ไม่ใช่บิลซ้ำ</div>
   </section>
 
-  <!-- STEP 2 -->
   <section class="card">
-    <h2>จัดรถ — เลือกหลายเขตแล้วจัดอัตโนมัติ</h2>
-    <p class="sub">ติ๊กเลือกเขตใกล้กัน → รวมเป็นรอบส่ง → ยืนยัน</p>
+    <h2>3) พิมพ์ใบงาน</h2>
+    <p class="sub">พิมพ์จากหน้าจัดรถ ไม่ใช่หน้ารายงาน</p>
     <ol class="steps">
       <li>
         <div>
-          <b>ติ๊กเลือกเขต (หลายเขตได้)</b>
-          <div class="d">กด chip เขตด้านบน เช่น <b>บางแค + หนองแขม</b> · หรือเปิด dropdown ใต้คอลัมน์ <b>เขต</b> แล้วติ๊กหลายเขต</div>
+          <b>หลังกดบันทึกรายการ ใบงานจะเปิดให้พิมพ์เอง</b>
+          <div class="d">พิมพ์ส่งคนขับถือไปส่ง · ใบงานมีแค่รายการขึ้นของ ไม่ใส่ระยะทาง/น้ำมัน (ตัวเลขแผนไม่ตรงของจริง)</div>
         </div>
       </li>
       <li>
         <div>
-          <b>งานด่วน 1 ร้าน</b>
-          <div class="d">กด <span class="btn">จัดทีละงาน</span> ที่แถวงาน → เลือกรถ + คนขับ → ยืนยัน</div>
-        </div>
-      </li>
-      <li>
-        <div>
-          <b>หลายร้านพร้อมกัน</b>
-          <div class="d">ติ๊ก checkbox ร้านที่ต้องการ → กด <span class="btn">จัดรถอัตโนมัติ</span> · หรือเข้าเมนู <span class="btn">จัดรถ</span></div>
-        </div>
-      </li>
-      <li>
-        <div>
-          <b>กด “จัดเส้นทางอัตโนมัติ” แล้ว “ยืนยันการส่ง”</b>
-          <div class="d">ระบบคำนวณระยะทางทุกจุด (ไป-กลับ) · ค่าน้ำมันตามระยะจริงทุกร้านในรอบ · ดูรอบที่แท็บ <b>รอบส่งวันนี้</b></div>
+          <b>พิมพ์ซ้ำได้ที่เมนู <span class="btn">จัดรถ</span> → แท็บ <span class="btn">พิมพ์ใบงาน</span></b>
+          <div class="d">กด <b>พิมพ์ใบงาน</b> ที่รอบนั้นอีกครั้ง</div>
         </div>
       </li>
     </ol>
-    <figure class="figure">
-      <img src="docs/guide/guide-step3-plan-districts.png" alt="เลือกหลายเขตและจัดเส้นทางอัตโนมัติ" width="760" height="428" loading="lazy">
-      <figcaption>รูปที่ 3 — เลือกหลายเขต → จัดเส้นทางอัตโนมัติ → ตรวจจำนวนจุดให้เท่ากับร้านที่เลือก</figcaption>
-    </figure>
-    <div class="tip warn"><b>เช็คไม่ให้ส่งไม่ครบ:</b> รวมจุดส่งทุกคัน ต้องเท่ากับจำนวนร้านที่ติ๊กไว้ — ถ้าไม่เท่า = ยังมีร้านหลุด</div>
   </section>
 
-  <!-- STEP 3 -->
   <section class="card">
-    <h2>พิมพ์ใบส่ง — พิมพ์ที่ไหน</h2>
-    <p class="sub">พิมพ์ก่อนออกรถ ให้คนขับถือไปส่งทีละร้าน</p>
-    <ol class="steps">
-      <li>
-        <div>
-          <b>ใบส่งต่อรอบ (แนะนำ)</b>
-          <div class="d">เมนู <span class="btn">รายงาน</span> → ประเภท <b>สรุปรอบส่ง</b> → กดสร้างรายงาน<br>
-          ที่แถวรอบส่ง กด <span class="btn">🖨️ พิมพ์</span> = ใบส่งของรอบนั้น (รายชื่อร้าน / ลำดับจุด / ระยะทาง)</div>
-        </div>
-      </li>
-      <li>
-        <div>
-          <b>ดูรอบก่อนพิมพ์</b>
-          <div class="d">เมนู <span class="btn">จัดรถ</span> → แท็บ <b>รอบส่งวันนี้</b> → กด <b>รายละเอียด</b> ดูว่ารอบนี้กี่ร้าน / กี่ชิ้น</div>
-        </div>
-      </li>
-      <li>
-        <div>
-          <b>เปรียบเทียบ GPS จริง (ถ้ารถมี Cartrack)</b>
-          <div class="d">เมนู <span class="btn">รายงาน</span> → <b>เปรียบเทียบ GPS จริง</b> — ดูว่ารถวิ่งไปไหนจริง เทียบกับแผน</div>
-        </div>
-      </li>
-    </ol>
-    <div class="tip ok"><b>จำที่พิมพ์:</b> ใบส่งรอบรถ = หน้า <b>รายงาน</b> (ปุ่มพิมพ์ที่แถวรอบ)</div>
-  </section>
-
-  <!-- STEP 4 -->
-  <section class="card">
-    <h2>คนขับ — ส่งของ + ส่งสถานะกลับ TRCloud</h2>
-    <p class="sub">อัปเดตทีละร้าน · ระบบใส่เครื่องหมายส่งแล้วให้อัตโนมัติ</p>
+    <h2>4) คนขับ — ส่งของ</h2>
+    <p class="sub">ใช้โหมดคนขับบนมือถือ ไม่ใช่หน้าวันนี้ของสำนักงาน</p>
     <ol class="steps">
       <li>
         <div>
           <b>เปิดโหมดคนขับ</b>
-          <div class="d">มุมบนขวา กด <span class="btn">โหมดคนขับ</span> → ส่งลิงก์ / QR ให้มือถือคนขับ · แตะเลือกชื่อตัวเอง</div>
+          <div class="d">มุมบนขวา กดไอคอนมือถือ → ส่งลิงก์หรือ QR ให้คนขับ · คนขับแตะชื่อตัวเอง</div>
         </div>
       </li>
       <li>
         <div>
-          <b>ถึงร้าน → กด “ส่งสำเร็จ”</b>
-          <div class="d">ถ่ายรูปหลักฐานได้ · ถ้าส่งไม่ได้ บันทึก “ส่งไม่สำเร็จ” พร้อมเหตุผล</div>
+          <b>กด <span class="btn">รับงานนี้</span> แล้ว <span class="btn">เริ่มรอบส่ง</span></b>
+          <div class="d">ถ้ายังไม่เริ่มรอบ สำนักงานจะยังไม่เห็นว่ากำลังส่ง</div>
         </div>
       </li>
       <li>
         <div>
-          <b>ระบบเขียนกลับ TRCloud อัตโนมัติ</b>
-          <div class="d">เมื่อส่งสำเร็จ ระบบใส่ <span class="mono">[DISPATCH:DELIVERED] Dispatch ส่งสำเร็จ …</span> ลง <span class="mono">invoice_note</span> ของ SO/IV · ครั้งถัดไปที่ sync จะไม่ดึงบิลนี้มาซ้ำ</div>
-        </div>
-      </li>
-      <li>
-        <div>
-          <b>สำนักงานดูความคืบหน้า</b>
-          <div class="d">เมนู <span class="btn">ติดตาม</span> → แท็บ <b>ภาพรวมรถ</b> · รถที่มี Cartrack แสดง GPS สด</div>
+          <b>ถึงร้าน → กด <span class="btn">ส่งเสร็จ</span></b>
+          <div class="d">ถ่ายรูปได้ · ส่งไม่ได้กด <b>ส่งไม่สำเร็จ</b> พร้อมเหตุผล · อย่าปล่อยค้างเงียบ</div>
         </div>
       </li>
     </ol>
-    <figure class="figure">
-      <img src="docs/guide/guide-step4-delivered-marker.png" alt="คนขับกดส่งสำเร็จและระบบเขียนเครื่องหมายกลับ TRCloud" width="760" height="428" loading="lazy">
-      <figcaption>รูปที่ 4 — กดส่งสำเร็จบนมือถือ → ระบบเขียน <span class="mono">[DISPATCH:DELIVERED]</span> กลับ TRCloud · sync ครั้งถัดไปไม่โผล่ซ้ำ</figcaption>
-    </figure>
+    <div class="tip ok"><b>ไม่ต้องไปแก้บิลใน TRCloud</b> พอกดส่งเสร็จ ระบบบอก TRCloud ให้อัตโนมัติ บิลนั้นจะไม่กลับมาในคิวรอจัดส่งอีก</div>
   </section>
 
-  <!-- STEP 5 -->
   <section class="card">
-    <h2>จบวัน — เช็คว่าส่งครบ ไม่มีบิลซ้ำ</h2>
-    <p class="sub">สลับแท็บ รอจัดส่ง / ส่งแล้ว ให้ตัวเลขสมเหตุสมผล</p>
+    <h2>5) จบวัน — เช็ค 3 ข้อ</h2>
+    <p class="sub">เปิดหน้าวันนี้ แท็บรอจัดส่ง / ส่งแล้ว</p>
     <ul class="check">
-      <li>แท็บ <b>รอจัดส่ง</b> — ต้องเป็น 0 หรือรู้สาเหตุทุกใบที่ค้าง (เลื่อนวัน / ส่งไม่สำเร็จ)</li>
-      <li>แท็บ <b>ส่งแล้ว</b> — นับร้านที่ส่งสำเร็จวันนี้ เทียบกับที่จัดรถตอนเช้า</li>
-      <li>กรอง <b>บิลเก่า sync</b> — ดูบิลเก่าที่ปิดอัตโนมัติ ไม่ปนกับงานวันนี้</li>
-      <li>เมนู <b>ติดตาม</b> — รอบที่ยัง “กำลังส่ง” ต้องว่างหรือรู้ว่าค้างที่ไหน</li>
-      <li>ถ้ามีร้านค้าง: จัดรอบเย็น / เลื่อนวัน / บันทึกส่งไม่สำเร็จ — อย่าปล่อยเงียบในรอจัดส่ง</li>
+      <li>แท็บ <b>รอจัดส่ง</b> เป็น 0 หรือรู้สาเหตุทุกใบที่ค้าง (เลื่อนวัน / ส่งไม่สำเร็จ)</li>
+      <li>แท็บ <b>ส่งแล้ว</b> นับร้านที่ส่งครบ เทียบกับที่จัดรถตอนเช้า</li>
+      <li>เมนู <b>ติดตาม</b> ไม่มีรอบค้าง “กำลังส่ง” โดยไม่รู้ว่าอยู่ไหน</li>
     </ul>
-    <figure class="figure">
-      <img src="docs/guide/guide-step5-end-day.png" alt="เช็คจบวัน แท็บส่งแล้วและบิลเก่า sync" width="760" height="428" loading="lazy">
-      <figcaption>รูปที่ 5 — จบวัน: รอจัดส่ง = 0 · ส่งแล้วครบ · บิลเก่า sync แยกไม่รบกวนคิว</figcaption>
-    </figure>
-    <div class="tip warn"><b>กฎสั้น ๆ:</b> ร้านตอนเช้า (รอจัดส่ง) ≈ ส่งแล้ว + ส่งไม่สำเร็จ + ค้างที่รู้สาเหตุ — ห้ามมีร้านหายเงียบ · ห้ามบิลส่งแล้วโผล่ซ้ำหลัง sync</div>
+    <div class="tip warn"><b>ห้ามมีร้านหายเงียบ</b> ร้านที่ยังไม่ส่ง ต้องอยู่แท็บรอจัดส่ง หรือบันทึกส่งไม่สำเร็จไว้</div>
   </section>
 
-  <!-- QUICK MENU -->
   <section class="card">
-    <h2>เมนูที่ต้องใช้ประจำ</h2>
-    <p class="sub">จำแค่เมนูเหล่านี้ก็ส่งงานได้ทั้งวัน</p>
-    <div class="menu">
-      <div><b>วันนี้</b><span>รอจัดส่ง / ส่งแล้ว · เลือกเขต · จัดรถ</span></div>
-      <div><b>จัดรถ</b><span>วางแผน + ดูรอบส่งวันนี้</span></div>
-      <div><b>ติดตาม</b><span>แผนที่รถ GPS · ค้นหา PO/บิล</span></div>
-      <div><b>รายงาน</b><span>พิมพ์ใบส่ง · เปรียบเทียบ GPS</span></div>
-      <div><b>ตั้งค่า → TRCloud</b><span>ดึง SO · ดูผล sync</span></div>
-      <div><b>โหมดคนขับ</b><span>มุมบนขวา → ให้มือถือคนขับ</span></div>
-    </div>
+    <h2>คำถามที่เจอบ่อย</h2>
+    <ul class="faq">
+      <li>
+        <b>ทำไมร้านเดียวกันโผล่ 2 เขต?</b>
+        <span>ดูที่อยู่ ไม่ใช่ดูชื่อร้าน · คนละที่ส่ง = คนละเขต ต้องจัดทั้งสองจุด</span>
+      </li>
+      <li>
+        <b>แถวว่าง ไม่มีเลขบิล / มูลค่า โผล่มาทำไม?</b>
+        <span>กดรีเฟรช — ระบบจะลบแถวขยะออก ไม่ต้องจัดแถวนั้น</span>
+      </li>
+      <li>
+        <b>บิลที่ส่งแล้ว กลับมาในคิวอีกไหม?</b>
+        <span>ไม่ควร · พอกดส่งเสร็จ ระบบทำเครื่องหมายไว้ ตอนดึงบิลรอบใหม่จะข้ามใบนั้น</span>
+      </li>
+      <li>
+        <b>บิลเก่าโผล่ปนงานวันนี้ไหม?</b>
+        <span>บิลเก่าเกิน 2 วัน ระบบปิดให้อัตโนมัติ · ดูได้ที่แท็บส่งแล้ว กรอง “บิลเก่า sync”</span>
+      </li>
+      <li>
+        <b>พิมพ์ใบงานที่ไหน?</b>
+        <span>เมนู <b>จัดรถ</b> → <b>พิมพ์ใบงาน</b> · ระยะทาง เวลาออก-กลับ น้ำมัน ดูที่ <b>รายงาน → ดูย้อนหลัง</b></span>
+      </li>
+    </ul>
   </section>
 
   <p class="foot">
     <a href="./">← กลับระบบจัดส่ง</a>
-    · พิมพ์หน้านี้เก็บไว้ที่โต๊ะได้ (Ctrl+P)
-    · อัปเดต ส.ค. 2026
+    · พิมพ์เก็บที่โต๊ะได้ (Ctrl+P)
   </p>
 </div>
-
 </body>
 </html>
