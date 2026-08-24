@@ -1057,6 +1057,74 @@ const Planner = {
   // ค่าจอดรวม = จำนวนจุดที่เป็นห้าง × ค่าจอดต่อจุด (ร้านเดี่ยว = 0)
   autoParking(stops){ return (stops||[]).filter(s=>this.isMall(s)).length * this.parking(); },
   fuelCost(distanceKm, vehicle){ const rate=vehicle&&vehicle.FuelCostPerKm?Number(vehicle.FuelCostPerKm):this.fuelPerKm(); return +(distanceKm*rate).toFixed(2); },
+  /** นาทีจอดส่งต่อจุด (ขึ้นของ + เซ็นรับ) — รวมในเวลาวิ่งทั้งรอบ */
+  serviceMinPerStop(){ return Number(setting('SERVICE_MIN_PER_STOP', 12)) || 12; },
+  driveMinForKm(km){ const sp = this.speed() || 30; return Math.max(0, (Number(km) || 0) / sp * 60); },
+  /** ไทม์ไลน์ทีละจุด: ออกคลัง → ถึงจุด · กม. · จอด · ออกไปจุดถัดไป → กลับคลัง */
+  buildStopTimeline(route, stops){
+    const wh = warehouse();
+    const seq = this.enrichStopCoords(stops || [], Store.data.deliveries, Store.data.customers)
+      .slice()
+      .sort((a, b) => (Number(a.StopOrder) || 0) - (Number(b.StopOrder) || 0));
+    const dwell = this.serviceMinPerStop();
+    let startMs;
+    if (route && route.GpsStartedAt) {
+      startMs = new Date(route.GpsStartedAt).getTime();
+    } else {
+      const day = String((route && route.DeliveryDate) || Store.date || '').slice(0, 10);
+      const h = this.workStartHour();
+      startMs = new Date(day + 'T' + String(h).padStart(2, '0') + ':00:00').getTime();
+    }
+    if (!Number.isFinite(startMs)) startMs = Date.now();
+    const events = [];
+    let t = startMs;
+    let prev = { lat: wh.lat, lng: wh.lng };
+    events.push({
+      kind: 'depart_wh', label: 'ออกจากคลัง', place: wh.name || 'คลัง',
+      at: t, km: 0, dwellMin: 0, leaveAt: t,
+    });
+    seq.forEach((s, i) => {
+      let leg = Number(s._distPrev ?? s.DistanceFromPrevious);
+      if (!Number.isFinite(leg) || leg < 0) {
+        leg = this.hasCoords(s)
+          ? haversine(prev.lat, prev.lng, +s.Latitude, +s.Longitude)
+          : 0;
+      }
+      leg = +Number(leg).toFixed(1);
+      const driveMin = this.driveMinForKm(leg);
+      t += driveMin * 60000;
+      const arriveAt = t;
+      const leaveAt = arriveAt + dwell * 60000;
+      events.push({
+        kind: 'stop',
+        order: Number(s.StopOrder) || (i + 1),
+        label: 'จุด ' + (Number(s.StopOrder) || (i + 1)),
+        place: s.CustomerName || '—',
+        address: s.Address || '',
+        deliveryId: s.DeliveryID,
+        at: arriveAt,
+        km: leg,
+        dwellMin: dwell,
+        leaveAt,
+      });
+      t = leaveAt;
+      if (this.hasCoords(s)) prev = { lat: +s.Latitude, lng: +s.Longitude };
+    });
+    const returnKm = +(haversine(prev.lat, prev.lng, wh.lat, wh.lng)).toFixed(1);
+    const returnDrive = this.driveMinForKm(returnKm);
+    t += returnDrive * 60000;
+    events.push({
+      kind: 'return_wh', label: 'กลับถึงคลัง', place: wh.name || 'คลัง',
+      at: t, km: returnKm, dwellMin: 0, leaveAt: t,
+    });
+    const totalKm = +(events.reduce((n, e) => n + (Number(e.km) || 0), 0)).toFixed(1);
+    const totalMin = Math.round((t - startMs) / 60000);
+    return {
+      events, startMs, endMs: t, totalKm, totalMin, dwell,
+      speed: this.speed(),
+      startSource: route && route.GpsStartedAt ? 'gps' : 'plan',
+    };
+  },
   extAmount(v, distanceKm){ const rate=Number(v&&v.Rate)||0; return v&&v.RateType==='PER_KM' ? +(rate*distanceKm).toFixed(2) : +rate; },
   // เรียงรถว่างใกล้คลังก่อน (ไม่ใช้ความจุกล่อง)
   sortByWh(list){
@@ -1132,8 +1200,8 @@ const Planner = {
     const returnKm = haversine(cur.lat,cur.lng,wh.lat,wh.lng);
     const dist = outbound + returnKm;
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
-    const serviceMin = seq.length*12;
-    const durationMin = Math.round(dist/this.speed()*60 + serviceMin);
+    const serviceMin = seq.length * this.serviceMinPerStop();
+    const durationMin = Math.round(dist / this.speed() * 60 + serviceMin);
     return {
       distance:+dist.toFixed(1), outboundKm:+outbound.toFixed(1), returnKm:+returnKm.toFixed(1),
       boxes, stops:seq.length, durationMin, source:'straight'
@@ -1154,7 +1222,7 @@ const Planner = {
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
     return {
       distance:r.distance, outboundKm, returnKm,
-      boxes, stops:seq.length, durationMin:r.durationMin + seq.length*12,
+      boxes, stops:seq.length, durationMin:r.durationMin + seq.length*this.serviceMinPerStop(),
       geometry:r.geometry, source:'osrm', legsKm:r.legsKm
     };
   },

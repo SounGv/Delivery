@@ -1471,10 +1471,131 @@ function routeCard(r){
     </div></div>`;
 }
 function rItem(l,v){ return `<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px"><div class="small muted">${l}</div><div class="strong" style="font-size:13.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</div></div>`; }
+function fmtClock(ms){
+  if (!ms || !Number.isFinite(ms)) return '—';
+  try {
+    return new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch (_) { return '—'; }
+}
+async function showRouteTimelineModal(route){
+  if (!route) return;
+  let stops = [];
+  try { stops = await API.get('getRouteStops', { routeId: route.RouteID }); } catch (_) {}
+  if (!stops.length) {
+    stops = (Store.data.deliveries || []).filter(d => String(d.RouteID) === String(route.RouteID)).map((d, i) => ({
+      StopOrder: i + 1, DeliveryID: d.DeliveryID, CustomerName: d.CustomerName, BranchName: d.BranchName,
+      Address: d.Address, Latitude: d.Latitude, Longitude: d.Longitude, BoxQty: d.BoxQty || 0,
+      DistanceFromPrevious: d.DistanceFromPrevious,
+    }));
+  }
+  // เติมระยะขาต่อขาจากแผนที่ถ้ายังไม่มี
+  const needLegs = stops.some(s => !(Number(s.DistanceFromPrevious) > 0) && !(Number(s._distPrev) > 0));
+  if (needLegs && stops.length) {
+    try {
+      const calc = await Planner.metricsForStops(stops, Store.data.deliveries, Store.data.customers);
+      if (calc && calc.metrics) stops = calc.seq.length ? calc.seq : stops;
+    } catch (_) {}
+  }
+  const tl = Planner.buildStopTimeline(route, stops);
+  const startNote = tl.startSource === 'gps'
+    ? 'เริ่มจากเวลา GPS จริง'
+    : 'เริ่มจากเวลาเริ่มงานประมาณ ' + String(Planner.workStartHour()).padStart(2, '0') + ':00';
+  const rows = tl.events.map(e => {
+    if (e.kind === 'depart_wh') {
+      return `<tr>
+        <td class="c"><span class="badge b-green">ออก</span></td>
+        <td class="tab strong">${fmtClock(e.at)}</td>
+        <td colspan="2"><b>ออกจากคลัง</b><div class="small muted">${esc(e.place)}</div></td>
+        <td class="r muted">—</td>
+        <td class="r muted">—</td>
+        <td class="tab">${fmtClock(e.leaveAt)}</td>
+      </tr>`;
+    }
+    if (e.kind === 'return_wh') {
+      return `<tr>
+        <td class="c"><span class="badge b-blue">กลับ</span></td>
+        <td class="tab strong">${fmtClock(e.at)}</td>
+        <td colspan="2"><b>กลับถึงคลัง</b><div class="small muted">${esc(e.place)} · จากจุดสุดท้าย ${num1(e.km)} กม.</div></td>
+        <td class="r tab">${num1(e.km)}</td>
+        <td class="r muted">—</td>
+        <td class="tab muted">—</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td class="c"><span class="stop-num" style="width:26px;height:26px;font-size:12px;background:#2563EB;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff">${int(e.order)}</span></td>
+      <td class="tab strong">${fmtClock(e.at)}</td>
+      <td><b>${esc(e.place)}</b>${e.address ? `<div class="small muted">${esc(shortAddr(e.address, 56))}</div>` : ''}</td>
+      <td class="small muted">ถึง → จอดส่ง → ออกไปจุดถัดไป</td>
+      <td class="r tab">${num1(e.km)}</td>
+      <td class="r tab">${int(e.dwellMin)} น.</td>
+      <td class="tab strong">${fmtClock(e.leaveAt)}</td>
+    </tr>`;
+  }).join('');
+  const m = modal({
+    wide: true,
+    title: 'ไทม์ไลน์รอบส่ง — ' + esc(route.RouteID),
+    body: `
+      <div class="notice info mb14"><i data-lucide="clock"></i><div>
+        ${esc(startNote)} · ความเร็วเฉลี่ย ${num1(tl.speed)} กม./ชม. · จอดส่งจุดละ ${int(tl.dwell)} นาที<br>
+        รวมประมาณ <b>${num1(tl.totalKm)} กม.</b> · <b>${Planner.fmtDur(tl.totalMin)}</b>
+        · รถ ${esc(tripVehicleLabel(route))} · คนขับ ${esc(route.DriverName || '—')}
+      </div></div>
+      <div class="tbl-wrap scrolly"><table class="tbl">
+        <thead><tr>
+          <th></th><th>ถึง</th><th>สถานที่</th><th>หมายเหตุ</th>
+          <th class="r">กม.</th><th class="r">จอด</th><th>ออก</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <p class="small muted" style="margin:10px 0 0">กม. = ระยะจากจุดก่อนหน้า · จอด = เวลาส่งของที่ร้าน · เวลาเป็นประมาณการ (หรืออิง GPS ถ้ามีเวลาออกจริง)</p>
+    `,
+    foot: `<button class="btn" id="tlClose">ปิด</button>
+      <button class="btn btn-primary" id="tlPrint"><i data-lucide="printer"></i>พิมพ์ไทม์ไลน์</button>`,
+  });
+  el('tlClose').onclick = m.close;
+  el('tlPrint').onclick = () => {
+    const body = `
+      <div class="kv">
+        <div><span>รอบส่ง:</span> <b>${esc(route.RouteID)}</b></div>
+        <div><span>วันที่:</span> <b>${thDate(route.DeliveryDate)}</b></div>
+        <div><span>รถ:</span> <b>${esc(tripVehicleLabel(route))}</b></div>
+        <div><span>คนขับ:</span> <b>${esc(route.DriverName || '—')}</b></div>
+        <div><span>รวม:</span> <b>${num1(tl.totalKm)} กม. · ${Planner.fmtDur(tl.totalMin)}</b></div>
+        <div><span>จอด/จุด:</span> <b>${int(tl.dwell)} นาที</b></div>
+      </div>
+      <div class="sec-title">ไทม์ไลน์ทีละจุด</div>
+      <table><thead><tr><th>#</th><th>ถึง</th><th>สถานที่</th><th class="r">กม.</th><th class="r">จอด</th><th>ออก</th></tr></thead>
+      <tbody>${tl.events.map(e => {
+        if (e.kind === 'depart_wh') return `<tr><td>ออก</td><td>${fmtClock(e.at)}</td><td>คลัง · ${esc(e.place)}</td><td class="r">—</td><td class="r">—</td><td>${fmtClock(e.leaveAt)}</td></tr>`;
+        if (e.kind === 'return_wh') return `<tr><td>กลับ</td><td>${fmtClock(e.at)}</td><td>คลัง · ${esc(e.place)}</td><td class="r">${num1(e.km)}</td><td class="r">—</td><td>—</td></tr>`;
+        return `<tr><td>${int(e.order)}</td><td>${fmtClock(e.at)}</td><td>${esc(e.place)}</td><td class="r">${num1(e.km)}</td><td class="r">${int(e.dwellMin)} น.</td><td>${fmtClock(e.leaveAt)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+    Printer.open('ไทม์ไลน์รอบส่ง — ' + route.RouteID, rSize(), body);
+  };
+}
 async function openRouteDetail(id){
   const stops = await API.get('getRouteStops',{routeId:id});
   const r = (Store.data.routes||[]).find(x=>x.RouteID===id)||{};
+  let tlHtml = '';
+  try {
+    const tl = Planner.buildStopTimeline(r, stops);
+    tlHtml = `<div class="card mb14" style="padding:12px 14px">
+      <div class="flex between aic mb8"><span class="h-card" style="font-size:14px">ไทม์ไลน์ประมาณการ</span>
+        <button type="button" class="btn btn-sm" id="rdTimeline"><i data-lucide="clock"></i>ดูเต็ม</button></div>
+      <div class="small muted" style="margin-bottom:8px">ออก ${fmtClock(tl.startMs)} · รวม ${num1(tl.totalKm)} กม. · ${Planner.fmtDur(tl.totalMin)} · จอดจุดละ ${int(tl.dwell)} น.</div>
+      <div class="scrolly" style="max-height:160px">${tl.events.filter(e=>e.kind==='stop').map(e=>
+        `<div class="flex between aic" style="padding:5px 0;border-bottom:1px solid #F3F5F8;gap:8px;font-size:13px">
+          <span class="mono muted">#${int(e.order)}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.place)}</span>
+          <span class="tab">${fmtClock(e.at)}</span>
+          <span class="muted">${num1(e.km)} กม.</span>
+          <span class="muted">จอด ${int(e.dwellMin)} น.</span>
+          <span class="tab">ออก ${fmtClock(e.leaveAt)}</span>
+        </div>`).join('')}</div>
+    </div>`;
+  } catch (_) {}
   const m = modal({ wide:true, title:'รายละเอียด '+id, body:`
+    ${tlHtml}
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
       <div><div id="rdMap" class="map" style="height:340px"></div></div>
       <div>
@@ -1488,6 +1609,7 @@ async function openRouteDetail(id){
       </div></div>
   `, foot:`<button class="btn btn-primary" id="rdClose">ปิด</button>` });
   el('rdClose').onclick=m.close;
+  const rdTl = el('rdTimeline'); if (rdTl) rdTl.onclick = () => { m.close(); showRouteTimelineModal(r); };
   setTimeout(()=>{ if(!el('rdMap'))return; const wh=warehouse(); const mp=MapUtil.make('rdMap',wh); MapUtil.whMarker(mp,wh); const pts=[[wh.lat,wh.lng]]; stops.forEach(s=>{ if(s.Latitude){MapUtil.stopMarker(mp,s,s.StopOrder,'#2563EB'); pts.push([+s.Latitude,+s.Longitude]);} }); if(stops.length){const line=[[wh.lat,wh.lng],...stops.map(s=>[+s.Latitude,+s.Longitude]),[wh.lat,wh.lng]]; L.polyline(line,{color:'#6f9e0a',weight:4}).addTo(mp);} if(pts.length>1)mp.fitBounds(pts,{padding:[25,25]}); icons(); },80);
 }
 
@@ -2115,6 +2237,7 @@ ROUTES.reports = async function(view){
     el('rDetail').innerHTML = reportDetail(type, last).html; icons();
     $$('[data-note]',view).forEach(b=>b.onclick=()=>printRouteNote((last.routes||[]).find(x=>x.RouteID===b.dataset.note)));
     $$('[data-track]',view).forEach(b=>b.onclick=()=>{ const r=(last.routes||[]).find(x=>x.RouteID===b.dataset.track); if(r) showRouteTrackModal(r); });
+    $$('[data-timeline]',view).forEach(b=>b.onclick=()=>{ const r=(last.routes||[]).find(x=>x.RouteID===b.dataset.timeline); if(r) showRouteTimelineModal(r); });
   }
   el('rGo').onclick=build;
   el('rType').onchange=renderDetail;
@@ -2165,7 +2288,7 @@ function reportDetail(type, rep){
         <th>รอบส่ง</th><th>วันที่</th><th>รถ</th><th>คนขับ</th><th>บิล / ร้าน</th>
         <th>ออก</th><th>กลับ</th>
         <th class="r">กม.GPS</th><th class="r">ลิตร</th><th class="r">น้ำมัน ฿</th><th class="r">ใบเสร็จ</th>
-        <th class="r">เวลา</th><th>สถานะ</th><th class="r">แผนที่</th>
+        <th class="r">เวลา</th><th>สถานะ</th><th class="r">ดู</th>
       </tr></thead><tbody>${routes.map(r=>{
         const gpsFuel = routeGpsFuelEst(r);
         const liters = fuelLitersFromBaht(gpsFuel);
@@ -2184,7 +2307,10 @@ function reportDetail(type, rep){
           <td class="r tab">${receipt ? money(receipt) : '—'}</td>
           <td class="r tab small">${r.GpsDurationMin ? int(r.GpsDurationMin)+' น.' : '—'}</td>
           <td>${dstatusBadge(r.Status)}</td>
-          <td class="r">${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="ดูเส้นทางที่วน"><i data-lucide="route"></i></button>`:'<span class="muted small">ไม่มี GPS</span>'}</td>
+          <td class="r"><div class="flex gap8" style="justify-content:flex-end">
+            <button class="btn btn-sm" data-timeline="${esc(r.RouteID)}" title="ไทม์ไลน์ทีละจุด"><i data-lucide="clock"></i></button>
+            ${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="ดูเส้นทางที่วน"><i data-lucide="route"></i></button>`:'<span class="muted small">—</span>'}
+          </div></td>
         </tr>`;
       }).join('')||`<tr><td colspan="14">${emptyState('ไม่มีรอบส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
     return { html, rows, filename:'report_route_history', title:'รายงานย้อนหลัง รถ · บิล · GPS' };
@@ -2216,7 +2342,11 @@ function reportDetail(type, rep){
   const rows = routes.map(r=>({ 'รอบส่ง':r.RouteID, 'วันที่':r.DeliveryDate, 'ประเภท':r.RouteType==='EXTERNAL_VEHICLE'?'รถภายนอก':'รถบริษัท', 'คนขับ':r.DriverName||'', 'จุด':Number(r.TotalStops)||0, 'กล่อง':Number(r.TotalBoxes)||0, 'ระยะทาง':Number(r.TotalDistance)||0, 'เวลาวิ่ง (นาที)':Number(r.EstimatedDuration)||0, 'ต้นทุน':Number(r.EstimatedTotalCost)||0, 'สถานะ':(DSTATUS[r.Status]||{}).label||r.Status }));
   const hasTrack = r => r.Status==='In Progress' || r.Status==='Completed';
   const html=`<div class="card mt16"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>รอบส่ง</th><th>วันที่</th><th>ประเภท</th><th>คนขับ</th><th class="r">จุด</th><th class="r">กล่อง</th><th class="r">ระยะทาง</th><th class="r">เวลาวิ่ง</th><th class="r">ต้นทุน</th><th>สถานะ</th><th class="r">ดู</th></tr></thead>
-    <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td><td class="r tab">${num1(r.TotalDistance)}</td><td class="r tab">${r.EstimatedDuration?int(r.EstimatedDuration)+' น.':'—'}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td><td class="r"><div class="flex gap8" style="justify-content:flex-end">${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="เส้นทางจริง + เวลาจอด"><i data-lucide="route"></i></button>`:''}<button class="btn btn-sm" data-note="${esc(r.RouteID)}" title="พิมพ์"><i data-lucide="printer"></i></button></div></td></tr>`).join('')||`<tr><td colspan="11">${emptyState('ไม่มีรอบส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
+    <tbody>${routes.map(r=>`<tr><td class="mono strong">${esc(r.RouteID)}</td><td class="small">${thDate(r.DeliveryDate)}</td><td>${r.RouteType==='EXTERNAL_VEHICLE'?'ภายนอก':'บริษัท'}</td><td>${esc(r.DriverName||'')}</td><td class="r tab">${int(r.TotalStops)}</td><td class="r tab">${int(r.TotalBoxes)}</td><td class="r tab">${num1(r.TotalDistance)}</td><td class="r tab">${r.EstimatedDuration?int(r.EstimatedDuration)+' น.':'—'}</td><td class="r tab strong">${money(r.EstimatedTotalCost)}</td><td>${dstatusBadge(r.Status)}</td><td class="r"><div class="flex gap8" style="justify-content:flex-end">
+      <button class="btn btn-sm" data-timeline="${esc(r.RouteID)}" title="ไทม์ไลน์ทีละจุด"><i data-lucide="clock"></i></button>
+      ${hasTrack(r)?`<button class="btn btn-sm" data-track="${esc(r.RouteID)}" title="เส้นทางจริง + เวลาจอด"><i data-lucide="route"></i></button>`:''}
+      <button class="btn btn-sm" data-note="${esc(r.RouteID)}" title="พิมพ์ใบงาน"><i data-lucide="printer"></i></button>
+    </div></td></tr>`).join('')||`<tr><td colspan="11">${emptyState('ไม่มีรอบส่งในช่วงนี้')}</td></tr>`}</tbody></table></div></div>`;
   return { html, rows, filename:'report_routes', title:'รายงานรอบส่ง' };
 }
 function rSize(){ return (el('rSize')&&el('rSize').value)||'A4'; }
@@ -2371,6 +2501,7 @@ ROUTES.config = async function(view){
   // เติมค่าเวลาทำงานถ้ายังไม่มีใน settings (ใช้กับโลจิกแบ่งรถ)
   [['WORK_START_HOUR','9','cost','เริ่มงาน (ชั่วโมง 0–23) เช่น 9 = 09:00'],
    ['WORK_END_HOUR','18','cost','เลิกงาน (ชั่วโมง 0–23) เช่น 18 = 18:00'],
+   ['SERVICE_MIN_PER_STOP','12','cost','นาทีจอดส่งต่อจุด (ใช้ในไทม์ไลน์รายงาน)'],
    ['FUEL_PRICE_PER_LITER','33','cost','ราคาน้ำมัน (บาท/ลิตร) ใช้คำนวณลิตรในรายงานย้อนหลัง']].forEach(([Key,Value,Group,Label])=>{
     if(!settings.find(s=>s.Key===Key)) settings.push({ Key, Value:String(setting(Key,Value)), Group, Label });
   });
