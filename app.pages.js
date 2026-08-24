@@ -1451,9 +1451,17 @@ function splitFormAll(opt){
 }
 function splitCost(g,i){
   const sel=Plan.splitSel[i]||{};
-  const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===sel.vehId);
+  const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===sel.vehId) || g.v;
   const fuel=v?Planner.fuelCost(g.m.distance,v):0, toll=Number(sel.toll)||0, parking=Number(sel.parking)||0;
   return { fuel, toll, parking, total:+(fuel+toll+parking).toFixed(2) };
+}
+function gpsCostForPlate(plate){
+  const p = String(plate || '').replace(/\s+/g,'').toLowerCase();
+  if (!p) return null;
+  const r = (Store.data.routes || []).find(x => String(x.LicensePlate||'').replace(/\s+/g,'').toLowerCase() === p && Number(x.GpsDistanceKm) > 0);
+  if (!r) return null;
+  const km = Number(r.GpsDistanceKm) || 0;
+  return { km, baht: GpsTrack.fuelEst(km, r), src: gpsSourceLabel(r.GpsSource) };
 }
 function splitCostBoxAll(opt){
   const rows = opt.split.map((g,i)=>{
@@ -1461,23 +1469,26 @@ function splitCostBoxAll(opt){
     const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===((Plan.splitSel[i]||{}).vehId)) || g.v;
     const rate = v && v.FuelCostPerKm ? Number(v.FuelCostPerKm) : Planner.fuelPerKm();
     const km = Number(g.m.distance) || 0;
-    const bad = Number(g.m.badGeo) || (g.seq||[]).filter(s=>s._badGeo).length;
-    const warn = bad ? ` <span class="small" style="color:#B45309">· พิกัดผิด ${int(bad)} จุด ไม่นับกม.นั้น</span>` : '';
-    return `<div style="padding:8px 0;border-bottom:1px solid #F3F5F8">
-      <div class="flex between" style="font-size:13px"><span class="muted">${esc(planCarTitle(i, g))}</span><span class="tab">${money(c.total)} ฿</span></div>
-      <div class="small muted">น้ำมันประมาณ ${num1(km)} กม. × ${num1(rate)} ฿/กม. = ${money(c.fuel)} ฿${warn}</div>
+    const gps = gpsCostForPlate(v && v.LicensePlate);
+    const extra = (c.toll||0) + (c.parking||0);
+    const gpsLine = gps
+      ? `<div class="small" style="color:var(--brand-ink);margin-top:2px"><b>น้ำมันจริง GPS ${gps.src || 'Cartrack'}</b> ${num1(gps.km)} กม. × ${num1(rate)} ฿ = ${money(gps.baht)} ฿</div>`
+      : `<div class="small muted" style="margin-top:2px">น้ำมันจริง: รอ GPS Cartrack ของคันนี้ — จอดส่งแล้ววิ่งต่อ ระบบนับกม.แยกคัน ไม่รวมกับคันอื่น</div>`;
+    return `<div style="padding:10px 0;border-bottom:1px solid #F3F5F8">
+      <div class="flex between" style="font-size:13px"><span class="strong">${esc(planCarTitle(i, g))}</span><span class="tab">${gps ? money(gps.baht + extra) : money(c.fuel)} ฿</span></div>
+      <div class="small muted">ประมาณแผนที่ ${num1(km)} กม. × ${num1(rate)} ฿/กม. = ${money(c.fuel)} ฿ (ยังไม่ใช่ของจริง)</div>
+      ${gpsLine}
     </div>`;
   }).join('');
-  const total = opt.split.reduce((n,g,i)=>n+splitCost(g,i).total,0);
   return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-    <div class="strong mb8">สรุปต้นทุนประมาณ (${int(opt.split.length)} คัน)</div>
-    <div class="small muted mb14">อ้างอิงจากระยะทางประมาณ (ไป-กลับคลัง) × อัตราน้ำมันของรถ + ค่าทางด่วน/ค่าจอดตั้งต้น — ไม่ใช่ใบเสร็จจริง</div>
+    <div class="strong mb8">ต้นทุนน้ำมันแยกคัน</div>
+    <div class="small muted mb14">คิดคนละคันจากระยะที่รถคันนั้นวิ่งจริงผ่าน <b>GPS Cartrack</b> (คลัง → จุดส่ง → จอด → ออกวิ่งต่อ → จุดถัดไป → กลับคลัง) ไม่เอากม.คันอื่นมารวม<br>
+    ตอนจัดรถยังไม่วิ่ง ตัวเลขแผนที่เป็นแค่ประมาณ — ราคาจริงดูหลังรถกลับ ที่รายงานย้อนหลัง</div>
     ${rows}
-    <div class="flex between" style="font-size:15px;margin-top:8px"><span class="strong">ต้นทุนรวมทั้งหมด</span><span class="strong tab" style="color:var(--brand-ink)">${money(total)} ฿</span></div>
   </div>`;
 }
 function empIdByName(name){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeName===name); return emp?emp.EmployeeID:''; }
-function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { vehId:g.v?g.v.VehicleID:'', driver, driverEmployeeId:empIdByName(driver), toll:Planner.toll(), parking:Planner.autoParking(g.seq) }; }
+function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { vehId:g.v?g.v.VehicleID:'', driver, driverEmployeeId:empIdByName(driver), toll:0, parking:Planner.autoParking(g.seq) }; }
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; runAutoPlan(); };
   $$('[data-kwant]').forEach(b => b.onclick = () => {
@@ -1771,8 +1782,8 @@ function routeCard(r){
       ${rItem('รถ',esc(r.VehicleName||r.ProviderName||'—'))}
       ${rItem('จุดส่ง',int(r.TotalStops)+' จุด')}
       ${rItem('กล่อง',int(r.TotalBoxes))}
-      ${rItem('ระยะทาง (ไป)',num1(r.TotalDistance)+' กม.')}
-      ${rItem('ต้นทุน',money(r.EstimatedTotalCost)+' ฿')}
+      ${rItem('กม.แผนที่',num1(r.TotalDistance)+' กม.')}
+      ${rItem(r.GpsDistanceKm ? 'น้ำมันจริง GPS' : 'น้ำมันประมาณ', r.GpsDistanceKm ? (money(routeGpsFuelEst(r))+' ฿') : (money(r.EstimatedFuelCost)+' ฿'))}
     </div></div>`;
 }
 function rItem(l,v){ return `<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px"><div class="small muted">${l}</div><div class="strong" style="font-size:13.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</div></div>`; }
@@ -2628,6 +2639,9 @@ function reportDetail(type, rep){
           <div>
             <div class="h-card" style="margin:0">${esc(tripVehicleLabel(r) || r.RouteID)} · ${esc(r.DriverName || 'ไม่ระบุคนขับ')}</div>
             <div class="small muted" style="margin-top:4px">${thDate(r.DeliveryDate)} · ${int(bills.length)} บิล · ${int(qty)} ชิ้น · ${esc(zones)}</div>
+            ${r.GpsDistanceKm
+              ? `<div class="small" style="margin-top:4px">น้ำมันจริง Cartrack ${num1(r.GpsDistanceKm)} กม. × อัตราคันนี้ = <b>${money(routeGpsFuelEst(r))} ฿</b></div>`
+              : `<div class="small muted" style="margin-top:4px">น้ำมันจริงคิดจาก GPS Cartrack ของคันนี้หลังวิ่ง (จอดส่งแล้วออกต่อ)</div>`}
           </div>
           <button class="btn btn-sm" data-note="${esc(r.RouteID)}" title="พิมพ์คันนี้ถ้าต้องการ"><i data-lucide="printer"></i>พิมพ์คันนี้</button>
         </div>
@@ -2676,8 +2690,8 @@ function reportDetail(type, rep){
     const sumGps = routes.reduce((n,r)=>n+(Number(r.GpsDistanceKm)||0),0);
     const sumL = routes.reduce((n,r)=>{ const L=routeGpsFuelLiters(r); return n+(L||0); },0);
     const html=`    <div class="notice info mb14"><i data-lucide="satellite"></i><div>
-      ดูย้อนหลังว่ารถคันไหนวิ่งรอบไหน บิลไหน ออกกี่โมง กลับกี่โมง ระยะทางเท่าไร ใช้น้ำมันกี่ลิตร<br>
-      ระยะทาง/เวลา = GPS จริง (Cartrack เป็นหลัก) · ลิตร = ระยะ GPS × อัตราบาท/กม. ÷ ราคาน้ำมัน ${num1(priceL)} บาท/ลิตร · กดไอคอนแผนที่ดูเส้นทางที่วน
+      น้ำมันคิด <b>แยกคัน</b> จากกม.ที่รถคันนั้นวิ่งจริงผ่าน GPS Cartrack (คลัง → จุดส่ง → จอดขึ้นของ → วิ่งต่อจุดถัดไป → กลับคลัง) ไม่เอากม.คันอื่นมารวม<br>
+      ระยะทาง/เวลา = GPS รถ · ลิตร = กม.GPS × อัตราคันนั้น ÷ ราคาน้ำมัน ${num1(priceL)} บาท/ลิตร
     </div></div>
     <div class="card mt16"><div class="h-card mb14">ย้อนหลัง ${int(routes.length)} รอบ · GPS ${num1(sumGps)} กม. · น้ำมันประมาณ ${num1(sumL)} ลิตร</div>
       <div class="tbl-wrap scrolly"><table class="tbl"><thead><tr>
