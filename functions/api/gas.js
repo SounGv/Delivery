@@ -41,6 +41,7 @@ const GET_ACTIONS = {
   getBootstrap: reads.getBootstrap,
   getDashboardData: reads.getDashboardData,
   getDeliveries: reads.getDeliveries,
+  searchDeliveries: reads.searchDeliveries,
   getRoutes: reads.getRoutes,
   getRouteStops: reads.getRouteStops,
   getRouteGpsTrack: reads.getRouteGpsTrack,

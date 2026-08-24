@@ -354,6 +354,14 @@ const Mock = (() => {
         if(p.status)r=r.filter(x=>x.Status===p.status);
         return r;
       }
+      case 'searchDeliveries': {
+        const q = String(p.q || p.query || '').trim().toLowerCase();
+        if (!q || q.length < 2) return [];
+        return db.deliveries.filter(x => !x.IsDeleted && [x.PoNo, x.InvoiceNo, x.DeliveryID, x.Note, x.CustomerName]
+          .some(f => String(f || '').toLowerCase().includes(q)))
+          .sort((a, b) => String(b.DeliveryDate || '').localeCompare(String(a.DeliveryDate || '')))
+          .slice(0, Math.min(Number(p.limit) || 40, 80));
+      }
       case 'getRoutes': { let r=db.routes.filter(x=>!x.IsDeleted); if(p.date)r=r.filter(x=>x.DeliveryDate===p.date); return r; }
       case 'getRouteStops': return db.routeStops.filter(s=>!p.routeId||s.RouteID===p.routeId).sort((a,b)=>a.StopOrder-b.StopOrder);
       case 'getRouteGpsTrack': {
@@ -822,14 +830,14 @@ function buildNav(){
     {id:'planning',icon:'route',label:'จัดรถ'},
     {id:'livemap',icon:'map-pin',label:'ติดตาม'},
   ];
-  m.innerHTML = mItems.map(it=>`<a href="#/${it.id}" class="${Store.page===it.id?'active':''}"><i data-lucide="${it.icon}"></i>${it.label}</a>`).join('');
+  m.innerHTML = mItems.map(it=>`<a href="#/${it.id}" class="${(Store.page===it.id||Store.page==='tracking'&&it.id==='livemap')?'active':''}"><i data-lucide="${it.icon}"></i>${it.label}</a>`).join('');
   icons();
 }
 function navLink(it){
   if (it.external || it.href) {
     return `<a href="${esc(it.href || it.id)}" class="nav-item" target="_blank" rel="noopener"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`;
   }
-  return `<a href="#/${it.id}" class="nav-item ${Store.page===it.id?'active':''}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`;
+  return `<a href="#/${it.id}" class="nav-item ${(Store.page===it.id||Store.page==='tracking'&&it.id==='livemap')?'active':''}" data-nav="${it.id}"><i data-lucide="${it.icon}"></i><span>${esc(it.label)}</span></a>`;
 }
 
 function updateSync(){
@@ -1579,7 +1587,16 @@ function bindShell(){
   el('globalSearch').addEventListener('input', e=>{
     const v = e.target.value.trim().toLowerCase();
     clearTimeout(_searchT);
-    _searchT = setTimeout(()=>{ Store.search=v; if(['deliveries','planning','customers'].includes(Store.page)) render(); }, 250);
+    _searchT = setTimeout(()=>{ Store.search=v; if(['deliveries','planning','customers','dashboard'].includes(Store.page)) render(); }, 250);
+  });
+  el('globalSearch').addEventListener('keydown', e=>{
+    if (e.key !== 'Enter') return;
+    const q = e.target.value.trim();
+    if (!q || q.length < 2) return;
+    // Enter = ค้นหาย้อนหลังข้ามวัน (หน้าวันนี้กรองแค่วันที่เลือก)
+    Store.search = q.toLowerCase();
+    Store._trkQ = q;
+    location.hash = '#/tracking';
   });
 }
 /* ROUTES are registered in app.pages.js */

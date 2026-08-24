@@ -194,11 +194,17 @@ ROUTES.dashboard = async function(view){
               ${viewMode === 'done' ? `<td>${delStatusBadge(d)}</td>` : ''}
             </tr>`;
           }).join('')}</tbody>
-        </table>` : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขต / ชื่อร้าน / WALK-IN หรือรีเฟรชข้อมูล')}
+        </table>` : (Store.search
+          ? emptyState('ไม่มีงานในวันนี้ตามคำค้น','หน้านี้ดูแค่วันทำงานที่เลือก — บิลที่ส่งแล้ววันอื่นให้ค้นหาย้อนหลัง',
+              `<button type="button" class="btn btn-primary" id="delHistSearch"><i data-lucide="package-search"></i>ค้นหาย้อนหลัง</button>`)
+          : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขต / ชื่อร้าน / WALK-IN หรือรีเฟรชข้อมูล'))}
         </div>
       </div>
       <div class="m-only">
-        ${rows.length ? `<div class="job-card-list">${rows.map(d => delMobileCard(d, { viewMode })).join('')}</div>` : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขตหรือคำค้นหา')}
+        ${rows.length ? `<div class="job-card-list">${rows.map(d => delMobileCard(d, { viewMode })).join('')}</div>` : (Store.search
+          ? emptyState('ไม่มีงานในวันนี้ตามคำค้น','ลองเปลี่ยนวัน หรือค้นหาย้อนหลังข้ามวัน',
+              `<button type="button" class="btn btn-primary" id="delHistSearchMob"><i data-lucide="package-search"></i>ค้นหาย้อนหลัง</button>`)
+          : emptyState('ไม่มีงานตามตัวกรอง','ลองเปลี่ยนเขตหรือคำค้นหา'))}
       </div>
     </div>
     ${viewMode === 'queue' ? delSelectionBar(selN, selAmount) : ''}
@@ -225,6 +231,26 @@ ROUTES.dashboard = async function(view){
   };
   bindDelSearch(view.querySelector('#delSearch'));
   bindDelSearch(view.querySelector('#delSearchDesk'));
+  const goHistSearch = () => {
+    const q = String(Store.search || '').trim();
+    if (!q) return;
+    Store._trkQ = q;
+    location.hash = '#/tracking';
+  };
+  const histBtn = view.querySelector('#delHistSearch');
+  if (histBtn) histBtn.onclick = goHistSearch;
+  const histBtnMob = view.querySelector('#delHistSearchMob');
+  if (histBtnMob) histBtnMob.onclick = goHistSearch;
+  [view.querySelector('#delSearch'), view.querySelector('#delSearchDesk')].forEach(inp => {
+    if (!inp) return;
+    inp.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const q = inp.value.trim();
+      if (!q || rows.length) return;
+      Store.search = q.toLowerCase();
+      goHistSearch();
+    });
+  });
   const fn = view.querySelector('#fName');
   if (fn) {
     fn.oninput = () => {
@@ -1628,46 +1654,69 @@ async function openRouteDetail(id){
    PARCEL TRACKING — ค้นด้วยเลขบิล / PO / DeliveryID
    ================================================================ */
 function renderTrackingSearch(view){
+  const preset = String(Store._trkQ || Store.search || '').trim();
+  Store._trkQ = '';
   el('ltBody').innerHTML = `
     <div class="card mb14">
+      <div class="notice info mb14"><i data-lucide="info"></i><div>
+        ค้นหาย้อนหลังได้ทุกวัน — ใส่ <b>เลขบิล / PO / ชื่อร้าน</b> จะเจอทั้งรอส่งและส่งแล้ว
+      </div></div>
       <div class="flex gap8 wrap aic">
         <div class="search" style="flex:1;max-width:480px;margin:0">
           <i data-lucide="package-search"></i>
-          <input id="trkQ" placeholder="เลขบิล / PO / รหัสงาน เช่น BSUJR3L61970" autocomplete="off">
+          <input id="trkQ" placeholder="เช่น BSO260800295 หรือ PO หรือชื่อร้าน" value="${esc(preset)}" autocomplete="off">
         </div>
         <button class="btn btn-primary" id="trkGo"><i data-lucide="search"></i>ค้นหา</button>
       </div>
     </div>
-    <div id="trkResult">${emptyState('พิมพ์เลขบิล/PO แล้วกดค้นหา','ระบบจะแสดงสถานะการส่ง ตำแหน่ง GPS และประวัติการเช็คอิน')}</div>
+    <div id="trkResult">${preset ? loadingState('กำลังค้นหา…') : emptyState('พิมพ์เลขบิล/PO แล้วกดค้นหา','ค้นได้ข้ามวัน รวมบิลที่ส่งแล้ว')}</div>
   `;
   icons();
   const run = async ()=>{
-    const q = el('trkQ').value.trim().toLowerCase();
+    const q = el('trkQ').value.trim();
     if(!q){ toast('กรอกเลขบิล/PO ก่อน','warn'); return; }
     el('trkResult').innerHTML = loadingState('กำลังค้นหา…');
     try{
-      const dels = await API.get('getDeliveries');
-      const hits = dels.filter(d => [d.PoNo,d.InvoiceNo,d.DeliveryID,d.Note,d.CustomerName].some(f=>String(f||'').toLowerCase().includes(q))).slice(0,20);
-      if(!hits.length){ el('trkResult').innerHTML = emptyState('ไม่พบพัสดุ','ตรวจเลขบิล/PO อีกครั้ง'); icons(); return; }
+      const hits = await API.get('searchDeliveries', { q, limit: 40 });
+      if(!hits || !hits.length){
+        el('trkResult').innerHTML = emptyState('ไม่พบในระบบ','ตรวจเลขบิลอีกครั้ง หรือบิลนี้ยังไม่เคย sync เข้า Dispatch');
+        icons(); return;
+      }
       const routeIds = [...new Set(hits.map(h=>h.RouteID).filter(Boolean))];
       const stopsByRoute = {};
       await Promise.all(routeIds.map(rid=>API.get('getRouteStops',{routeId:rid}).then(s=>stopsByRoute[rid]=s).catch(()=>stopsByRoute[rid]=[])));
       const stopFor = d => (stopsByRoute[d.RouteID]||[]).find(s=>String(s.DeliveryID)===String(d.DeliveryID));
       Track.hits = hits; Track.stopFor = stopFor;
-      el('trkResult').innerHTML = hits.map(d=>trackCard(d, stopsByRoute[d.RouteID]||[])).join('');
-      $$('[data-print]',view).forEach(b=>b.onclick=()=>{ const d=hits.find(x=>x.DeliveryID===b.dataset.print); Printer.open('ใบติดตามพัสดุ','A5', trkDoc(d, stopFor(d))); });
+      el('trkResult').innerHTML = `<div class="small muted mb14">พบ ${int(hits.length)} รายการ (รวมวันอื่น / ส่งแล้ว)</div>`
+        + hits.map(d=>trackCard(d, stopsByRoute[d.RouteID]||[])).join('');
+      const trkBox = el('trkResult');
+      $$('[data-print]', trkBox).forEach(b=>b.onclick=()=>{ const d=hits.find(x=>x.DeliveryID===b.dataset.print); Printer.open('ใบติดตามพัสดุ','A5', trkDoc(d, stopFor(d))); });
+      $$('[data-goto-day]', trkBox).forEach(b=>b.onclick=async()=>{
+        const day = b.dataset.gotoDay;
+        if (!day) return;
+        Store.date = day;
+        setDateLabel();
+        await loadBootstrap();
+        location.hash = '#/dashboard';
+        render();
+      });
       icons();
     }catch(e){ el('trkResult').innerHTML = errorState(e.message,"renderLiveTracking(document.getElementById('view'),'search')"); icons(); }
   };
   el('trkGo').onclick = run;
   el('trkQ').addEventListener('keydown', e=>{ if(e.key==='Enter') run(); });
   el('trkQ').focus();
+  if (preset) run();
 }
 function trackCard(d, stops){
   const stop = stops.find(s=>String(s.DeliveryID)===String(d.DeliveryID));
   const checkedIn = stop && stop.CheckInTime;
   const done = d.Status==='Completed' || (stop && stop.Status==='Completed');
   const failed = d.Status==='Failed';
+  const day = String(d.DeliveryDate || '').slice(0, 10);
+  const dayBtn = day
+    ? `<button class="btn btn-sm" data-goto-day="${esc(day)}"><i data-lucide="calendar"></i>เปิดวัน ${thDate(day)}</button>`
+    : '';
   const steps = [
     { k:'สร้างงาน', t:d.CreatedAt, on:true },
     { k:'วางแผนรอบส่ง', t:d.RouteID?'':'', on:!!d.RouteID || ['Planned','Assigned','In Progress','Completed'].includes(d.Status), sub:d.RouteID||'' },
@@ -1678,9 +1727,11 @@ function trackCard(d, stops){
   return `<div class="card mb14">
     <div class="flex between aic wrap" style="margin-bottom:10px">
       <div><div class="flex aic gap8"><span class="mono strong" style="font-size:15px">${esc(d.PoNo||d.InvoiceNo||d.DeliveryID)}</span>${dstatusBadge(d.Status)}</div>
-        <div class="small muted" style="margin-top:3px">${esc(d.CustomerName)}${d.BranchName?' · '+esc(d.BranchName):''} · ${int(d.BoxQty)} กล่อง · ${thDate(d.DeliveryDate)}</div></div>
-      <div class="flex gap8">
+        <div class="small muted" style="margin-top:3px">${esc(d.CustomerName)}${d.BranchName?' · '+esc(d.BranchName):''} · ${int(d.BoxQty)} กล่อง · วันทำงาน ${thDate(d.DeliveryDate)}</div>
+        <div class="small muted">บิล ${esc(d.InvoiceNo||'—')} · PO ${esc(d.PoNo||'—')}</div></div>
+      <div class="flex gap8 wrap">
         ${d.RouteID?`<span class="badge b-blue">รอบส่ง ${esc(d.RouteID)}</span>`:''}
+        ${dayBtn}
         <button class="btn btn-sm" data-print="${esc(d.DeliveryID)}"><i data-lucide="printer"></i>พิมพ์</button>
       </div>
     </div>
