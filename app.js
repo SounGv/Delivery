@@ -1360,8 +1360,8 @@ const Planner = {
     return { metrics:m, options:opts, workDayMin:work, workLabel:workLbl };
   },
 
-  // แบ่งจุดส่งเป็น K กลุ่มตามทิศทาง (sweep bearing จากคลัง) — เท่า ๆ กันตามจำนวนจุด
-  // แล้วปรับขอบเขตให้ระยะรวมสั้น — คืน {seq,m,v,cost,sector,overtime,bills}
+  // แบ่งจุดส่งเป็น K กลุ่มตามทิศทาง/เขต (ถ้ามี) แล้วจับคู่รถให้เหมาะกับแต่ละกลุ่ม
+  // คืน {seq,m,v,cost,sector,overtime,bills}
   autoSplit(seq, vehicles){
     const wh = warehouse();
     const work = this.workDayMin();
@@ -1371,15 +1371,34 @@ const Planner = {
         sector:this.sectorLabel(s), overtime:mm.durationMin>work, bills:s.map(x=>({invoice:x.InvoiceNo||'', customer:x.CustomerName||'', branch:x.BranchName||'', boxes:Number(x.BoxQty)||0, id:x.DeliveryID})) }];
     }
     const K = vehicles.length;
+    const byDistrict = new Map();
+    (seq || []).forEach((s) => {
+      const key = String(s._district || '').trim() || '__none__';
+      if (!byDistrict.has(key)) byDistrict.set(key, []);
+      byDistrict.get(key).push(Object.assign({}, s));
+    });
     // clone + เรียงตามมุมจากคลัง → กลุ่มติดกันเป็น “ซ้าย/ขวา” ตามพื้นที่
-    const pts = seq.map(s=>Object.assign({},s)).sort((a,b)=>bearing(wh.lat,wh.lng,+a.Latitude,+a.Longitude)-bearing(wh.lat,wh.lng,+b.Latitude,+b.Longitude));
     const groups = Array.from({length:K},()=>[]);
-    // แบ่งจำนวนจุดให้ใกล้เคียงกัน (ไม่ใช้ความจุกล่อง)
-    const base = Math.floor(pts.length / K), rem = pts.length % K;
-    let idx=0;
-    for(let gi=0; gi<K; gi++){
-      const take = base + (gi < rem ? 1 : 0);
-      for(let t=0; t<take && idx<pts.length; t++) groups[gi].push(pts[idx++]);
+    // ถ้ามีหลายเขตเด่น ๆ ให้กระจายตามเขตก่อน เพื่อให้เส้นไม่ข้ามโซนเยอะ
+    if (byDistrict.size >= 2 && seq.length >= K * 2) {
+      const districts = Array.from(byDistrict.entries())
+        .sort((a, b) => b[1].length - a[1].length);
+      districts.forEach(([_, items], idx) => {
+        items.forEach((it) => groups[idx % K].push(it));
+      });
+      // จัดลำดับในแต่ละกลุ่มตามมุมจากคลังอีกครั้ง
+      for (let i = 0; i < groups.length; i++) {
+        groups[i] = groups[i].sort((a, b) => bearing(wh.lat, wh.lng, +a.Latitude, +a.Longitude) - bearing(wh.lat, wh.lng, +b.Latitude, +b.Longitude));
+      }
+    } else {
+      const pts = seq.map(s=>Object.assign({},s)).sort((a,b)=>bearing(wh.lat,wh.lng,+a.Latitude,+a.Longitude)-bearing(wh.lat,wh.lng,+b.Latitude,+b.Longitude));
+      // แบ่งจำนวนจุดให้ใกล้เคียงกัน (ไม่ใช้ความจุกล่อง)
+      const base = Math.floor(pts.length / K), rem = pts.length % K;
+      let idx=0;
+      for(let gi=0; gi<K; gi++){
+        const take = base + (gi < rem ? 1 : 0);
+        for(let t=0; t<take && idx<pts.length; t++) groups[gi].push(pts[idx++]);
+      }
     }
 
     const distOf = g => g.length ? this.metrics(this.order(g.map(x=>Object.assign({},x)))).distance : 0;
@@ -1402,9 +1421,30 @@ const Planner = {
       }
       if(!improved) break;
     }
+    // จับคู่รถที่อยู่ใกล้ centroid ของกลุ่มก่อน ลด deadhead route
+    const vehPool = (vehicles || []).slice();
+    const pickVehicleForGroup = (g) => {
+      if (!vehPool.length || !g.length) return null;
+      const ctr = g.reduce((acc, s) => {
+        acc.lat += +s.Latitude || 0;
+        acc.lng += +s.Longitude || 0;
+        return acc;
+      }, { lat: 0, lng: 0 });
+      ctr.lat /= g.length; ctr.lng /= g.length;
+      let best = 0; let bestDist = Infinity;
+      vehPool.forEach((v, i) => {
+        const d = haversine(
+          (+v.CurrentLatitude || wh.lat), (+v.CurrentLongitude || wh.lng),
+          ctr.lat, ctr.lng
+        );
+        if (d < bestDist) { bestDist = d; best = i; }
+      });
+      return vehPool.splice(best, 1)[0];
+    };
+
     return groups.map((g,i)=>{
       if(!g.length) return null;
-      const s=this.order(g), mm=this.metrics(s), v=vehicles[i];
+      const s=this.order(g), mm=this.metrics(s), v=pickVehicleForGroup(g) || vehicles[i];
       return {
         seq:s, m:mm, v, cost:this.companyCost(mm.distance, v),
         sector:this.sectorLabel(s), overtime:mm.durationMin>work,

@@ -336,6 +336,12 @@ ROUTES.dashboard = async function(view){
     handoffSelectionToPlan([...dPick.sel]);
     location.hash = '#/planning';
   };
+  const editSelBtn = view.querySelector('[data-act="dselEdit"]');
+  if (editSelBtn) editSelBtn.onclick = () => bulkEditSelectedDeliveries(view);
+  const priSelBtn = view.querySelector('[data-act="dselPriority"]');
+  if (priSelBtn) priSelBtn.onclick = () => bulkPrioritySelectedDeliveries(view);
+  const delSelBtn = view.querySelector('[data-act="dselDelete"]');
+  if (delSelBtn) delSelBtn.onclick = () => bulkDeleteSelectedDeliveries(view);
   const clr = view.querySelector('[data-act="dselClear"]'); if (clr) clr.onclick = () => { dPick.sel.clear(); dPick.districts.clear(); ROUTES.dashboard(view); };
 };
 
@@ -688,6 +694,9 @@ function delSelectionBar(selN, selAmount){
       ${selAmount > 0 ? `<div class="small muted">มูลค่ารวม ${money(selAmount)} บาท</div>` : `<div class="small muted">กดจัดรถรายการที่เลือก</div>`}
     </div>
     <div class="del-sel-actions">
+      <button class="btn btn-sm" data-act="dselEdit">แก้ไขที่เลือก</button>
+      <button class="btn btn-sm" data-act="dselPriority">ปรับด่วน/ปกติ</button>
+      <button class="btn btn-sm btn-danger" data-act="dselDelete">ลบที่เลือก</button>
       <button class="btn btn-sm" data-act="dselClear">ล้าง</button>
       <a class="btn btn-primary" href="#/planning" id="dselPlan">จัดรถอัตโนมัติ <i data-lucide="chevron-right"></i></a>
     </div>
@@ -876,6 +885,82 @@ function deliveryForm(d){
     if(isEdit) updateLocal('deliveries','updateDelivery',d.DeliveryID,data).then(()=>toast('แก้ไขงานส่งแล้ว','ok')).catch(()=>{});
     else       createLocal('deliveries','createDelivery',data).then(()=>toast('เพิ่มงานส่งแล้ว','ok')).catch(()=>{});
   };
+}
+
+function selectedDispatchableRows(){
+  const open = Store.data.deliveries || [];
+  return normalizeDeliveries(open.filter(d => dPick.sel.has(d.DeliveryID) && DelView.isNoRoute(d)));
+}
+
+function bulkEditSelectedDeliveries(view){
+  const rows = selectedDispatchableRows();
+  if (!rows.length) { toast('ยังไม่ได้เลือกรายการที่แก้ไขได้', 'warn'); return; }
+  if (rows.length === 1) { deliveryForm(rows[0]); return; }
+  const m = modal({
+    title: `แก้ไขงานส่งที่เลือก (${int(rows.length)} รายการ)`,
+    body: `
+      <div class="notice info mb14"><i data-lucide="info"></i><div>ใช้สำหรับเตรียมงานก่อนกดจัดรถอัตโนมัติ</div></div>
+      <div class="field"><label class="label">ความเร่งด่วน</label>
+        <select class="select" id="bulkPri">
+          <option value="">— ไม่เปลี่ยน —</option>
+          ${Object.keys(PRIORITY).map(p=>`<option value="${p}">${PRIORITY[p].label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label class="label">กำหนดส่งของ (Due Date)</label><input class="input" type="date" id="bulkDue"></div>
+      <div class="field"><label class="label">หมายเหตุ (เติมท้าย)</label><textarea class="textarea" id="bulkNote" placeholder="เช่น บิลด่วนลูกค้าโทรตาม"></textarea></div>
+    `,
+    foot:`<button class="btn" id="bulkCancel">ยกเลิก</button><button class="btn btn-primary" id="bulkSave"><i data-lucide="check"></i>บันทึกที่เลือก</button>`
+  });
+  el('bulkCancel').onclick = m.close;
+  el('bulkSave').onclick = async () => {
+    const pri = el('bulkPri').value;
+    const due = el('bulkDue').value;
+    const note = String(el('bulkNote').value || '').trim();
+    if (!pri && !due && !note) { toast('ยังไม่ได้ระบุข้อมูลที่ต้องแก้ไข', 'warn'); return; }
+    const ops = rows.map((d) => {
+      const patch = {};
+      if (pri) patch.Priority = pri;
+      if (due) patch.DueDate = due;
+      if (note) patch.Note = [String(d.Note || '').trim(), note].filter(Boolean).join(' | ');
+      return updateLocal('deliveries', 'updateDelivery', d.DeliveryID, patch);
+    });
+    m.close();
+    await Promise.allSettled(ops);
+    toast(`แก้ไขแล้ว ${int(rows.length)} รายการ`, 'ok');
+    ROUTES.dashboard(view);
+  };
+}
+
+function bulkPrioritySelectedDeliveries(view){
+  const rows = selectedDispatchableRows();
+  if (!rows.length) { toast('ยังไม่ได้เลือกรายการ', 'warn'); return; }
+  const m = modal({
+    title: `ปรับความเร่งด่วน (${int(rows.length)} รายการ)`,
+    body: `<div class="field"><label class="label">ความเร่งด่วนใหม่</label>
+      <select class="select" id="bulkPriOnly">
+        ${Object.keys(PRIORITY).map(p=>`<option value="${p}">${PRIORITY[p].label}</option>`).join('')}
+      </select></div>`,
+    foot:`<button class="btn" id="bulkPriCancel">ยกเลิก</button><button class="btn btn-primary" id="bulkPriSave"><i data-lucide="check"></i>บันทึก</button>`
+  });
+  el('bulkPriCancel').onclick = m.close;
+  el('bulkPriSave').onclick = async () => {
+    const pri = el('bulkPriOnly').value || 'NORMAL';
+    m.close();
+    await Promise.allSettled(rows.map(d => updateLocal('deliveries', 'updateDelivery', d.DeliveryID, { Priority: pri })));
+    toast(`ปรับเป็น "${PRIORITY[pri].label}" แล้ว`, 'ok');
+    ROUTES.dashboard(view);
+  };
+}
+
+function bulkDeleteSelectedDeliveries(view){
+  const rows = selectedDispatchableRows();
+  if (!rows.length) { toast('ยังไม่ได้เลือกรายการ', 'warn'); return; }
+  confirmDialog(`ลบงานส่งที่เลือก ${int(rows.length)} รายการ ? (soft-delete กู้คืนได้)`, async ()=>{
+    await Promise.allSettled(rows.map(d => deleteLocal('deliveries', 'deleteDelivery', d.DeliveryID, { id: d.DeliveryID })));
+    rows.forEach(d => dPick.sel.delete(d.DeliveryID));
+    toast('ลบรายการที่เลือกแล้ว', 'ok');
+    ROUTES.dashboard(view);
+  }, { danger:true, yes:'ลบที่เลือก' });
 }
 
 /* ================================================================
@@ -1080,13 +1165,23 @@ async function runAutoPlan(){
   if (dec) { dec.innerHTML = decisionLoading(); icons(); }
   const btn=el('autoPlan'); if(btn){btn.disabled=true; btn.innerHTML='<i data-lucide="loader-2" style="animation:spin 1s linear infinite"></i>กำลังวิเคราะห์…'; icons();}
   const drafts=normalizeDeliveries((Store.data.deliveries||[]).filter(d=>Plan.selected.has(d.DeliveryID)));
-  const enriched=Planner.enrichStopCoords(drafts, Store.data.deliveries, Store.data.customers);
+  const enriched=Planner.enrichStopCoords(drafts, Store.data.deliveries, Store.data.customers)
+    .map(d => Object.assign({}, d, { _district: DelView.zone(d) || 'ไม่ระบุเขต' }));
   const seq=Planner.order(enriched.filter(d=>Planner.hasCoords(d)));
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
-  Plan.result={seq,...out};
+  const districts = new Set(seq.map(s => s._district).filter(Boolean));
+  const avail = Planner.sortByWh(Planner.availableVehicles());
+  let split = [];
+  if (avail.length >= 2 && seq.length >= 10 && districts.size >= 2) {
+    const kByLoad = Planner.suggestK(seq, out.metrics, avail.length);
+    const kByZone = Math.min(avail.length, Math.max(2, Math.min(districts.size, Math.ceil(seq.length / 8))));
+    const k = Math.min(avail.length, Math.max(kByLoad, kByZone), seq.length);
+    split = Planner.autoSplit(seq, avail.slice(0, k));
+  }
+  Plan.result={seq, split, ...out};
   Plan.chosen = 'A';
-  Plan.splitSel = [];
+  Plan.splitSel = split.map(g => splitSelFor(g));
   const rec = Planner.recommendVehicle() || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
   const emp = rec && (Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
   Plan.sel = { type:'COMPANY', vehId: rec?rec.VehicleID:'', extId:(Planner.availableExternal()[0]||{}).ExternalVehicleID||'',
@@ -1132,10 +1227,14 @@ function displayBillRow(s, i){
 function renderDecision(){
   const dec = el('decision');
   if (!dec || !Plan.result) return;
-  const { seq, metrics: m } = Plan.result;
+  const { seq, metrics: m, split } = Plan.result;
   const seqHtml = (seq || []).map((s, i) => displayBillRow(s, i + 1)).join('');
+  const splitReady = Array.isArray(split) && split.length >= 2;
   const timeWarn = m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
+  const splitNote = splitReady
+    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบแยกเป็น ${int(split.length)} รอบตามเขต/ทิศทางอัตโนมัติแล้ว กดยืนยันครั้งเดียวเพื่อบันทึกทุกรอบ</div></div>`
+    : '';
 
   dec.innerHTML = `
     <div class="flex between aic mb14">
@@ -1143,21 +1242,29 @@ function renderDecision(){
       <button class="btn btn-sm" id="replan" type="button"><i data-lucide="rotate-cw"></i>เรียงลำดับใหม่</button>
     </div>
     ${timeWarn}
+    ${splitNote}
     <div class="plan-driver-step">
-      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>เลือกรถ + คนขับ</span></div>
-      <div class="plan-driver-box" id="driverFormBox">${selForm()}</div>
+      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'เลือกรถ + คนขับรายรอบ' : 'เลือกรถ + คนขับ'}</span></div>
+      <div class="plan-driver-box" id="driverFormBox">${splitReady ? splitFormAll(Plan.result) : selForm()}</div>
     </div>
+    ${splitReady ? `<div id="costBox" style="margin-top:12px">${splitCostBoxAll(Plan.result)}</div>` : ''}
     <div class="plan-stop-section">
       <div class="small strong muted mb8">รายการบิลที่จัด (${int(m.stops)})</div>
       <div class="plan-stop-list scrolly">${seqHtml || '<div class="muted small">ไม่มีบิล</div>'}</div>
     </div>
-    <button class="btn btn-primary btn-block btn-lg mt16" id="confirmRoute" type="button"><i data-lucide="save"></i>${confirmBtnLabel()}</button>
+    <div class="flex gap8 mt16">
+      <button class="btn btn-primary btn-block btn-lg" id="confirmRoute" type="button"><i data-lucide="save"></i>${confirmBtnLabel()}</button>
+      <button class="btn btn-block btn-lg" id="confirmRouteReports" type="button"><i data-lucide="bar-chart-3"></i>บันทึกแล้วไปรายงาน</button>
+    </div>
   `;
   icons();
   bindDecisionEvents();
   setTimeout(() => { const box = el('driverFormBox'); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 60);
 }
 function confirmBtnLabel(){
+  if (Plan.result && Array.isArray(Plan.result.split) && Plan.result.split.length >= 2) {
+    return `บันทึก ${int(Plan.result.split.length)} รอบส่ง`;
+  }
   const v = selVehicle();
   const drv = String(Plan.sel.driver || (v && (v.CurrentDriver || v.DriverName)) || '').trim();
   const vehLbl = vehicleShortName(v) || '';
@@ -1305,6 +1412,49 @@ function empIdByName(name){ const emp=(Store.data.employees||[]).find(x=>x.Emplo
 function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { vehId:g.v?g.v.VehicleID:'', driver, driverEmployeeId:empIdByName(driver), toll:Planner.toll(), parking:Planner.autoParking(g.seq) }; }
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; runAutoPlan(); };
+  const splitMode = Plan.result && Array.isArray(Plan.result.split) && Plan.result.split.length >= 2;
+  if (splitMode) {
+    $$('[data-splitveh]').forEach((it) => {
+      it.onchange = () => {
+        const i = Number(it.dataset.splitveh);
+        const sel = Plan.splitSel[i] || {};
+        sel.vehId = it.value;
+        const v = (Store.data.vehicles || []).find(x => x.VehicleID === it.value);
+        if (v && v.CurrentDriver) {
+          sel.driver = v.CurrentDriver;
+          sel.driverEmployeeId = empIdByName(v.CurrentDriver);
+          const txt = document.querySelector(`[data-splitdrv="${i}"]`);
+          const emp = document.querySelector(`[data-splitdrvemp="${i}"]`);
+          if (txt) txt.value = sel.driver || '';
+          if (emp) emp.value = sel.driverEmployeeId || '';
+        }
+        Plan.splitSel[i] = sel;
+        const cb = el('costBox');
+        if (cb) cb.innerHTML = splitCostBoxAll(Plan.result);
+      };
+    });
+    $$('[data-splitdrvemp]').forEach((it) => {
+      it.onchange = () => {
+        const i = Number(it.dataset.splitdrvemp);
+        const sel = Plan.splitSel[i] || {};
+        sel.driverEmployeeId = it.value;
+        const emp = (Store.data.employees || []).find(x => x.EmployeeID === it.value);
+        sel.driver = emp ? emp.EmployeeName : '';
+        const txt = document.querySelector(`[data-splitdrv="${i}"]`);
+        if (txt) txt.value = sel.driver;
+        Plan.splitSel[i] = sel;
+      };
+    });
+    $$('[data-splitdrv]').forEach((it) => {
+      it.oninput = () => {
+        const i = Number(it.dataset.splitdrv);
+        const sel = Plan.splitSel[i] || {};
+        sel.driver = it.value;
+        sel.driverEmployeeId = '';
+        Plan.splitSel[i] = sel;
+      };
+    });
+  }
   const st=el('selType'); if(st) $$('#selType button').forEach(b=>b.onclick=()=>{ Plan.sel.type=b.dataset.t;
     if(b.dataset.t==='EXTERNAL' && !Plan.sel.extId){ const e=(Store.data.externalVehicles||[])[0]; Plan.sel.extId=e?e.ExternalVehicleID:''; }
     renderDecision(); });
@@ -1321,7 +1471,8 @@ function bindDecisionEvents(){
     if(sde.value){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeID===sde.value); Plan.sel.driver=emp?emp.EmployeeName:''; if(el('selDriver')) el('selDriver').value=Plan.sel.driver; }
     refreshConfirmBtn(); };
   const sd=el('selDriver'); if(sd) sd.oninput=()=>{ Plan.sel.driver=sd.value; Plan.sel.driverEmployeeId=''; refreshConfirmBtn(); };
-  const cr=el('confirmRoute'); if(cr) cr.onclick=confirmRoute;
+  const cr=el('confirmRoute'); if(cr) cr.onclick=()=>confirmRoute(false);
+  const crr=el('confirmRouteReports'); if(crr) crr.onclick=()=>confirmRoute(true);
 }
 function queueRoutePrints(routeIds, fallbackMatch){
   setTimeout(() => {
@@ -1332,11 +1483,12 @@ function queueRoutePrints(routeIds, fallbackMatch){
     routes.forEach((r, i) => setTimeout(() => printRouteNote(r), i * 900));
   }, 350);
 }
-async function confirmRoute(){
+async function confirmRoute(goReports){
   const seq=Plan.result.seq, m=Plan.result.metrics;
+  const splitMode = Plan.result && Array.isArray(Plan.result.split) && Plan.result.split.length >= 2;
   const isExt=Plan.sel.type==='EXTERNAL';
   const v=selVehicle();
-  if(!v){ toast('กรุณาเลือกรถก่อน','warn'); return; }
+  if(!splitMode && !v){ toast('กรุณาเลือกรถก่อน','warn'); return; }
   const c=selCost();
   const emps=Store.data.employees||[];
   const emp=!isExt && (emps.find(e=>e.EmployeeID===Plan.sel.driverEmployeeId) || emps.find(e=>e.VehicleID===v.VehicleID));
@@ -1356,12 +1508,60 @@ async function confirmRoute(){
     return { DeliveryID:s.DeliveryID, CustomerName:s.CustomerName, BranchName:s.BranchName, Address:s.Address,
       Latitude:lat, Longitude:lng, BoxQty:s.BoxQty, DistanceFromPrevious:+(s._distPrev||0).toFixed(1) };
   });
+  if (splitMode) {
+    const groups = Plan.result.split || [];
+    const routePromises = groups.map((g, i) => {
+      const ss = Plan.splitSel[i] || {};
+      const veh = (Store.data.vehicles || []).find(x => x.VehicleID === ss.vehId) || g.v;
+      if (!veh) return Promise.reject(new Error('รถไม่พอสำหรับรอบที่ ' + (i + 1)));
+      const empMatch = emps.find(e => e.EmployeeID === ss.driverEmployeeId) || emps.find(e => e.VehicleID === veh.VehicleID);
+      const cc = splitCost(g, i);
+      const payload = {
+        DeliveryDate: Store.date,
+        RouteType: 'COMPANY_VEHICLE',
+        DriverName: ss.driver || (veh && veh.CurrentDriver) || '',
+        DriverPhone: (empMatch && empMatch.Phone) || '',
+        DriverEmployeeID: ss.driverEmployeeId || '',
+        VehicleType: veh.VehicleType || '',
+        VehicleName: veh.VehicleName || '',
+        LicensePlate: veh.LicensePlate || '',
+        ProviderName: '',
+        TotalStops: g.m.stops,
+        TotalBoxes: g.m.boxes,
+        TotalDistance: Planner.routeDisplayKm(g.m),
+        EstimatedDuration: g.m.durationMin,
+        EstimatedFuelCost: cc.fuel,
+        EstimatedTollCost: cc.toll,
+        EstimatedParkingCost: cc.parking,
+        EstimatedExternalCost: 0,
+        EstimatedOtherCost: 0,
+        Status: 'Planned'
+      };
+      const groupStops = g.seq.map((s) => ({
+        DeliveryID: s.DeliveryID, CustomerName: s.CustomerName, BranchName: s.BranchName, Address: s.Address,
+        Latitude: +s.Latitude || null, Longitude: +s.Longitude || null, BoxQty: s.BoxQty,
+        DistanceFromPrevious: +(s._distPrev || 0).toFixed(1)
+      }));
+      return createRouteOptimistic('confirmRoute', payload, groupStops);
+    });
+    Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
+    try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
+    if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.districts.clear(); }
+    Plan.tab = 'plan';
+    location.hash = goReports ? '#/reports' : '#/dashboard';
+    toast(`บันทึกแผนแยกเขตแล้ว ${int(groups.length)} รอบ`, 'ok', 'บันทึกแล้ว');
+    Promise.allSettled(routePromises).then((all) => {
+      const routes = all.filter(x => x.status === 'fulfilled').map(x => x.value && x.value.RouteID).filter(Boolean);
+      if (routes.length) queueRoutePrints(routes);
+    });
+    return;
+  }
   Plan.selected.clear(); Plan.locked = false; Plan.result=null; Plan.splitSel=[];
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
   if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.districts.clear(); }
   Plan.tab = 'plan';
   toast('บันทึกรายการแล้ว — เปิดใบงานให้พิมพ์','ok','บันทึกแล้ว');
-  location.hash = '#/dashboard';
+  location.hash = goReports ? '#/reports' : '#/dashboard';
   const routeMatch = r => r.DeliveryDate === Store.date && r.DriverName === data.DriverName && r.TotalStops === data.TotalStops && (r.__pending || r.Status === 'Planned');
   createRouteOptimistic('confirmRoute', data, stops).then(r => {
     queueRoutePrints([r && r.RouteID], routeMatch);
