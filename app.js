@@ -1203,24 +1203,38 @@ const Planner = {
       return copy;
     });
   },
+  MAX_LEG_KM: 200,
+  hasPlausibleCoords(s){
+    const lat = +((s && s.Latitude) || 0), lng = +((s && s.Longitude) || 0);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+    if (lat === 0 && lng === 0) return false;
+    // ประเทศไทยโดยประมาณ — นอกนี้ถือว่าพิกัดผิด (ทำให้กม./น้ำมันพุ่ง)
+    return lat >= 5.5 && lat <= 21 && lng >= 97 && lng <= 106;
+  },
   // total distance incl return to warehouse (Haversine straight-line — instant, offline)
   metrics(seq){
     const wh = warehouse();
-    let outbound = 0; let cur = wh;
+    let outbound = 0; let cur = wh; let badGeo = 0;
     seq.forEach(s=>{
-      const leg = haversine(cur.lat,cur.lng,+s.Latitude,+s.Longitude);
-      s._distPrev = +leg.toFixed(1);
+      const plausible = this.hasPlausibleCoords(s);
+      const leg = plausible ? haversine(cur.lat,cur.lng,+s.Latitude,+s.Longitude) : 0;
+      const bad = !plausible || leg > this.MAX_LEG_KM;
+      s._distPrev = bad ? 0 : +leg.toFixed(1);
+      s._badGeo = bad;
+      if (bad) { badGeo += 1; return; }
       outbound += leg;
       cur = { lat:+s.Latitude, lng:+s.Longitude };
     });
-    const returnKm = haversine(cur.lat,cur.lng,wh.lat,wh.lng);
+    const returnKmRaw = haversine(cur.lat,cur.lng,wh.lat,wh.lng);
+    const returnBad = returnKmRaw > this.MAX_LEG_KM;
+    const returnKm = returnBad ? 0 : returnKmRaw;
     const dist = outbound + returnKm;
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
     const serviceMin = seq.length * this.serviceMinPerStop();
     const durationMin = Math.round(dist / this.speed() * 60 + serviceMin);
     return {
       distance:+dist.toFixed(1), outboundKm:+outbound.toFixed(1), returnKm:+returnKm.toFixed(1),
-      boxes, stops:seq.length, durationMin, source:'straight'
+      boxes, stops:seq.length, durationMin, source:'straight', badGeo,
     };
   },
   // ระยะทางตามถนนจริงผ่าน OSRM (async) — คืน null ถ้าล่ม (ให้ fallback ไป metrics())
@@ -1230,16 +1244,27 @@ const Planner = {
     const r = await Geo.route(pts);
     if(!r) return null;
     // legsKm[i] = ระยะจากจุดก่อนหน้าถึง seq[i]  (leg 0 = คลัง→จุด1)
-    if(r.legsKm && r.legsKm.length){ seq.forEach((s,i)=>{ s._distPrev = r.legsKm[i]; }); }
+    if(r.legsKm && r.legsKm.length){
+      seq.forEach((s,i)=>{
+        const km = Number(r.legsKm[i]) || 0;
+        const bad = km > this.MAX_LEG_KM || !this.hasPlausibleCoords(s);
+        s._distPrev = bad ? 0 : km;
+        s._badGeo = bad;
+        if (bad) r.legsKm[i] = 0;
+      });
+    }
     const outboundKm = r.legsKm && r.legsKm.length >= seq.length
       ? +(r.legsKm.slice(0, seq.length).reduce((n, km)=>n + km, 0)).toFixed(1)
       : r.distance;
-    const returnKm = r.legsKm && r.legsKm.length > seq.length ? r.legsKm[seq.length] : 0;
+    const returnRaw = r.legsKm && r.legsKm.length > seq.length ? r.legsKm[seq.length] : 0;
+    const returnKm = returnRaw > this.MAX_LEG_KM ? 0 : returnRaw;
+    const dist = +(outboundKm + returnKm).toFixed(1);
     const boxes = seq.reduce((n,s)=>n+(Number(s.BoxQty)||0),0);
+    const badGeo = seq.filter(s => s._badGeo).length;
     return {
-      distance:r.distance, outboundKm, returnKm,
-      boxes, stops:seq.length, durationMin:r.durationMin + seq.length*this.serviceMinPerStop(),
-      geometry:r.geometry, source:'osrm', legsKm:r.legsKm
+      distance:dist, outboundKm, returnKm,
+      boxes, stops:seq.length, durationMin:Math.round(dist / this.speed() * 60) + seq.length*this.serviceMinPerStop(),
+      geometry:r.geometry, source:'osrm', legsKm:r.legsKm, badGeo
     };
   },
   // คำนวณระยะทางตามแผนที่จากรายการจุดส่ง (ใช้ตอนพิมพ์ใบงาน)

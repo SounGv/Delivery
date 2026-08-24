@@ -1000,7 +1000,7 @@ function bulkDeleteSelectedDeliveries(view){
    ================================================================ */
 const Plan = {
   tab:'plan', selected:new Set(), locked:false,
-  result:null, chosen:null,
+  result:null, chosen:null, kWanted:null,
   sel:{type:'COMPANY',vehId:'',extId:'',driver:'',driverEmployeeId:''},
   splitSel:[]
 };
@@ -1031,6 +1031,7 @@ function handoffSelectionToPlan(ids){
   Plan.tab = 'plan';
   Plan.result = null;
   Plan.chosen = null;
+  Plan.kWanted = null;
   persistPlanSelection();
 }
 function planOpenStatuses(){ return ['Draft','Pending','Planned','Assigned','In Progress','']; }
@@ -1199,13 +1200,17 @@ async function runAutoPlan(){
   const drafts=normalizeDeliveries((Store.data.deliveries||[]).filter(d=>Plan.selected.has(d.DeliveryID)));
   const enriched=Planner.enrichStopCoords(drafts, Store.data.deliveries, Store.data.customers)
     .map(d => Object.assign({}, d, { _district: DelView.zone(d) || 'ไม่ระบุเขต' }));
-  const seq=Planner.order(enriched.filter(d=>Planner.hasCoords(d)));
+  const seq=Planner.order(enriched.filter(d=>Planner.hasCoords(d) && Planner.hasPlausibleCoords(d)));
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
   const fleet = Planner.fleetVehicles();
-  const k = Planner.splitK(seq, out.metrics, fleet.length);
+  const maxK = Math.min(fleet.length, seq.length) || 1;
+  const autoK = Planner.splitK(seq, out.metrics, maxK);
+  if (Plan.kWanted == null) Plan.kWanted = autoK;
+  Plan.kWanted = Math.max(1, Math.min(maxK, Number(Plan.kWanted) || autoK));
+  const k = Plan.kWanted;
   const split = k >= 2 ? Planner.autoSplit(seq, fleet.slice(0, k)) : [];
-  Plan.result={seq, split, ...out};
+  Plan.result={seq, split, maxK, ...out};
   Plan.chosen = split.length >= 2 ? 'C' : 'A';
   Plan.splitSel = split.map(g => splitSelFor(g));
   const rec = Planner.recommendVehicle() || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
@@ -1253,12 +1258,21 @@ function displayBillRow(s, i){
 function renderDecision(){
   const dec = el('decision');
   if (!dec || !Plan.result) return;
-  const { seq, metrics: m, split } = Plan.result;
+  const { seq, metrics: m, split, maxK } = Plan.result;
   const splitReady = Array.isArray(split) && split.length >= 2;
+  const kNow = Math.max(1, Plan.kWanted || (splitReady ? split.length : 1));
+  const kMax = Math.max(1, maxK || kNow);
+  const kPicker = kMax >= 2 ? `<div class="flex aic gap8 wrap mb14" style="padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:#FAFBFC">
+      <span class="small strong">ใช้กี่คัน</span>
+      <button class="btn btn-sm" data-kwant="-1" type="button" ${kNow<=1?'disabled':''}>−</button>
+      <span class="strong tab" style="min-width:1.6em;text-align:center">${int(kNow)}</span>
+      <button class="btn btn-sm" data-kwant="1" type="button" ${kNow>=kMax?'disabled':''}>+</button>
+      <span class="small muted">จากรถ ${int(kMax)} คัน — เลือก 1 หรือ 2 คันก็ได้ แล้วค่อยกดบันทึก</span>
+    </div>` : '';
   const timeWarn = !splitReady && m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
   const splitNote = splitReady
-    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบแยกเป็น <b>${int(split.length)} เส้นทาง</b> ตามเขตที่อยู่ใกล้กัน — แต่ละคันมีเขตของตัวเอง กดบันทึกครั้งเดียวจบทุกรอบ</div></div>`
+    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบแยกเป็น <b>${int(split.length)} เส้นทาง</b> ตามเขตที่อยู่ใกล้กัน — ลดจำนวนคันได้จากปุ่ม − ด้านบน แล้วค่อยบันทึก</div></div>`
     : '';
   const splitLists = splitReady
     ? split.map((g, i) => {
@@ -1279,6 +1293,7 @@ function renderDecision(){
       <button class="btn btn-sm" id="replan" type="button"><i data-lucide="rotate-cw"></i>เรียงลำดับใหม่</button>
     </div>
     ${timeWarn}
+    ${kPicker}
     ${splitNote}
     <div class="plan-driver-step">
       <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'รถ + คนขับที่ระบบจับคู่ให้ (แก้ได้)' : 'เลือกรถ + คนขับ'}</span></div>
@@ -1437,19 +1452,37 @@ function splitCost(g,i){
   return { fuel, toll, parking, total:+(fuel+toll+parking).toFixed(2) };
 }
 function splitCostBoxAll(opt){
-  const rows = opt.split.map((g,i)=>{ const c=splitCost(g,i); return `<div class="flex between" style="padding:5px 0;font-size:13px"><span class="muted">รอบส่ง ${i+1}</span><span class="tab">${money(c.total)} ฿</span></div>`; }).join('');
+  const rows = opt.split.map((g,i)=>{
+    const c=splitCost(g,i);
+    const v=(Store.data.vehicles||[]).find(x=>x.VehicleID===((Plan.splitSel[i]||{}).vehId)) || g.v;
+    const rate = v && v.FuelCostPerKm ? Number(v.FuelCostPerKm) : Planner.fuelPerKm();
+    const km = Number(g.m.distance) || 0;
+    const bad = Number(g.m.badGeo) || (g.seq||[]).filter(s=>s._badGeo).length;
+    const warn = bad ? ` <span class="small" style="color:#B45309">· พิกัดผิด ${int(bad)} จุด ไม่นับกม.นั้น</span>` : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid #F3F5F8">
+      <div class="flex between" style="font-size:13px"><span class="muted">รอบส่ง ${i+1}</span><span class="tab">${money(c.total)} ฿</span></div>
+      <div class="small muted">น้ำมันประมาณ ${num1(km)} กม. × ${num1(rate)} ฿/กม. = ${money(c.fuel)} ฿${warn}</div>
+    </div>`;
+  }).join('');
   const total = opt.split.reduce((n,g,i)=>n+splitCost(g,i).total,0);
   return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-    <div class="strong mb14">สรุปต้นทุนรวม (${opt.split.length} รอบส่ง)</div>
+    <div class="strong mb8">สรุปต้นทุนรวม (${opt.split.length} รอบส่ง)</div>
+    <div class="small muted mb14">อ้างอิงจากระยะทางประมาณ (ไป-กลับคลัง) × อัตราน้ำมันของรถ + ค่าทางด่วน/ค่าจอดตั้งต้น — ไม่ใช่ใบเสร็จจริง</div>
     ${rows}
-    <div class="divider"></div>
-    <div class="flex between" style="font-size:15px"><span class="strong">ต้นทุนรวมทั้งหมด</span><span class="strong tab" style="color:var(--brand-ink)">${money(total)} ฿</span></div>
+    <div class="flex between" style="font-size:15px;margin-top:8px"><span class="strong">ต้นทุนรวมทั้งหมด</span><span class="strong tab" style="color:var(--brand-ink)">${money(total)} ฿</span></div>
   </div>`;
 }
 function empIdByName(name){ const emp=(Store.data.employees||[]).find(x=>x.EmployeeName===name); return emp?emp.EmployeeID:''; }
 function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { vehId:g.v?g.v.VehicleID:'', driver, driverEmployeeId:empIdByName(driver), toll:Planner.toll(), parking:Planner.autoParking(g.seq) }; }
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; runAutoPlan(); };
+  $$('[data-kwant]').forEach(b => b.onclick = () => {
+    const maxK = Math.max(1, (Plan.result && Plan.result.maxK) || 1);
+    const cur = Math.max(1, Plan.kWanted || ((Plan.result.split||[]).length) || 1);
+    Plan.kWanted = Math.max(1, Math.min(maxK, cur + Number(b.dataset.kwant)));
+    Plan.result = null;
+    runAutoPlan();
+  });
   const splitMode = Plan.result && Array.isArray(Plan.result.split) && Plan.result.split.length >= 2;
   if (splitMode) {
     $$('[data-splitveh]').forEach((it) => {
