@@ -1191,6 +1191,10 @@ function miniStat(l,v,ic){ return `<div class="flex between aic" style="padding:
   <span class="strong tab">${v}</span></div>`; }
 
 const SPLIT_COLORS=['#6f9e0a','#2563EB','#DB2777','#D97706','#7C3AED','#0891B2'];
+function planCarTitle(i, g){
+  const plate = vehicleShortName(g && g.v) || '';
+  return `รถคันที่ ${i + 1}${plate ? ' · ' + plate : ''}`;
+}
 
 async function runAutoPlan(){
   Plan._autoRunning = true;
@@ -1272,13 +1276,13 @@ function renderDecision(){
   const timeWarn = !splitReady && m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
   const splitNote = splitReady
-    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบแยกเป็น <b>${int(split.length)} เส้นทาง</b> ตามเขตที่อยู่ใกล้กัน — ลดจำนวนคันได้จากปุ่ม − ด้านบน แล้วค่อยบันทึก</div></div>`
+    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบจัดให้ <b>${int(split.length)} คัน</b> ตามเขตที่อยู่ใกล้กัน — ลดจำนวนคันได้จากปุ่ม − ด้านบน แล้วค่อยบันทึก</div></div>`
     : '';
   const splitLists = splitReady
     ? split.map((g, i) => {
         const zones = (g.districts && g.districts.length) ? g.districts : [...new Set(g.seq.map(s => s._district || DelView.zone(s)).filter(Boolean))];
         return `<div class="plan-split-bills">
-          <div class="small strong" style="color:${SPLIT_COLORS[i%SPLIT_COLORS.length]}">รอบ ${i+1} · ${esc(vehicleShortName(g.v) || 'รถ')} · เขต ${esc(zones.join(' · ') || '—')}</div>
+          <div class="small strong" style="color:${SPLIT_COLORS[i%SPLIT_COLORS.length]}">${esc(planCarTitle(i, g))} · เขต ${esc(zones.join(' · ') || '—')}</div>
           <div class="plan-stop-list scrolly">${g.seq.map((s, n) => displayBillRow(s, n + 1)).join('')}</div>
         </div>`;
       }).join('')
@@ -1296,7 +1300,7 @@ function renderDecision(){
     ${kPicker}
     ${splitNote}
     <div class="plan-driver-step">
-      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'รถ + คนขับที่ระบบจับคู่ให้ (แก้ได้)' : 'เลือกรถ + คนขับ'}</span></div>
+      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'รถ + คนขับที่จัดให้ (แก้ทะเบียน/คนขับได้)' : 'เลือกรถ + คนขับ'}</span></div>
       <div class="plan-driver-box" id="driverFormBox">${splitReady ? splitFormAll(Plan.result) : selForm()}</div>
     </div>
     ${splitReady ? `<div id="costBox" style="margin-top:12px">${splitCostBoxAll(Plan.result)}</div>` : ''}
@@ -1312,7 +1316,7 @@ function renderDecision(){
 }
 function confirmBtnLabel(){
   if (Plan.result && Array.isArray(Plan.result.split) && Plan.result.split.length >= 2) {
-    return `บันทึก ${int(Plan.result.split.length)} รอบส่ง`;
+    return `บันทึกจัดรถ ${int(Plan.result.split.length)} คัน`;
   }
   const v = selVehicle();
   const drv = String(Plan.sel.driver || (v && (v.CurrentDriver || v.DriverName)) || '').trim();
@@ -1394,7 +1398,7 @@ function selCostBox(){
   const editRow=(l,id,val,hint)=>`<div class="flex between aic" style="padding:4px 0"><span class="muted" style="font-size:13px">${l}${hint?` <span class="small" style="color:#9AA3B2">${hint}</span>`:''}</span>
     <span class="flex aic" style="gap:4px"><input class="input" id="${id}" type="number" value="${val}" style="width:96px;height:32px;text-align:right;padding:0 8px"><span class="small muted">฿</span></span></div>`;
   return `${warn}<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-    <div class="strong mb14">สรุปต้นทุนรอบส่ง <span class="small muted">(แก้ทางด่วน/ค่าจอดได้)</span></div>
+    <div class="strong mb14">สรุปต้นทุนประมาณ <span class="small muted">(แก้ทางด่วน/ค่าจอดได้)</span></div>
     ${row('ค่าน้ำมัน · '+num1(Planner.fuelDistanceKm(m))+' กม. (ไป-กลับ)', c.fuel)}
     ${editRow('ค่าทางด่วน','selToll',Number(Plan.sel.toll)||0,'ใส่ 0 ถ้าไม่ขึ้นทางด่วน')}
     ${editRow('ค่าจอดรถ','selPark',Number(Plan.sel.parking)||0, mallN?`ห้าง ${mallN} จุด`:'ร้านเดี่ยว')}
@@ -1428,7 +1432,7 @@ function splitForm(g, i){
     ? g.districts
     : [...new Set((g.seq||[]).map(s => s._district || DelView.zone(s)).filter(Boolean))];
   return `<div class="plan-driver-card plan-split-card" style="border-left:4px solid ${color}">
-    <div class="strong" style="margin-bottom:4px">รอบ ${i+1} · ${esc(vehicleShortName(g.v) || 'รถ')} · ${int(g.seq.length)} บิล · ${Planner.fmtDur(g.m.durationMin)}</div>
+    <div class="strong" style="margin-bottom:4px">${esc(planCarTitle(i, g))} · ${int(g.seq.length)} บิล · ประมาณ ${Planner.fmtDur(g.m.durationMin)}</div>
     <div class="small muted" style="margin-bottom:10px">เขตนี้ไปกับคันนี้: ${esc(zones.join(' · ') || '—')}</div>
     <div class="plan-driver-grid">
       <div class="field" style="margin:0"><label class="label">รถ</label>
@@ -1460,13 +1464,13 @@ function splitCostBoxAll(opt){
     const bad = Number(g.m.badGeo) || (g.seq||[]).filter(s=>s._badGeo).length;
     const warn = bad ? ` <span class="small" style="color:#B45309">· พิกัดผิด ${int(bad)} จุด ไม่นับกม.นั้น</span>` : '';
     return `<div style="padding:8px 0;border-bottom:1px solid #F3F5F8">
-      <div class="flex between" style="font-size:13px"><span class="muted">รอบส่ง ${i+1}</span><span class="tab">${money(c.total)} ฿</span></div>
+      <div class="flex between" style="font-size:13px"><span class="muted">${esc(planCarTitle(i, g))}</span><span class="tab">${money(c.total)} ฿</span></div>
       <div class="small muted">น้ำมันประมาณ ${num1(km)} กม. × ${num1(rate)} ฿/กม. = ${money(c.fuel)} ฿${warn}</div>
     </div>`;
   }).join('');
   const total = opt.split.reduce((n,g,i)=>n+splitCost(g,i).total,0);
   return `<div style="border:1px solid var(--border);border-radius:11px;padding:14px">
-    <div class="strong mb8">สรุปต้นทุนรวม (${opt.split.length} รอบส่ง)</div>
+    <div class="strong mb8">สรุปต้นทุนประมาณ (${int(opt.split.length)} คัน)</div>
     <div class="small muted mb14">อ้างอิงจากระยะทางประมาณ (ไป-กลับคลัง) × อัตราน้ำมันของรถ + ค่าทางด่วน/ค่าจอดตั้งต้น — ไม่ใช่ใบเสร็จจริง</div>
     ${rows}
     <div class="flex between" style="font-size:15px;margin-top:8px"><span class="strong">ต้นทุนรวมทั้งหมด</span><span class="strong tab" style="color:var(--brand-ink)">${money(total)} ฿</span></div>
