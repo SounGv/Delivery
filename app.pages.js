@@ -1488,7 +1488,6 @@ async function showRouteTimelineModal(route){
       DistanceFromPrevious: d.DistanceFromPrevious,
     }));
   }
-  // เติมระยะขาต่อขาจากแผนที่ถ้ายังไม่มี
   const needLegs = stops.some(s => !(Number(s.DistanceFromPrevious) > 0) && !(Number(s._distPrev) > 0));
   if (needLegs && stops.length) {
     try {
@@ -1497,60 +1496,68 @@ async function showRouteTimelineModal(route){
     } catch (_) {}
   }
   const tl = Planner.buildStopTimeline(route, stops);
-  const startNote = tl.startSource === 'gps'
-    ? 'เริ่มจากเวลา GPS จริง'
-    : 'เริ่มจากเวลาเริ่มงานประมาณ ' + String(Planner.workStartHour()).padStart(2, '0') + ':00';
-  const rows = tl.events.map(e => {
+  const startLbl = tl.startSource === 'gps'
+    ? 'ออกจริงจาก GPS'
+    : 'ออกประมาณ ' + String(Planner.workStartHour()).padStart(2, '0') + ':00';
+  const kmChip = (e) => {
+    if (e.badGeo) return `<span class="tl-chip bad">พิกัดผิด</span>`;
+    if (e.km == null || e.km === 0 && e.kind !== 'stop') return '';
+    if (!(Number(e.km) > 0) && e.kind === 'depart_wh') return '';
+    return `<span class="tl-chip km">${num1(e.km)} กม.</span>`;
+  };
+  const steps = tl.events.map(e => {
     if (e.kind === 'depart_wh') {
-      return `<tr>
-        <td class="c"><span class="badge b-green">ออก</span></td>
-        <td class="tab strong">${fmtClock(e.at)}</td>
-        <td colspan="2"><b>ออกจากคลัง</b><div class="small muted">${esc(e.place)}</div></td>
-        <td class="r muted">—</td>
-        <td class="r muted">—</td>
-        <td class="tab">${fmtClock(e.leaveAt)}</td>
-      </tr>`;
+      return `<li class="tl-step">
+        <div class="tl-rail"><span class="tl-dot go">ออก</span></div>
+        <div class="tl-card">
+          <div class="tl-card-title">ออกจากคลัง</div>
+          <div class="tl-card-sub">${esc(e.place)}</div>
+          <div class="tl-chips"><span class="tl-chip time">${fmtClock(e.at)}</span></div>
+        </div>
+      </li>`;
     }
     if (e.kind === 'return_wh') {
-      return `<tr>
-        <td class="c"><span class="badge b-blue">กลับ</span></td>
-        <td class="tab strong">${fmtClock(e.at)}</td>
-        <td colspan="2"><b>กลับถึงคลัง</b><div class="small muted">${esc(e.place)} · จากจุดสุดท้าย ${num1(e.km)} กม.</div></td>
-        <td class="r tab">${num1(e.km)}</td>
-        <td class="r muted">—</td>
-        <td class="tab muted">—</td>
-      </tr>`;
+      return `<li class="tl-step">
+        <div class="tl-rail"><span class="tl-dot back">กลับ</span></div>
+        <div class="tl-card">
+          <div class="tl-card-title">กลับถึงคลัง</div>
+          <div class="tl-card-sub">${esc(e.place)}</div>
+          <div class="tl-chips">
+            <span class="tl-chip time">ถึง ${fmtClock(e.at)}</span>
+            ${kmChip(e)}
+          </div>
+        </div>
+      </li>`;
     }
-    return `<tr>
-      <td class="c"><span class="stop-num" style="width:26px;height:26px;font-size:12px;background:#2563EB;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff">${int(e.order)}</span></td>
-      <td class="tab strong">${fmtClock(e.at)}</td>
-      <td><b>${esc(e.place)}</b>${e.address ? `<div class="small muted">${esc(shortAddr(e.address, 56))}</div>` : ''}</td>
-      <td class="small muted">ถึง → จอดส่ง → ออกไปจุดถัดไป</td>
-      <td class="r tab">${num1(e.km)}</td>
-      <td class="r tab">${int(e.dwellMin)} น.</td>
-      <td class="tab strong">${fmtClock(e.leaveAt)}</td>
-    </tr>`;
+    return `<li class="tl-step">
+      <div class="tl-rail"><span class="tl-dot stop">${int(e.order)}</span></div>
+      <div class="tl-card">
+        <div class="tl-card-title">${esc(e.place)}</div>
+        ${e.address ? `<div class="tl-card-sub">${esc(shortAddr(e.address, 64))}</div>` : ''}
+        <div class="tl-chips">
+          <span class="tl-chip time">ถึง ${fmtClock(e.at)}</span>
+          ${kmChip(e)}
+          <span class="tl-chip dwell">จอด ${int(e.dwellMin)} น.</span>
+          <span class="tl-chip time">ออก ${fmtClock(e.leaveAt)}</span>
+        </div>
+      </div>
+    </li>`;
   }).join('');
   const m = modal({
     wide: true,
-    title: 'ไทม์ไลน์รอบส่ง — ' + esc(route.RouteID),
+    title: 'ไทม์ไลน์ · ' + route.RouteID,
     body: `
-      <div class="notice info mb14"><i data-lucide="clock"></i><div>
-        ${esc(startNote)} · ความเร็วเฉลี่ย ${num1(tl.speed)} กม./ชม. · จอดส่งจุดละ ${int(tl.dwell)} นาที<br>
-        รวมประมาณ <b>${num1(tl.totalKm)} กม.</b> · <b>${Planner.fmtDur(tl.totalMin)}</b>
-        · รถ ${esc(tripVehicleLabel(route))} · คนขับ ${esc(route.DriverName || '—')}
-      </div></div>
-      <div class="tbl-wrap scrolly"><table class="tbl">
-        <thead><tr>
-          <th></th><th>ถึง</th><th>สถานที่</th><th>หมายเหตุ</th>
-          <th class="r">กม.</th><th class="r">จอด</th><th>ออก</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>
-      <p class="small muted" style="margin:10px 0 0">กม. = ระยะจากจุดก่อนหน้า · จอด = เวลาส่งของที่ร้าน · เวลาเป็นประมาณการ (หรืออิง GPS ถ้ามีเวลาออกจริง)</p>
+      <div class="tl-stats">
+        <div class="tl-stat"><b>${fmtClock(tl.startMs)}</b><span>ออกคลัง</span></div>
+        <div class="tl-stat"><b>${num1(tl.totalKm)} กม.</b><span>ระยะรวม</span></div>
+        <div class="tl-stat"><b>${Planner.fmtDur(tl.totalMin)}</b><span>เวลาทั้งหมด</span></div>
+      </div>
+      <p class="tl-meta">${esc(tripVehicleLabel(route))} · ${esc(route.DriverName || '—')} · ${esc(startLbl)} · จอดจุดละ ${int(tl.dwell)} น.</p>
+      ${tl.hasBadGeo ? `<div class="tl-warn">มีจุดพิกัดผิด — ข้ามระยะนั้นตอนคำนวณเวลา · แก้ที่อยู่/พิกัดร้านแล้วรีเฟรช</div>` : ''}
+      <ul class="tl-list">${steps}</ul>
     `,
     foot: `<button class="btn" id="tlClose">ปิด</button>
-      <button class="btn btn-primary" id="tlPrint"><i data-lucide="printer"></i>พิมพ์ไทม์ไลน์</button>`,
+      <button class="btn btn-primary" id="tlPrint"><i data-lucide="printer"></i>พิมพ์</button>`,
   });
   el('tlClose').onclick = m.close;
   el('tlPrint').onclick = () => {
@@ -1566,9 +1573,9 @@ async function showRouteTimelineModal(route){
       <div class="sec-title">ไทม์ไลน์ทีละจุด</div>
       <table><thead><tr><th>#</th><th>ถึง</th><th>สถานที่</th><th class="r">กม.</th><th class="r">จอด</th><th>ออก</th></tr></thead>
       <tbody>${tl.events.map(e => {
-        if (e.kind === 'depart_wh') return `<tr><td>ออก</td><td>${fmtClock(e.at)}</td><td>คลัง · ${esc(e.place)}</td><td class="r">—</td><td class="r">—</td><td>${fmtClock(e.leaveAt)}</td></tr>`;
-        if (e.kind === 'return_wh') return `<tr><td>กลับ</td><td>${fmtClock(e.at)}</td><td>คลัง · ${esc(e.place)}</td><td class="r">${num1(e.km)}</td><td class="r">—</td><td>—</td></tr>`;
-        return `<tr><td>${int(e.order)}</td><td>${fmtClock(e.at)}</td><td>${esc(e.place)}</td><td class="r">${num1(e.km)}</td><td class="r">${int(e.dwellMin)} น.</td><td>${fmtClock(e.leaveAt)}</td></tr>`;
+        if (e.kind === 'depart_wh') return `<tr><td>ออก</td><td>${fmtClock(e.at)}</td><td>คลัง</td><td class="r">—</td><td class="r">—</td><td>${fmtClock(e.leaveAt)}</td></tr>`;
+        if (e.kind === 'return_wh') return `<tr><td>กลับ</td><td>${fmtClock(e.at)}</td><td>คลัง</td><td class="r">${e.badGeo ? 'พิกัดผิด' : num1(e.km)}</td><td class="r">—</td><td>—</td></tr>`;
+        return `<tr><td>${int(e.order)}</td><td>${fmtClock(e.at)}</td><td>${esc(e.place)}</td><td class="r">${e.badGeo ? 'พิกัดผิด' : num1(e.km)}</td><td class="r">${int(e.dwellMin)} น.</td><td>${fmtClock(e.leaveAt)}</td></tr>`;
       }).join('')}</tbody></table>`;
     Printer.open('ไทม์ไลน์รอบส่ง — ' + route.RouteID, rSize(), body);
   };
@@ -1580,16 +1587,20 @@ async function openRouteDetail(id){
   try {
     const tl = Planner.buildStopTimeline(r, stops);
     tlHtml = `<div class="card mb14" style="padding:12px 14px">
-      <div class="flex between aic mb8"><span class="h-card" style="font-size:14px">ไทม์ไลน์ประมาณการ</span>
+      <div class="flex between aic mb8"><span class="h-card" style="font-size:14px">ไทม์ไลน์</span>
         <button type="button" class="btn btn-sm" id="rdTimeline"><i data-lucide="clock"></i>ดูเต็ม</button></div>
-      <div class="small muted" style="margin-bottom:8px">ออก ${fmtClock(tl.startMs)} · รวม ${num1(tl.totalKm)} กม. · ${Planner.fmtDur(tl.totalMin)} · จอดจุดละ ${int(tl.dwell)} น.</div>
-      <div class="scrolly" style="max-height:160px">${tl.events.filter(e=>e.kind==='stop').map(e=>
-        `<div class="flex between aic" style="padding:5px 0;border-bottom:1px solid #F3F5F8;gap:8px;font-size:13px">
+      <div class="tl-stats" style="margin-bottom:8px">
+        <div class="tl-stat"><b>${fmtClock(tl.startMs)}</b><span>ออกคลัง</span></div>
+        <div class="tl-stat"><b>${num1(tl.totalKm)} กม.</b><span>ระยะ</span></div>
+        <div class="tl-stat"><b>${Planner.fmtDur(tl.totalMin)}</b><span>เวลา</span></div>
+      </div>
+      ${tl.hasBadGeo ? `<div class="tl-warn" style="margin-bottom:8px">มีจุดพิกัดผิด — กดดูเต็มเพื่อรายละเอียด</div>` : ''}
+      <div class="scrolly" style="max-height:140px">${tl.events.filter(e=>e.kind==='stop').map(e=>
+        `<div class="flex between aic" style="padding:6px 0;border-bottom:1px solid #F3F5F8;gap:8px;font-size:13px">
           <span class="mono muted">#${int(e.order)}</span>
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.place)}</span>
           <span class="tab">${fmtClock(e.at)}</span>
-          <span class="muted">${num1(e.km)} กม.</span>
-          <span class="muted">จอด ${int(e.dwellMin)} น.</span>
+          <span class="muted">${e.badGeo ? 'พิกัดผิด' : (num1(e.km)+' กม.')}</span>
           <span class="tab">ออก ${fmtClock(e.leaveAt)}</span>
         </div>`).join('')}</div>
     </div>`;

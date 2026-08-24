@@ -1091,7 +1091,10 @@ const Planner = {
           : 0;
       }
       leg = +Number(leg).toFixed(1);
-      const driveMin = this.driveMinForKm(leg);
+      // ระยะเกินจริงใน กทม./ปริมณฑล = พิกัดผิด ไม่นำไปคำนวณเวลา
+      const badGeo = leg > 200;
+      const useKm = badGeo ? 0 : leg;
+      const driveMin = this.driveMinForKm(useKm);
       t += driveMin * 60000;
       const arriveAt = t;
       const leaveAt = arriveAt + dwell * 60000;
@@ -1104,25 +1107,30 @@ const Planner = {
         deliveryId: s.DeliveryID,
         at: arriveAt,
         km: leg,
+        badGeo,
         dwellMin: dwell,
         leaveAt,
       });
       t = leaveAt;
-      if (this.hasCoords(s)) prev = { lat: +s.Latitude, lng: +s.Longitude };
+      if (this.hasCoords(s) && !badGeo) prev = { lat: +s.Latitude, lng: +s.Longitude };
     });
-    const returnKm = +(haversine(prev.lat, prev.lng, wh.lat, wh.lng)).toFixed(1);
+    let returnKm = +(haversine(prev.lat, prev.lng, wh.lat, wh.lng)).toFixed(1);
+    const returnBad = returnKm > 200;
+    if (returnBad) returnKm = 0;
     const returnDrive = this.driveMinForKm(returnKm);
     t += returnDrive * 60000;
     events.push({
       kind: 'return_wh', label: 'กลับถึงคลัง', place: wh.name || 'คลัง',
-      at: t, km: returnKm, dwellMin: 0, leaveAt: t,
+      at: t, km: returnBad ? null : returnKm, badGeo: returnBad, dwellMin: 0, leaveAt: t,
     });
-    const totalKm = +(events.reduce((n, e) => n + (Number(e.km) || 0), 0)).toFixed(1);
+    const totalKm = +(events.reduce((n, e) => n + (e.badGeo ? 0 : (Number(e.km) || 0)), 0)).toFixed(1);
     const totalMin = Math.round((t - startMs) / 60000);
+    const hasBadGeo = events.some(e => e.badGeo);
     return {
       events, startMs, endMs: t, totalKm, totalMin, dwell,
       speed: this.speed(),
       startSource: route && route.GpsStartedAt ? 'gps' : 'plan',
+      hasBadGeo,
     };
   },
   extAmount(v, distanceKm){ const rate=Number(v&&v.Rate)||0; return v&&v.RateType==='PER_KM' ? +(rate*distanceKm).toFixed(2) : +rate; },
