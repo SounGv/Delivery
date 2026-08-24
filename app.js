@@ -963,6 +963,9 @@ async function loadBootstrap(){
     if (data.carriedOver > 0) {
       toast('ดึงงานค้าง ' + data.carriedOver + ' รายการมาวันที่ ' + thDate(Store.date) + ' แล้ว (รายงานวันนี้นับรวมด้วย)', 'ok');
     }
+    if (data.ghostsPurged > 0) {
+      toast('ลบแถวว่างค้าง ' + data.ghostsPurged + ' รายการ (ไม่มีบิล/PO/มูลค่า)', 'ok');
+    }
   }catch(e){
     Store.live = false; Store.error = e.message;
     // ยังไม่มีข้อมูลเลย → ใช้ข้อมูลทดลองไปก่อนให้แอปใช้งานได้ แล้วลองเชื่อมใหม่อัตโนมัติ
@@ -1008,6 +1011,7 @@ async function render(){
   buildNav(); setDateLabel(); updateSync();
   const view = el('view');
   document.body.classList.toggle('driver-mode', page==='driver');
+  document.body.classList.toggle('del-app-page', page==='dashboard' && window.innerWidth <= 720);
   if(page==='driver'){ view.classList.add('driver'); } else { view.classList.remove('driver'); el('dnav').innerHTML=''; }
   const fn = ROUTES[page] || ROUTES.dashboard;
   view.innerHTML = loadingState();
@@ -1021,6 +1025,9 @@ async function render(){
 }
 window.render = render;
 window.addEventListener('hashchange', render);
+window.addEventListener('resize', () => {
+  document.body.classList.toggle('del-app-page', currentRoute() === 'dashboard' && window.innerWidth <= 720);
+});
 
 /* ================================================================
    PLANNER — route optimization + options + cost
@@ -1576,7 +1583,7 @@ async function silentTrcloudSync(){
   Store._trcloudSyncing = true;
   try{
     const r = await API.post('syncTrcloudOrders', { dateTo: Store.date, workDate: Store.date, lookbackDays: 2, limit: 80 });
-    if(r && ((r.imported|0) > 0 || (r.updated|0) > 0)){
+    if(r && ((r.imported|0) > 0 || (r.updated|0) > 0 || (r.ghostsPurged|0) > 0)){
       await silentSync();
       if(['deliveries','dashboard','trcloud'].includes(Store.page)) render();
     }

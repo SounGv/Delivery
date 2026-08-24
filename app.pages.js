@@ -128,7 +128,7 @@ function actIcon(a){ return {CREATE_DELIVERY:'package-plus',CREATE_ROUTE:'route'
 
 ROUTES.dashboard = async function(view){
   const allDel = Store.data.deliveries || [];
-  const open = allDel.filter(d => DelView.isOpen(d));
+  const open = allDel.filter(d => DelView.isOpen(d) && !DelView.isGhost(d));
   const done = allDel.filter(d => DelView.isDone(d));
   const viewMode = dPick.viewMode || 'queue';
   const baseList = viewMode === 'done' ? done : open;
@@ -150,22 +150,24 @@ ROUTES.dashboard = async function(view){
   const allChecked = viewMode === 'queue' && rows.length > 0 && rows.every(d => dPick.sel.has(d.DeliveryID));
   const statsBase = viewMode === 'done' ? done : open;
   const zoneNamed = districtCounts(statsBase).filter(([n]) => n !== 'ไม่ระบุเขต').length;
+  const kpi = DelView.kpi(statsBase);
   const headSub = viewMode === 'done'
     ? `${thDate(Store.date)} · ส่งแล้ว ${int(done.length)} ร้าน`
     : `${thDate(Store.date)} · รอส่ง ${int(open.length)} ร้าน${zoneNamed ? ` · ${int(zoneNamed)} เขต` : ''}`;
 
   page(view, `
     <div class="del-page">
-    ${delMobPageHead('วันนี้', headSub)}
-    ${delViewTabsHtml(open.length, done.length)}
+    ${delMobShell({ openN: open.length, doneN: done.length, zoneNamed, viewMode, openList: open, baseList: statsBase, kpi })}
     ${viewMode === 'queue' ? delMobQueueHint() : delMobDoneHint()}
-    <div class="del-mob-toolbar">
+    <div class="desk-only">${head('วันนี้', headSub, `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}</div>
+    <div class="desk-only">${delViewTabsHtml(open.length, done.length)}</div>
+    <div class="del-mob-toolbar desk-only">
       <div class="del-search mb14">
         <i data-lucide="search"></i>
-        <input id="delSearch" class="input" placeholder="ค้นหาร้าน เขต PO บิล…" value="${esc(Store.search || '')}" enterkeyhint="search" autocomplete="off">
+        <input id="delSearchDesk" class="input" placeholder="ค้นหาร้าน เขต PO บิล…" value="${esc(Store.search || '')}" enterkeyhint="search" autocomplete="off">
       </div>
     </div>
-    ${viewMode === 'queue' ? districtChipsHtml(open) : delFilterChipsHtml()}
+    ${viewMode === 'queue' ? districtChipsHtml(open, { deskOnly: true }) : delFilterChipsHtml(statsBase, { deskOnly: true })}
     <div class="card del-list-card ${selN ? 'has-sel' : ''}" style="padding:0">
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
@@ -213,14 +215,16 @@ ROUTES.dashboard = async function(view){
     ROUTES.dashboard(view);
   });
   const sy = view.querySelector('[data-act="sync"]'); if (sy) sy.onclick = async e => { e.target.closest('button').disabled = true; await loadBootstrap(); render(); toast('รีเฟรชข้อมูลแล้ว','ok'); };
-  const ds = view.querySelector('#delSearch');
-  if (ds) {
+  const bindDelSearch = (ds) => {
+    if (!ds) return;
     ds.oninput = () => {
       Store.search = ds.value.trim().toLowerCase();
       clearTimeout(ds._t);
       ds._t = setTimeout(() => ROUTES.dashboard(view), 200);
     };
-  }
+  };
+  bindDelSearch(view.querySelector('#delSearch'));
+  bindDelSearch(view.querySelector('#delSearchDesk'));
   const fn = view.querySelector('#fName');
   if (fn) {
     fn.oninput = () => {
@@ -328,6 +332,15 @@ const DelView = {
   docIso(d){ return String(d.DocumentDate || '').slice(0, 10); },
   isOpen(d){ return ['Draft','Pending','Planned','Assigned','In Progress',''].includes(d.Status || ''); },
   isDone(d){ return d.Status === 'Completed'; },
+  /** แถวว่างไม่มีบิล/PO/มูลค่า — ไม่ควรโผล่ในคิว (ทำให้ user งง) */
+  isGhost(d){
+    if (d.RouteID) return false;
+    if (['Planned','Assigned','In Progress'].includes(d.Status || '')) return false;
+    if (String(d.InvoiceNo || '').trim()) return false;
+    if (this.amount(d)) return false;
+    if (String(d.PoNo || '').trim()) return false;
+    return true;
+  },
   /** บิลเก่าที่ sync มาแล้วปิดเป็น Completed (ไม่ใช่งานที่ส่งวันนี้) */
   isSyncArchive(d){
     if (!this.isDone(d)) return false;
@@ -454,6 +467,7 @@ function deliveryFilterCounts(allRows){
     noRoute: allRows.filter(d => DelView.isNoRoute(d)).length,
     dueToday: allRows.filter(d => DelView.isDueToday(d)).length,
     overdue: allRows.filter(d => DelView.isOverdue(d)).length,
+    syncArchive: allRows.filter(d => DelView.isSyncArchive(d)).length,
     selected: allRows.filter(d => dPick.sel.has(d.DeliveryID)).length,
   };
 }
@@ -495,6 +509,29 @@ function delDistrictFilterHtml(districtList){
     </div>
   </div>`;
 }
+function delMobShell({ openN, doneN, zoneNamed, viewMode, openList, baseList, kpi }){
+  const amt = kpi && kpi.amountSum > 0 ? `<span class="del-mob-stat"><b class="tab">${money(kpi.amountSum)}</b><span>มูลค่า</span></span>` : '';
+  const zoneStat = zoneNamed ? `<span class="del-mob-stat"><b>${int(zoneNamed)}</b><span>เขต</span></span>` : '';
+  const queueStat = viewMode === 'done'
+    ? `<span class="del-mob-stat"><b>${int(doneN)}</b><span>ส่งแล้ว</span></span>`
+    : `<span class="del-mob-stat accent"><b>${int(openN)}</b><span>รอส่ง</span></span>`;
+  return `<div class="del-mob-shell m-only">
+    <div class="del-mob-shell-top">
+      <div class="del-mob-shell-title">
+        <div class="del-mob-app-title">วันนี้</div>
+        <div class="del-mob-app-date">${esc(thDate(Store.date))}</div>
+      </div>
+      <button type="button" class="icon-btn del-mob-sync" data-act="sync" title="รีเฟรช" aria-label="รีเฟรช"><i data-lucide="refresh-cw"></i></button>
+    </div>
+    <div class="del-mob-stats">${queueStat}${zoneStat}${amt}</div>
+    ${delViewTabsHtml(openN, doneN, { compact: true })}
+    <div class="del-search del-mob-search">
+      <i data-lucide="search"></i>
+      <input id="delSearch" class="input" placeholder="ค้นหาร้าน เขต PO บิล…" value="${esc(Store.search || '')}" enterkeyhint="search" autocomplete="off">
+    </div>
+    ${viewMode === 'queue' ? districtChipsHtml(openList) : delFilterChipsHtml(baseList)}
+  </div>`;
+}
 function delMobPageHead(title, sub){
   return `<div class="del-mob-page-head m-only">
     <div>
@@ -509,24 +546,29 @@ function delMobPageHead(title, sub){
 }
 function delMobQueueHint(){
   return `<details class="del-mob-tip m-only">
-    <summary>วิธีจัดรถอัตโนมัติ</summary>
-    <div class="del-mob-tip-body">1) ติ๊ก chip เขต (เลือกได้หลายเขต)<br>2) ติ๊กร้าน หรือแตะการ์ดเพื่อเลือก<br>3) กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ</div>
+    <summary><i data-lucide="help-circle"></i> วิธีจัดรถ</summary>
+    <div class="del-mob-tip-body">เลือก chip เขต → ติ๊กร้าน → กด <b>จัดรถอัตโนมัติ</b> ด้านล่าง</div>
   </details>
   <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>`;
 }
 function delMobDoneHint(){
-  return `<div class="del-mob-banner ok m-only"><i data-lucide="check-circle-2"></i><div>บิล<strong>ส่งแล้ว</strong> — ไม่แสดงในคิวจัดรถ · sync ข้ามบิลที่มี <span class="mono">[DISPATCH:DELIVERED]</span></div></div>
+  return `<div class="del-mob-done-note m-only">บิลส่งแล้ว — ไม่แสดงในคิวจัดรถ</div>
   <div class="notice ok mb14 desk-only"><i data-lucide="check-circle-2"></i><div>บิลที่<strong>ส่งแล้ว</strong> — ไม่แสดงในคิวจัดรถ · sync จาก TRCloud จะข้ามบิลที่มีเครื่องหมาย <span class="mono">[DISPATCH:DELIVERED]</span> แล้ว</div></div>`;
 }
-function delViewTabsHtml(openN, doneN){
+function delViewTabsHtml(openN, doneN, opts){
+  const compact = opts && opts.compact;
   const mode = dPick.viewMode || 'queue';
-  const tab = (key, label, n) => `<button type="button" class="pw-step ${mode === key ? 'on' : ''}" data-del-view="${key}" role="tab" aria-selected="${mode === key}">${esc(label)} (${int(n)})</button>`;
-  return `<div class="del-view-tabs plan-wizard-steps mb14" id="delViewTabs" role="tablist">${tab('queue', 'รอจัดส่ง', openN)}${tab('done', 'ส่งแล้ว', doneN)}</div>`;
+  const tab = (key, label, n) => `<button type="button" class="pw-step ${mode === key ? 'on' : ''}" data-del-view="${key}" role="tab" aria-selected="${mode === key}">${esc(label)}<span class="del-tab-n">${int(n)}</span></button>`;
+  const qLabel = compact ? 'รอส่ง' : 'รอจัดส่ง';
+  const dLabel = compact ? 'ส่งแล้ว' : 'ส่งแล้ว';
+  return `<div class="del-view-tabs plan-wizard-steps${compact ? ' del-view-tabs-compact' : ''} mb14" id="delViewTabs" role="tablist">${tab('queue', qLabel, openN)}${tab('done', dLabel, doneN)}</div>`;
 }
-function delFilterChipsHtml(){
+function delFilterChipsHtml(list, opts){
   const f = dPick.filter || 'all';
-  const chip = (key, label) => `<button type="button" class="pw-step ${f === key ? 'on' : ''}" data-dfilter="${key}">${esc(label)}</button>`;
-  return `<div class="del-mob-chips plan-wizard-steps mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
+  const counts = deliveryFilterCounts(list || []);
+  const chip = (key, label) => `<button type="button" class="pw-step ${f === key ? 'on' : ''}" data-dfilter="${key}">${esc(label)} (${int(counts[key] || 0)})</button>`;
+  const inner = `<div class="del-mob-chips plan-wizard-steps mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
+  return (opts && opts.deskOnly) ? `<div class="desk-only">${inner}</div>` : inner;
 }
 function delTableHead(staffList, districtList, showStatus){
   return `<thead>
@@ -565,27 +607,27 @@ function districtCounts(list){
   });
   return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
 }
-function districtChipsHtml(list){
+function districtChipsHtml(list, opts){
   const counts = districtCounts(list);
   const noneN = (list || []).filter(d => !DelView.zone(d)).length;
   const ds = dPick.districts;
   const allOn = !ds.size;
   const chip = (key, label, n) => {
     const on = ds.has(key);
-    return `<button type="button" class="pw-step ${on ? 'on' : ''}" data-district="${esc(key)}" title="ติ๊กเลือก/ยกเลิกเขต">${on ? '☑ ' : ''}${esc(label)} (${int(n)})</button>`;
+    return `<button type="button" class="pw-step ${on ? 'on' : ''}" data-district="${esc(key)}" title="ติ๊กเลือก/ยกเลิกเขต">${on ? '✓ ' : ''}${esc(label)} <span class="del-chip-n">${int(n)}</span></button>`;
   };
-  const chips = [`<button type="button" class="pw-step ${allOn ? 'on' : ''}" data-district="">ทั้งหมด (${int(list.length)})</button>`]
+  const chips = [`<button type="button" class="pw-step ${allOn ? 'on' : ''}" data-district="">ทั้งหมด <span class="del-chip-n">${int((list || []).length)}</span></button>`]
     .concat(counts.filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) => chip(name, name, n)));
   if (noneN) chips.push(chip('__none__', 'ไม่ระบุเขต', noneN));
-  const picked = ds.size ? `<span class="small strong" style="color:var(--brand-ink)">เลือก ${int(ds.size)} เขต</span>` : '';
-  return `<div class="del-district-bar">
+  const picked = ds.size ? `<span class="del-district-picked">${int(ds.size)} เขต</span>` : '';
+  const inner = `<div class="del-district-bar">
     <div class="del-district-cap">
       <span class="small muted desk-only">chip เขต = ติ๊กเลือกบิลจัดรถ · dropdown ใต้หัวคอลัมน์ = กรองดู</span>
-      <span class="small muted m-only">${picked || 'เลื่อนซ้าย-ขวาเลือกเขต'}</span>
-      ${picked ? `<span class="small strong m-only" style="color:var(--brand-ink)">${int(ds.size)} เขต</span>` : ''}
+      ${picked || '<span class="del-district-hint">เลื่อนเลือกเขต</span>'}
     </div>
     <div class="del-mob-chips plan-wizard-steps" id="districtChips">${chips.join('')}</div>
   </div>`;
+  return (opts && opts.deskOnly) ? `<div class="desk-only">${inner}</div>` : inner;
 }
 function delKpiStrip(kpi){
   const cell = (label, val, color) => `<div class="del-kpi-card" style="--kpi:${color}">
@@ -632,28 +674,31 @@ function delMobileCard(d, opts){
   const po = DelView.poNo(d);
   const inv = DelView.invoiceNo(d);
   const invShow = (inv && po && inv.replace(/\s+/g,'').toLowerCase() === po.replace(/\s+/g,'').toLowerCase()) ? '' : inv;
-  const poLine = (po || invShow) ? `<div class="job-card-po">${po ? `<span class="muted">PO</span> ${esc(po)}` : ''}${po && invShow ? ' · ' : ''}${invShow ? `<span class="muted">บิล</span> ${esc(invShow)}` : ''}</div>` : '';
+  const refs = [po ? `PO ${po}` : '', invShow ? `บิล ${invShow}` : ''].filter(Boolean).join(' · ');
   const showSel = viewMode === 'queue';
+  const amt = DelView.amount(d);
+  const amtHtml = amt != null ? `<div class="job-card-amt tab">${money(amt)}</div>` : '';
+  const statusHtml = (viewMode === 'done' || !DelView.isNoRoute(d)) ? `<div class="job-card-status">${delStatusBadge(d)}</div>` : '';
   const foot = showSel && DelView.isNoRoute(d)
-    ? `<div class="job-card-foot"><button type="button" class="btn btn-sm" data-quick="${esc(d.DeliveryID)}">จัดทีละงาน</button></div>`
+    ? `<div class="job-card-foot"><button type="button" class="btn btn-sm btn-ghost" data-quick="${esc(d.DeliveryID)}">จัดทีละงาน</button></div>`
     : '';
-  return `<div class="job-card ${selected ? 'on' : ''}" data-card="${esc(d.DeliveryID)}">
-    <div class="job-card-top">
+  return `<div class="job-card job-card-mob ${selected ? 'on' : ''}" data-card="${esc(d.DeliveryID)}">
+    <div class="job-card-row">
       ${showSel ? `<label class="job-check"><input type="checkbox" class="d-sel" data-sel="${esc(d.DeliveryID)}" ${selected ? 'checked' : ''} aria-label="เลือก ${esc(d.CustomerName || 'ร้าน')}"></label>` : ''}
-      <div class="job-card-main">
-        <div class="job-card-title">${esc(d.CustomerName || 'ไม่ระบุร้าน')}</div>
-        <div class="job-card-sub">${esc(zone || 'ไม่ระบุเขต')}${DelView.isOverdue(d) ? ' · <span style="color:var(--red-ink)">เลยกำหนด</span>' : ''}</div>
-        ${d.Address ? `<div class="small muted" style="margin-top:2px;line-height:1.35">${esc(shortAddr(d.Address, 72))}</div>` : ''}
+      <div class="job-card-body">
+        <div class="job-card-head">
+          <div class="job-card-title">${esc(d.CustomerName || 'ไม่ระบุร้าน')}</div>
+          ${amtHtml}
+        </div>
+        <div class="job-card-meta">
+          ${zone ? `<span class="job-zone">${esc(zone)}</span>` : '<span class="job-zone muted">ไม่ระบุเขต</span>'}
+          ${DelView.isOverdue(d) ? '<span class="job-overdue">เลยกำหนด</span>' : ''}
+          ${statusHtml}
+        </div>
+        ${refs ? `<div class="job-card-refs">${esc(refs)}</div>` : ''}
+        ${d.Address ? `<div class="job-card-addr">${esc(shortAddr(d.Address, 80))}</div>` : ''}
       </div>
-      ${viewMode === 'done' || !DelView.isNoRoute(d) ? delStatusBadge(d) : ''}
     </div>
-    <div class="job-card-grid">
-      <div><span class="lbl">มูลค่า</span><div class="val">${delAmountHtml(d)}</div></div>
-      <div><span class="lbl">WALK-IN / ชื่อ</span><div class="val">${delStaffBadge(d)}</div></div>
-      <div><span class="lbl">กำหนดส่ง</span><div class="val">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</div></div>
-      <div><span class="lbl">วันออกบิล</span><div class="val">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</div></div>
-    </div>
-    ${poLine}
     ${foot}
   </div>`;
 }
@@ -2416,6 +2461,8 @@ ROUTES.trcloud = async function(view){
         รูปแบบ ${(r.formats||[]).join('+')||'KSO+BSO'} · ช่วง ${esc(r.dateFrom||dateFrom)} → ${esc(r.dateTo||dateTo)} · พบรวม ${int(r.total)} ใบ · <b>ใหม่ ${int(r.imported)}</b> · อัปเดต ${int(r.updated)} · ข้าม ${int(r.skipped)}
         ${r.markedDelivered ? ` · ส่งแล้วใน TRCloud ${int(r.markedDelivered)}` : ''}
         ${r.skippedDelivered ? ` · ข้าม (ส่งแล้วในระบบ) ${int(r.skippedDelivered)}` : ''}
+        ${r.skippedIncomplete ? ` · ข้าม (ข้อมูลไม่ครบ) ${int(r.skippedIncomplete)}` : ''}
+        ${r.ghostsPurged ? ` · ลบแถวว่าง ${int(r.ghostsPurged)}` : ''}
         ${fmtLine?`<br><span class="small muted">${esc(fmtLine)}</span>`:''}
         ${r.errors&&r.errors.length?`<br><span class="small">error ${r.errors.length}: ${esc((r.errors[0]&&r.errors[0].error)||'')}</span>`:''}
         <div style="margin-top:10px"><a class="btn btn-sm btn-primary" href="#/deliveries">ไปหน้างานส่ง</a></div>
