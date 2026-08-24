@@ -1280,6 +1280,39 @@ const Planner = {
   },
   availableVehicles(){ return (Store.data.vehicles||[]).filter(v=>v.VehicleStatus==='Available'); },
   availableExternal(){ return (Store.data.externalVehicles||[]).filter(v=>v.Status==='Available'); },
+  /** รถว่างก่อน ถ้าไม่พอใช้รถบริษัททั้งหมด — ให้แบ่งเส้นได้แม้สถานะ Available มีคันเดียว */
+  fleetVehicles(){
+    const avail = this.availableVehicles();
+    const all = (Store.data.vehicles || []).filter(v => !v.IsDeleted);
+    const pool = avail.length >= 2 ? avail : (all.length ? all : avail);
+    return this.sortByWh(pool);
+  },
+  uniqueShops(seq){
+    const seen = new Set();
+    (seq || []).forEach(s => {
+      const lat = Number(s.Latitude), lng = Number(s.Longitude);
+      const k = Number.isFinite(lat) && Number.isFinite(lng)
+        ? lat.toFixed(5) + ',' + lng.toFixed(5)
+        : String(s.CustomerName || '').trim().toLowerCase() + '|' + String(s.Address || '').trim().toLowerCase().slice(0, 48);
+      seen.add(k);
+    });
+    return seen.size;
+  },
+  districtSet(seq){
+    return new Set((seq || []).map(s => String(s._district || '').trim() || 'ไม่ระบุเขต'));
+  },
+  /** จำนวนคันที่ควรแบ่ง: ตามเขต / จำนวนร้าน / เวลาทำงาน */
+  splitK(seq, metrics, nVeh){
+    if (nVeh < 2 || !seq || seq.length < 2) return 1;
+    const districts = this.districtSet(seq).size;
+    const shops = this.uniqueShops(seq);
+    const byTime = Math.max(1, Math.ceil((metrics.durationMin || 0) / this.workDayMin()));
+    const byZone = districts >= 2 ? Math.max(2, Math.ceil(districts / 3)) : 1;
+    const byShop = Math.max(1, Math.ceil(shops / 12));
+    const wantSplit = (shops >= 8 || seq.length >= 10) && districts >= 2;
+    const k = Math.max(wantSplit ? 2 : 1, byTime, byZone, byShop);
+    return Math.min(nVeh, k, seq.length);
+  },
 
   // รถบริษัทที่ว่าง + ใกล้คลังที่สุด (ไม่เช็กความจุกล่อง)
   recommendVehicle(){
@@ -1306,6 +1339,7 @@ const Planner = {
       if(override.outboundKm != null) m.outboundKm=override.outboundKm;
       if(override.returnKm != null) m.returnKm=override.returnKm;
     }
+    const fleet = this.fleetVehicles();
     const avail = this.sortByWh(this.availableVehicles());
     const work = this.workDayMin();
     const workLbl = String(this.workStartHour()).padStart(2,'0')+':00–'+String(this.workEndHour()).padStart(2,'0')+':00';
@@ -1341,116 +1375,90 @@ const Planner = {
         note:`เสริมด้วย ${ext.ProviderName} · ${ext.LicensePlate||''}` });
     }
 
-    // OPTION C — แบ่งตามเขต/ทิศทาง (ซ้าย–ขวา) + จับคู่รถ ตามเวลาทำงาน
-    if(avail.length>=2 && seq.length>=2){
-      let kRec = this.suggestK(seq, m, avail.length);
-      if(kRec<2) kRec=2; // มี ≥2 คันและ ≥2 จุด → อย่างน้อยแบ่ง 2 ทิศ
-      kRec = Math.min(kRec, avail.length, seq.length);
-      const groups = this.autoSplit(seq, avail.slice(0,kRec));
+    // OPTION C — แบ่งตามเขต + จับคู่รถ
+    if(fleet.length>=2 && seq.length>=2){
+      const kRec = this.splitK(seq, m, fleet.length);
+      const groups = kRec >= 2 ? this.autoSplit(seq, fleet.slice(0, kRec)) : [];
+      if (groups.length >= 2) {
       const totalDist = +groups.reduce((n,g)=>n+g.m.distance,0).toFixed(1);
       const cFuel=groups.reduce((n,g)=>n+g.cost.fuel,0), cToll=groups.reduce((n,g)=>n+g.cost.toll,0), cPark=groups.reduce((n,g)=>n+g.cost.parking,0);
       const anyOver = groups.some(g=>g.overtime);
-      opts.push({ id:'C', name:`แบ่งตามเขต ${groups.length} คัน (ทิศทาง)`, feasible:true, recommended:m.durationMin>work || avail.length>=2,
-        kRec, kMax:Math.min(avail.length, seq.length), split:groups,
+      opts.push({ id:'C', name:`แบ่งตามเขต ${groups.length} คัน`, feasible:true, recommended:m.durationMin>work || this.districtSet(seq).size>=2,
+        kRec, kMax:Math.min(fleet.length, seq.length), split:groups,
         vehicles:groups.map(g=>g.v), distance:totalDist, duration:Math.max(...groups.map(g=>g.m.durationMin)),
         boxes:m.boxes, stops:m.stops, overtime:anyOver,
         cost:{ fuel:+cFuel.toFixed(2), toll:cToll, parking:cPark, external:0, other:0, total:+(cFuel+cToll+cPark).toFixed(2) },
-        note: groups.map((g,i)=>`คัน ${i+1} ทิศ${g.sector}: ${g.seq.length} จุด · ${this.fmtDur(g.m.durationMin)}`).join(' · ') });
+        note: groups.map((g,i)=>`คัน ${i+1} ${vehicleShortName(g.v)} · ${(g.districts||[]).join('/') || g.sector}: ${g.seq.length} จุด`).join(' · ') });
+      }
     }
     return { metrics:m, options:opts, workDayMin:work, workLabel:workLbl };
   },
 
-  // แบ่งจุดส่งเป็น K กลุ่มตามทิศทาง/เขต (ถ้ามี) แล้วจับคู่รถให้เหมาะกับแต่ละกลุ่ม
-  // คืน {seq,m,v,cost,sector,overtime,bills}
+  // แบ่งจุดส่งเป็น K กลุ่ม: ทั้งเขตไปคันเดียวกัน เขตใกล้กันอยู่รถคันเดียวกัน แล้วจับคู่รถใกล้ centroid
   autoSplit(seq, vehicles){
     const wh = warehouse();
     const work = this.workDayMin();
-    if(vehicles.length<=1){
-      const s=this.order(seq.map(x=>Object.assign({},x))); const mm=this.metrics(s);
-      return [{ seq:s, m:mm, v:vehicles[0], cost:this.companyCost(mm.distance, vehicles[0]),
-        sector:this.sectorLabel(s), overtime:mm.durationMin>work, bills:s.map(x=>({invoice:x.InvoiceNo||'', customer:x.CustomerName||'', branch:x.BranchName||'', boxes:Number(x.BoxQty)||0, id:x.DeliveryID})) }];
+    const packOne = (stops, v) => {
+      const s = this.order((stops || []).map(x => Object.assign({}, x)));
+      const mm = this.metrics(s);
+      return {
+        seq: s, m: mm, v,
+        cost: this.companyCost(mm.distance, v),
+        sector: this.sectorLabel(s), overtime: mm.durationMin > work,
+        districts: [...this.districtSet(s)],
+        bills: s.map(x => ({ invoice: x.InvoiceNo || '', customer: x.CustomerName || '', branch: x.BranchName || '', boxes: Number(x.BoxQty) || 0, id: x.DeliveryID }))
+      };
+    };
+    if (!vehicles || vehicles.length <= 1) {
+      return [packOne(seq, vehicles && vehicles[0])];
     }
     const K = vehicles.length;
     const byDistrict = new Map();
     (seq || []).forEach((s) => {
-      const key = String(s._district || '').trim() || '__none__';
+      const key = String(s._district || '').trim() || 'ไม่ระบุเขต';
       if (!byDistrict.has(key)) byDistrict.set(key, []);
       byDistrict.get(key).push(Object.assign({}, s));
     });
-    // clone + เรียงตามมุมจากคลัง → กลุ่มติดกันเป็น “ซ้าย/ขวา” ตามพื้นที่
-    const groups = Array.from({length:K},()=>[]);
-    // ถ้ามีหลายเขตเด่น ๆ ให้กระจายตามเขตก่อน เพื่อให้เส้นไม่ข้ามโซนเยอะ
-    if (byDistrict.size >= 2 && seq.length >= K * 2) {
-      const districts = Array.from(byDistrict.entries())
-        .sort((a, b) => b[1].length - a[1].length);
-      districts.forEach(([_, items], idx) => {
-        items.forEach((it) => groups[idx % K].push(it));
-      });
-      // จัดลำดับในแต่ละกลุ่มตามมุมจากคลังอีกครั้ง
-      for (let i = 0; i < groups.length; i++) {
-        groups[i] = groups[i].sort((a, b) => bearing(wh.lat, wh.lng, +a.Latitude, +a.Longitude) - bearing(wh.lat, wh.lng, +b.Latitude, +b.Longitude));
-      }
-    } else {
-      const pts = seq.map(s=>Object.assign({},s)).sort((a,b)=>bearing(wh.lat,wh.lng,+a.Latitude,+a.Longitude)-bearing(wh.lat,wh.lng,+b.Latitude,+b.Longitude));
-      // แบ่งจำนวนจุดให้ใกล้เคียงกัน (ไม่ใช้ความจุกล่อง)
-      const base = Math.floor(pts.length / K), rem = pts.length % K;
-      let idx=0;
-      for(let gi=0; gi<K; gi++){
-        const take = base + (gi < rem ? 1 : 0);
-        for(let t=0; t<take && idx<pts.length; t++) groups[gi].push(pts[idx++]);
-      }
-    }
+    const packs = [];
+    byDistrict.forEach((items, name) => {
+      const lat = items.reduce((n, s) => n + (+s.Latitude || 0), 0) / items.length;
+      const lng = items.reduce((n, s) => n + (+s.Longitude || 0), 0) / items.length;
+      packs.push({ name, items, n: items.length, bearing: bearing(wh.lat, wh.lng, lat, lng) });
+    });
+    packs.sort((a, b) => a.bearing - b.bearing);
 
-    const distOf = g => g.length ? this.metrics(this.order(g.map(x=>Object.assign({},x)))).distance : 0;
-    for(let pass=0; pass<4; pass++){
-      let improved=false;
-      for(let i=0;i<K-1;i++){
-        const A=groups[i], B=groups[i+1];
-        if(!A.length || !B.length) continue;
-        const baseD = distOf(A)+distOf(B);
-        let bestCand=null, bestDist=baseD;
-        if(A.length>1){
-          const A2=A.slice(0,-1), B2=[A[A.length-1],...B];
-          const d=distOf(A2)+distOf(B2); if(d<bestDist-0.05){ bestDist=d; bestCand=[A2,B2]; }
-        }
-        if(B.length>1){
-          const B2=B.slice(1), A2=[...A,B[0]];
-          const d=distOf(A2)+distOf(B2); if(d<bestDist-0.05){ bestDist=d; bestCand=[A2,B2]; }
-        }
-        if(bestCand){ groups[i]=bestCand[0]; groups[i+1]=bestCand[1]; improved=true; }
+    const groups = Array.from({ length: K }, () => []);
+    const total = (seq || []).length || 1;
+    const goals = Array.from({ length: K }, (_, i) => Math.round(total * (i + 1) / K));
+    let gi = 0, acc = 0;
+    packs.forEach((p, idx) => {
+      const remainPacks = packs.length - idx;
+      const remainGroups = K - gi;
+      if (gi < K - 1 && acc >= goals[gi] && remainPacks >= remainGroups) {
+        gi += 1;
       }
-      if(!improved) break;
-    }
-    // จับคู่รถที่อยู่ใกล้ centroid ของกลุ่มก่อน ลด deadhead route
+      p.items.forEach((it) => groups[gi].push(it));
+      acc += p.n;
+    });
+
     const vehPool = (vehicles || []).slice();
     const pickVehicleForGroup = (g) => {
       if (!vehPool.length || !g.length) return null;
-      const ctr = g.reduce((acc, s) => {
-        acc.lat += +s.Latitude || 0;
-        acc.lng += +s.Longitude || 0;
-        return acc;
+      const ctr = g.reduce((acc2, s) => {
+        acc2.lat += +s.Latitude || 0;
+        acc2.lng += +s.Longitude || 0;
+        return acc2;
       }, { lat: 0, lng: 0 });
       ctr.lat /= g.length; ctr.lng /= g.length;
       let best = 0; let bestDist = Infinity;
       vehPool.forEach((v, i) => {
-        const d = haversine(
-          (+v.CurrentLatitude || wh.lat), (+v.CurrentLongitude || wh.lng),
-          ctr.lat, ctr.lng
-        );
+        const d = haversine((+v.CurrentLatitude || wh.lat), (+v.CurrentLongitude || wh.lng), ctr.lat, ctr.lng);
         if (d < bestDist) { bestDist = d; best = i; }
       });
       return vehPool.splice(best, 1)[0];
     };
 
-    return groups.map((g,i)=>{
-      if(!g.length) return null;
-      const s=this.order(g), mm=this.metrics(s), v=pickVehicleForGroup(g) || vehicles[i];
-      return {
-        seq:s, m:mm, v, cost:this.companyCost(mm.distance, v),
-        sector:this.sectorLabel(s), overtime:mm.durationMin>work,
-        bills:s.map(x=>({invoice:x.InvoiceNo||'', customer:x.CustomerName||'', branch:x.BranchName||'', boxes:Number(x.BoxQty)||0, id:x.DeliveryID}))
-      };
-    }).filter(Boolean);
+    return groups.filter(g => g.length).map((g, i) => packOne(g, pickVehicleForGroup(g) || vehicles[i]));
   }
 };
 

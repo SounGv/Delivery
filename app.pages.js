@@ -192,6 +192,7 @@ ROUTES.dashboard = async function(view){
               <td class="small tab">${DelView.docIso(d) ? thDate(DelView.docIso(d)) : '—'}</td>
               <td class="small tab">${DelView.dueIso(d) ? thDate(DelView.dueIso(d)) : '—'}</td>
               ${viewMode === 'done' ? `<td>${delStatusBadge(d)}</td>` : ''}
+              <td class="c del-act">${delRowActionsHtml(d, viewMode)}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>` : (Store.search
@@ -328,6 +329,22 @@ ROUTES.dashboard = async function(view){
     e.stopPropagation();
     const d = rows.find(x => x.DeliveryID === btn.dataset.quick) || allDel.find(x => x.DeliveryID === btn.dataset.quick);
     if (d) quickDispatch(d);
+  });
+  $$('[data-del-edit]', view).forEach(btn => btn.onclick = (e) => {
+    e.stopPropagation();
+    const d = allDel.find(x => x.DeliveryID === btn.dataset.delEdit) || rows.find(x => x.DeliveryID === btn.dataset.delEdit);
+    if (d) deliveryForm(d);
+  });
+  $$('[data-del-row-del]', view).forEach(btn => btn.onclick = (e) => {
+    e.stopPropagation();
+    const d = allDel.find(x => x.DeliveryID === btn.dataset.delRowDel) || rows.find(x => x.DeliveryID === btn.dataset.delRowDel);
+    if (!d) return;
+    confirmDialog(`ลบบิล "${d.CustomerName || d.InvoiceNo || d.PoNo || ''}" ? (กู้คืนได้)`, () => {
+      deleteLocal('deliveries', 'deleteDelivery', d.DeliveryID, { id: d.DeliveryID }).then(() => {
+        dPick.sel.delete(d.DeliveryID);
+        toast('ลบบิลแล้ว', 'ok');
+      }).catch(() => {});
+    }, { danger: true, yes: 'ลบ' });
   });
   const planBtn = view.querySelector('#dselPlan');
   if (planBtn) planBtn.onclick = (e) => {
@@ -615,6 +632,7 @@ function delTableHead(staffList, districtList, showStatus){
       <th>วันที่ออกเอกสาร</th>
       <th>กำหนดส่งของ</th>
       ${showStatus ? '<th>สถานะ</th>' : ''}
+      <th class="c del-act" style="width:88px">แก้</th>
     </tr>
     <tr class="del-filter-row">
       <th class="c"></th>
@@ -622,6 +640,7 @@ function delTableHead(staffList, districtList, showStatus){
       <th>${delStaffFilterHtml(staffList)}</th>
       <th>${delDistrictFilterHtml(districtList)}</th>
       <th colspan="${showStatus ? 6 : 5}"></th>
+      <th class="del-act"></th>
     </tr>
   </thead>`;
 }
@@ -682,6 +701,15 @@ function delAmountHtml(d){
   const a = DelView.amount(d);
   return a == null ? '<span class="muted">—</span>' : `<span class="tab">${money(a)}</span>`;
 }
+function delRowActionsHtml(d, viewMode){
+  if (viewMode === 'done') {
+    return `<button type="button" class="icon-btn" data-del-edit="${esc(d.DeliveryID)}" title="ดู / แก้ไข"><i data-lucide="pencil"></i></button>`;
+  }
+  return `<div class="del-row-acts">
+    <button type="button" class="icon-btn" data-del-edit="${esc(d.DeliveryID)}" title="แก้ไขบิล (ด่วน/ปกติ)"><i data-lucide="pencil"></i></button>
+    <button type="button" class="icon-btn del-row-del" data-del-row-del="${esc(d.DeliveryID)}" title="ลบ"><i data-lucide="trash-2"></i></button>
+  </div>`;
+}
 function delSelectionBar(selN, selAmount){
   if (!selN) return '';
   const distHint = dPick.districts.size
@@ -714,8 +742,12 @@ function delMobileCard(d, opts){
   const amt = DelView.amount(d);
   const amtHtml = amt != null ? `<div class="job-card-amt tab">${money(amt)}</div>` : '';
   const statusHtml = (viewMode === 'done' || !DelView.isNoRoute(d)) ? `<div class="job-card-status">${delStatusBadge(d)}</div>` : '';
-  const foot = showSel && DelView.isNoRoute(d)
-    ? `<div class="job-card-foot"><button type="button" class="btn btn-sm btn-ghost" data-quick="${esc(d.DeliveryID)}">จัดทีละงาน</button></div>`
+  const foot = showSel
+    ? `<div class="job-card-foot">
+        <button type="button" class="btn btn-sm" data-del-edit="${esc(d.DeliveryID)}"><i data-lucide="pencil"></i>แก้ไข</button>
+        ${DelView.isNoRoute(d) ? `<button type="button" class="btn btn-sm btn-ghost" data-quick="${esc(d.DeliveryID)}">จัดทีละงาน</button>` : ''}
+        <button type="button" class="btn btn-sm btn-danger" data-del-row-del="${esc(d.DeliveryID)}">ลบ</button>
+      </div>`
     : '';
   return `<div class="job-card job-card-mob ${selected ? 'on' : ''}" data-card="${esc(d.DeliveryID)}">
     <div class="job-card-row">
@@ -1170,17 +1202,11 @@ async function runAutoPlan(){
   const seq=Planner.order(enriched.filter(d=>Planner.hasCoords(d)));
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
-  const districts = new Set(seq.map(s => s._district).filter(Boolean));
-  const avail = Planner.sortByWh(Planner.availableVehicles());
-  let split = [];
-  if (avail.length >= 2 && seq.length >= 10 && districts.size >= 2) {
-    const kByLoad = Planner.suggestK(seq, out.metrics, avail.length);
-    const kByZone = Math.min(avail.length, Math.max(2, Math.min(districts.size, Math.ceil(seq.length / 8))));
-    const k = Math.min(avail.length, Math.max(kByLoad, kByZone), seq.length);
-    split = Planner.autoSplit(seq, avail.slice(0, k));
-  }
+  const fleet = Planner.fleetVehicles();
+  const k = Planner.splitK(seq, out.metrics, fleet.length);
+  const split = k >= 2 ? Planner.autoSplit(seq, fleet.slice(0, k)) : [];
   Plan.result={seq, split, ...out};
-  Plan.chosen = 'A';
+  Plan.chosen = split.length >= 2 ? 'C' : 'A';
   Plan.splitSel = split.map(g => splitSelFor(g));
   const rec = Planner.recommendVehicle() || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
   const emp = rec && (Store.data.employees||[]).find(e=>e.VehicleID===rec.VehicleID);
@@ -1228,30 +1254,38 @@ function renderDecision(){
   const dec = el('decision');
   if (!dec || !Plan.result) return;
   const { seq, metrics: m, split } = Plan.result;
-  const seqHtml = (seq || []).map((s, i) => displayBillRow(s, i + 1)).join('');
   const splitReady = Array.isArray(split) && split.length >= 2;
-  const timeWarn = m.durationMin > Planner.workDayMin()
+  const timeWarn = !splitReady && m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
   const splitNote = splitReady
-    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบแยกเป็น ${int(split.length)} รอบตามเขต/ทิศทางอัตโนมัติแล้ว กดยืนยันครั้งเดียวเพื่อบันทึกทุกรอบ</div></div>`
+    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบแยกเป็น <b>${int(split.length)} เส้นทาง</b> ตามเขตที่อยู่ใกล้กัน — แต่ละคันมีเขตของตัวเอง กดบันทึกครั้งเดียวจบทุกรอบ</div></div>`
     : '';
+  const splitLists = splitReady
+    ? split.map((g, i) => {
+        const zones = (g.districts && g.districts.length) ? g.districts : [...new Set(g.seq.map(s => s._district || DelView.zone(s)).filter(Boolean))];
+        return `<div class="plan-split-bills">
+          <div class="small strong" style="color:${SPLIT_COLORS[i%SPLIT_COLORS.length]}">รอบ ${i+1} · ${esc(vehicleShortName(g.v) || 'รถ')} · เขต ${esc(zones.join(' · ') || '—')}</div>
+          <div class="plan-stop-list scrolly">${g.seq.map((s, n) => displayBillRow(s, n + 1)).join('')}</div>
+        </div>`;
+      }).join('')
+    : `<div class="plan-stop-section">
+        <div class="small strong muted mb8">รายการบิลที่จัด (${int(m.stops)})</div>
+        <div class="plan-stop-list scrolly">${(seq || []).map((s, i) => displayBillRow(s, i + 1)).join('') || '<div class="muted small">ไม่มีบิล</div>'}</div>
+      </div>`;
 
   dec.innerHTML = `
     <div class="flex between aic mb14">
-      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน · ${num1(Planner.routeDisplayKm(m))} กม. ไป · ${num1(Planner.fuelDistanceKm(m))} กม. ไป-กลับ${m.source==='osrm'?'':' (ประมาณ)'} · ${Planner.fmtDur(m.durationMin)}</span>
+      <span class="h-card">${int(m.stops)} บิล · ${int(uniqueShopCount(seq))} ร้าน${splitReady ? ` · แยก ${int(split.length)} คัน` : ''} · ${num1(Planner.routeDisplayKm(m))} กม. ไป · ${Planner.fmtDur(m.durationMin)}</span>
       <button class="btn btn-sm" id="replan" type="button"><i data-lucide="rotate-cw"></i>เรียงลำดับใหม่</button>
     </div>
     ${timeWarn}
     ${splitNote}
     <div class="plan-driver-step">
-      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'เลือกรถ + คนขับรายรอบ' : 'เลือกรถ + คนขับ'}</span></div>
+      <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'รถ + คนขับที่ระบบจับคู่ให้ (แก้ได้)' : 'เลือกรถ + คนขับ'}</span></div>
       <div class="plan-driver-box" id="driverFormBox">${splitReady ? splitFormAll(Plan.result) : selForm()}</div>
     </div>
     ${splitReady ? `<div id="costBox" style="margin-top:12px">${splitCostBoxAll(Plan.result)}</div>` : ''}
-    <div class="plan-stop-section">
-      <div class="small strong muted mb8">รายการบิลที่จัด (${int(m.stops)})</div>
-      <div class="plan-stop-list scrolly">${seqHtml || '<div class="muted small">ไม่มีบิล</div>'}</div>
-    </div>
+    ${splitLists}
     <div class="flex gap8 mt16">
       <button class="btn btn-primary btn-block btn-lg" id="confirmRoute" type="button"><i data-lucide="save"></i>${confirmBtnLabel()}</button>
       <button class="btn btn-block btn-lg" id="confirmRouteReports" type="button"><i data-lucide="bar-chart-3"></i>บันทึกแล้วไปรายงาน</button>
@@ -1370,13 +1404,17 @@ function bindCostInputs(){
 }
 /* ---- multi-route (split) vehicle/driver selection — 1 ชุดต่อ Route ---- */
 function splitForm(g, i){
-  const veh=(Planner.availableVehicles().length?Planner.availableVehicles():(Store.data.vehicles||[]));
+  const veh = Planner.fleetVehicles().length ? Planner.fleetVehicles() : (Store.data.vehicles||[]);
   const emps=Store.data.employees||[];
   const drivers=emps.filter(x=>x.Role==='DRIVER'&&!x.IsDeleted);
   const sel = Plan.splitSel[i] || {};
   const color=SPLIT_COLORS[i%SPLIT_COLORS.length];
+  const zones = (g.districts && g.districts.length)
+    ? g.districts
+    : [...new Set((g.seq||[]).map(s => s._district || DelView.zone(s)).filter(Boolean))];
   return `<div class="plan-driver-card plan-split-card" style="border-left:4px solid ${color}">
-    <div class="strong" style="margin-bottom:10px">รอบ ${i+1} · ${int(g.seq.length)} บิล · ${Planner.fmtDur(g.m.durationMin)}</div>
+    <div class="strong" style="margin-bottom:4px">รอบ ${i+1} · ${esc(vehicleShortName(g.v) || 'รถ')} · ${int(g.seq.length)} บิล · ${Planner.fmtDur(g.m.durationMin)}</div>
+    <div class="small muted" style="margin-bottom:10px">เขตนี้ไปกับคันนี้: ${esc(zones.join(' · ') || '—')}</div>
     <div class="plan-driver-grid">
       <div class="field" style="margin:0"><label class="label">รถ</label>
         <select class="select" data-splitveh="${i}">${veh.map(v=>`<option value="${esc(v.VehicleID)}" ${sel.vehId===v.VehicleID?'selected':''}>${esc(vehicleOptionLabel(v))}</option>`).join('')}</select></div>
@@ -1548,11 +1586,14 @@ async function confirmRoute(goReports){
     try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
     if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.districts.clear(); }
     Plan.tab = 'plan';
+    if (goReports) Store._reportType = 'loadsheet';
     location.hash = goReports ? '#/reports' : '#/dashboard';
-    toast(`บันทึกแผนแยกเขตแล้ว ${int(groups.length)} รอบ`, 'ok', 'บันทึกแล้ว');
+    toast(goReports
+      ? `บันทึกแผนแยกเขตแล้ว ${int(groups.length)} รอบ — ดูเช็คขึ้นของที่รายงานได้`
+      : `บันทึกแผนแยกเขตแล้ว ${int(groups.length)} รอบ`, 'ok', 'บันทึกแล้ว');
     Promise.allSettled(routePromises).then((all) => {
       const routes = all.filter(x => x.status === 'fulfilled').map(x => x.value && x.value.RouteID).filter(Boolean);
-      if (routes.length) queueRoutePrints(routes);
+      if (!goReports && routes.length) queueRoutePrints(routes);
     });
     return;
   }
@@ -1560,12 +1601,13 @@ async function confirmRoute(goReports){
   try { sessionStorage.removeItem('ddc_plan_sel'); sessionStorage.removeItem('ddc_plan_lock'); } catch (_) {}
   if (typeof dPick !== 'undefined') { dPick.sel.clear(); dPick.districts.clear(); }
   Plan.tab = 'plan';
-  toast('บันทึกรายการแล้ว — เปิดใบงานให้พิมพ์','ok','บันทึกแล้ว');
+  if (goReports) Store._reportType = 'loadsheet';
+  toast(goReports ? 'บันทึกรายการแล้ว — เช็คขึ้นของที่หน้ารายงานได้ (ไม่บังคับพิมพ์)' : 'บันทึกรายการแล้ว — เปิดใบงานให้พิมพ์','ok','บันทึกแล้ว');
   location.hash = goReports ? '#/reports' : '#/dashboard';
   const routeMatch = r => r.DeliveryDate === Store.date && r.DriverName === data.DriverName && r.TotalStops === data.TotalStops && (r.__pending || r.Status === 'Planned');
   createRouteOptimistic('confirmRoute', data, stops).then(r => {
-    queueRoutePrints([r && r.RouteID], routeMatch);
-  }).catch(() => queueRoutePrints([], routeMatch));
+    if (!goReports) queueRoutePrints([r && r.RouteID], routeMatch);
+  }).catch(() => { if (!goReports) queueRoutePrints([], routeMatch); });
 }
 
 /* ================================================================
@@ -1577,7 +1619,7 @@ async function renderRoundsTab(view){
     ${head('จัดรถ', `${thDate(Store.date)} · ${int(routes.length)} รอบ`,
       `<button class="btn btn-sm" data-act="csv"><i data-lucide="download"></i>CSV</button>`)}
     ${planPageTabs('rounds')}
-    ${routes.length? `<div class="notice ok mb14"><i data-lucide="printer"></i><div>หลังยืนยันระบบเปิด <b>ใบงานส่ง</b> ให้พิมพ์อัตโนมัติ — หรือกด <b>พิมพ์ใบงาน</b> ที่แต่ละรอบอีกครั้ง</div></div>
+    ${routes.length? `<div class="notice info mb14"><i data-lucide="clipboard-check"></i><div>เช็คขึ้นของได้ที่ <b>รายงาน → เช็คขึ้นของ (ต่อคันรถ)</b> — พิมพ์เมื่อต้องการ หรือดูบิลจริงก็ได้ ไม่บังคับ</div></div>
       <div style="display:flex;flex-direction:column;gap:14px">${routes.map(routeCard).join('')}</div>`
       : emptyState('ยังไม่มีรอบส่งวันนี้','กลับไปหน้าวันนี้ → เลือกเขต → ยืนยัน','<a class="btn btn-primary" href="#/dashboard"><i data-lucide="home"></i>ไปหน้าวันนี้</a>')}
   `);
@@ -2440,9 +2482,12 @@ function employeeForm(e, veh){
    REPORTS
    ================================================================ */
 ROUTES.reports = async function(view){
-  const to = Store.date; const from = new Date(new Date(to).getTime()-6*864e5).toISOString().slice(0,10);
+  const to = Store.date;
+  const wantLoad = Store._reportType === 'loadsheet';
+  Store._reportType = '';
+  const from = wantLoad ? to : new Date(new Date(to).getTime()-6*864e5).toISOString().slice(0,10);
   page(view, `
-    ${head('รายงาน', 'ดูย้อนหลังว่ารถคันไหนวิ่งบิลไหน รอบไหน ระยะทาง เวลาออก-กลับ น้ำมันกี่ลิตร', '')}
+    ${head('รายงาน', 'เช็คขึ้นของต่อคันรถได้บนจอ — พิมพ์เมื่อต้องการ หรือเทียบกับบิลจริงก็ได้ ไม่บังคับ', '')}
     <div class="card mb14">
       <div class="flex gap12 wrap aic">
         <div><label class="label">จากวันที่</label><input type="date" class="input" id="rFrom" value="${from}"></div>
@@ -2452,7 +2497,8 @@ ROUTES.reports = async function(view){
           <button class="btn btn-sm" data-preset="today">วันนี้</button>
           <button class="btn btn-sm" data-preset="7">7 วัน</button>
           <button class="btn btn-sm" data-preset="month">เดือนนี้</button></div>
-        <div style="align-self:flex-end"><label class="label">ประเภทรายงาน</label><select class="select" id="rType" style="width:240px">
+        <div style="align-self:flex-end"><label class="label">ประเภทรายงาน</label><select class="select" id="rType" style="width:260px">
+          <option value="loadsheet" selected>เช็คขึ้นของ (ต่อคันรถ)</option>
           <option value="gpsactual">ดูย้อนหลัง (รถ · บิล · GPS)</option>
           <option value="routes">สรุปรอบส่ง</option>
           <option value="deliveries">รายการจัดส่ง (รายร้าน)</option>
@@ -2519,6 +2565,57 @@ function reportDetail(type, rep){
   rep = rep||{};
   const routes = rep.routes||[], dels = rep.deliveries||[], exps = rep.expenses||[];
   const rmap={}; routes.forEach(r=>{ rmap[r.RouteID]=r; });
+  if(type==='loadsheet'){
+    const leftover = (dels||[]).filter(d => !d.RouteID && !['Completed','Failed','Cancelled'].includes(d.Status||''));
+    const rows = [];
+    const cards = routes.map(r => {
+      const bills = (dels||[]).filter(d => String(d.RouteID||'') === String(r.RouteID||''));
+      const qty = bills.reduce((n, d) => n + (Number(d.BoxQty) || 0), 0);
+      const zones = [...new Set(bills.map(d => DelView.zone(d)).filter(z => z && z !== 'ไม่ระบุเขต'))].join(' · ') || 'ไม่ระบุเขต';
+      bills.forEach(d => rows.push({
+        'รถ': tripVehicleLabel(r), 'คนขับ': r.DriverName||'', 'รอบส่ง': r.RouteID, 'วันที่': r.DeliveryDate,
+        'ลูกค้า': d.CustomerName||'', 'เลข PO': DelView.poNo(d)||'', 'เลขบิล': DelView.invoiceNo(d)||'',
+        'จำนวน': Number(d.BoxQty)||0, 'เขต': DelView.zone(d)||''
+      }));
+      const body = bills.map((d,i)=>{
+        const po = DelView.poNo(d) || '—';
+        const inv = DelView.invoiceNo(d) || '—';
+        return `<tr><td class="c">☐</td><td class="c tab">${int(i+1)}</td>
+          <td class="strong">${esc(d.CustomerName||'—')}</td>
+          <td class="mono small">${esc(po)}</td><td class="mono small">${esc(inv)}</td>
+          <td class="r tab">${int(d.BoxQty)}</td><td class="small">${esc(DelView.zone(d)||'—')}</td>
+          <td>${priBadge(d.Priority)}</td></tr>`;
+      }).join('') || `<tr><td colspan="8" class="c muted">ไม่มีบิลในรอบนี้</td></tr>`;
+      return `<div class="card mb14">
+        <div class="flex between aic wrap gap8" style="margin-bottom:10px">
+          <div>
+            <div class="h-card" style="margin:0">${esc(tripVehicleLabel(r) || r.RouteID)} · ${esc(r.DriverName || 'ไม่ระบุคนขับ')}</div>
+            <div class="small muted" style="margin-top:4px">${thDate(r.DeliveryDate)} · ${int(bills.length)} บิล · ${int(qty)} ชิ้น · ${esc(zones)}</div>
+          </div>
+          <button class="btn btn-sm" data-note="${esc(r.RouteID)}" title="พิมพ์คันนี้ถ้าต้องการ"><i data-lucide="printer"></i>พิมพ์คันนี้</button>
+        </div>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th class="c">ขึ้น</th><th class="c">#</th><th>ร้าน</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th class="r">จำนวน</th><th>เขต</th><th>ด่วน</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table></div>
+      </div>`;
+    }).join('');
+    leftover.forEach(d => rows.push({
+      'รถ': '(ยังไม่จัดรถ)', 'คนขับ':'', 'รอบส่ง':'', 'วันที่': d.DeliveryDate,
+      'ลูกค้า': d.CustomerName||'', 'เลข PO': DelView.poNo(d)||'', 'เลขบิล': DelView.invoiceNo(d)||'',
+      'จำนวน': Number(d.BoxQty)||0, 'เขต': DelView.zone(d)||''
+    }));
+    const leftoverHtml = leftover.length ? `<div class="card mb14">
+      <div class="h-card mb14">ยังไม่ขึ้นรถ · ${int(leftover.length)} บิล</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>ร้าน</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th class="r">จำนวน</th><th>เขต</th></tr></thead>
+      <tbody>${leftover.map((d,i)=>`<tr><td class="c">${int(i+1)}</td><td class="strong">${esc(d.CustomerName||'—')}</td>
+        <td class="mono small">${esc(DelView.poNo(d)||'—')}</td><td class="mono small">${esc(DelView.invoiceNo(d)||'—')}</td>
+        <td class="r tab">${int(d.BoxQty)}</td><td class="small">${esc(DelView.zone(d)||'—')}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+    const html = `<div class="notice info mb14"><i data-lucide="clipboard-check"></i><div>
+      แยกรายการตามคันรถเพื่อเช็คว่าขึ้นของครบหรือยัง — ดูบนจอได้ · พิมพ์เฉพาะคันที่ต้องการ หรือเทียบกับบิลจริงก็ได้ <b>ไม่บังคับพิมพ์</b>
+    </div></div>${cards || emptyState('ยังไม่มีรอบส่งในช่วงนี้','จัดรถแล้วจึงมาเช็คขึ้นของที่นี่')}${leftoverHtml}`;
+    return { html, rows, filename:'report_loadsheet', title:'เช็คขึ้นของต่อคันรถ' };
+  }
   if(type==='gpsactual'){
     const hasTrack = r => Number(r.GpsPointCount) > 1;
     const priceL = fuelPricePerLiter();
@@ -2642,6 +2739,21 @@ function printReport(from,to,rep,type){
     <table><thead><tr><th class="tl">รอบส่ง</th><th>วันที่</th><th>ค่าน้ำมัน</th><th>ทางด่วน</th><th>จอดรถ</th><th>รถภายนอก</th><th>อื่นๆ</th><th>รวม</th></tr></thead>
     <tbody>${routes.map(r=>`<tr><td>${esc(r.RouteID)}</td><td>${thDate(r.DeliveryDate)}</td><td class="r">${money(r.EstimatedFuelCost)}</td><td class="r">${money(r.EstimatedTollCost)}</td><td class="r">${money(r.EstimatedParkingCost)}</td><td class="r">${money(r.EstimatedExternalCost)}</td><td class="r">${money(r.EstimatedOtherCost)}</td><td class="r">${money(r.EstimatedTotalCost)}</td></tr>`).join('')||'<tr><td colspan="8" class="c muted">ไม่มีข้อมูล</td></tr>'}</tbody>
     <tfoot><tr><th colspan="2" class="r">รวมทั้งสิ้น</th><th class="r">${money(sum(routes,'EstimatedFuelCost'))}</th><th class="r">${money(sum(routes,'EstimatedTollCost'))}</th><th class="r">${money(sum(routes,'EstimatedParkingCost'))}</th><th class="r">${money(sum(routes,'EstimatedExternalCost'))}</th><th class="r">${money(sum(routes,'EstimatedOtherCost'))}</th><th class="r">${money(total)}</th></tr></tfoot></table>`;
+  } else if(type==='loadsheet'){
+    title='เช็คขึ้นของต่อคันรถ';
+    tbl = routes.map(r => {
+      const bills = (dels||[]).filter(d => String(d.RouteID||'') === String(r.RouteID||''));
+      const qty = bills.reduce((n,d)=>n+(Number(d.BoxQty)||0),0);
+      return `<div class="sec-title">${esc(tripVehicleLabel(r) || r.RouteID)} · ${esc(r.DriverName||'-')} · ${thDate(r.DeliveryDate)}</div>
+        <table class="slip-table"><thead><tr><th>☐</th><th>#</th><th>ร้าน</th><th>เลขอ้างอิง</th><th>เลขบิล</th><th>จำนวน</th><th>เขต</th></tr></thead>
+        <tbody>${bills.map((d,i)=>`<tr><td class="c">☐</td><td class="c">${i+1}</td><td>${esc(d.CustomerName||'-')}</td>
+          <td class="mono">${esc(DelView.poNo(d)||'-')}</td><td class="mono">${esc(DelView.invoiceNo(d)||'-')}</td>
+          <td class="r">${int(d.BoxQty)}</td><td>${esc(DelView.zone(d)||'-')}</td></tr>`).join('')||'<tr><td colspan="7" class="c muted">ไม่มีบิล</td></tr>'}</tbody>
+        <tfoot><tr><th colspan="5" class="r">รวม</th><th class="r">${int(qty)}</th><th></th></tr></tfoot></table>
+        <p class="small muted">เช็ค ☐ ก่อนขึ้นของ · เทียบบิลจริงได้ ไม่บังคับพิมพ์</p>
+        <div class="sign"><div>ผู้จัดงาน</div><div>คนขับ</div></div>
+        <div style="page-break-after:always;height:12px"></div>`;
+    }).join('') || '<p class="muted">ยังไม่มีรอบส่ง</p>';
   } else if(type==='gpsactual'){
     title='รายงานย้อนหลัง รถ · บิล · GPS';
     const exps = rep.expenses||[];

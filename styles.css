@@ -282,6 +282,8 @@ input,select,textarea{font-family:inherit;}
 .plan-driver-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .plan-split-card{margin-bottom:10px;}
 .plan-split-card:last-child{margin-bottom:0;}
+.plan-split-bills{margin-top:12px}
+.plan-split-bills .plan-stop-list{max-height:220px;margin-bottom:8px}
 .plan-stop-section{margin-bottom:14px;}
 .plan-skipped-bills{margin-top:8px;}
 .plan-skipped-bills summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--amber-ink);}
@@ -416,6 +418,14 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
 .del-zone-opt:hover{background:#F4F6F9}
 .del-zone-opt input{flex-shrink:0;margin:0}
 .del-tbl tbody td{font-size:var(--fs-table)}
+.del-tbl th.del-act,.del-tbl td.del-act{position:sticky;right:0;z-index:1;background:#fff;box-shadow:-8px 0 10px -8px rgba(15,23,42,.12);white-space:nowrap}
+.del-tbl thead th.del-act{z-index:4;background:#F7F8FA}
+.del-tbl thead tr.del-filter-row th.del-act{background:#fff}
+.del-tbl tbody tr.row-sel td.del-act{background:#fafdf5}
+.del-row-acts{display:flex;gap:2px;justify-content:center}
+.del-tbl .icon-btn{width:32px;height:32px}
+.del-tbl .icon-btn i{width:16px;height:16px}
+.del-tbl .icon-btn.del-row-del{color:#DC2626}
 .del-tbl tfoot td{position:sticky;bottom:0;background:#fff;box-shadow:0 -1px 0 var(--border);font-size:13px}
 .job-card-list{display:flex;flex-direction:column;gap:12px}
 .job-card{border:1.5px solid var(--border);border-radius:14px;padding:14px;background:#fff}
