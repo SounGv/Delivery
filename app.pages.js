@@ -1248,16 +1248,117 @@ function groupStopsForDisplay(stops){
 }
 function uniqueShopCount(stops){ return groupStopsForDisplay(stops).length; }
 function planBillLabel(s){ return uniqueDocParts(s).join(' · ') || DelView.invoiceNo(s) || '—'; }
-function displayBillRow(s, i){
+function displayBillRow(s, i, timeHint){
   const color = (PRIORITY[s.Priority] || PRIORITY.NORMAL).color;
   return `<div class="plan-stop-row">
     <span class="stop-num" style="background:${color}">${i}</span>
     <div class="plan-stop-main">
       <div class="strong">${esc(s.CustomerName || '—')}</div>
-      <div class="small muted">${esc(planBillLabel(s))}${DelView.zone(s) ? ' · ' + esc(DelView.zone(s)) : ''}</div>
+      <div class="small muted">${esc(planBillLabel(s))}${DelView.zone(s) ? ' · ' + esc(DelView.zone(s)) : ''}${timeHint ? ' · ' + timeHint : ''}</div>
     </div>
     <div class="small muted tab">${int(s.BoxQty || 0)} กล.</div>
   </div>`;
+}
+/** แปลง seq ของแผน → stops สำหรับไทม์ไลน์/แผนที่ */
+function planStopsFromSeq(seq){
+  return (seq || []).map((s, i) => Object.assign({}, s, {
+    StopOrder: i + 1,
+    DistanceFromPrevious: Number(s._distPrev) || Number(s.DistanceFromPrevious) || 0,
+  }));
+}
+function planTimelineForSeq(seq){
+  const stops = planStopsFromSeq(seq);
+  return Planner.buildStopTimeline({ DeliveryDate: Store.date }, stops);
+}
+function planRouteTimelineHtml(tl, color){
+  if (!tl || !tl.events) return '';
+  const rows = tl.events.map(e => {
+    if (e.kind === 'depart_wh') {
+      return `<div class="plan-route-step">
+        <span class="plan-route-dot go">ออก</span>
+        <div><b>ออกจากคลัง</b><div class="small muted">${fmtClock(e.at)}</div></div>
+      </div>`;
+    }
+    if (e.kind === 'return_wh') {
+      return `<div class="plan-route-step">
+        <span class="plan-route-dot back">กลับ</span>
+        <div><b>กลับถึงคลัง</b><div class="small muted">ถึง ${fmtClock(e.at)}${e.badGeo ? '' : (e.km ? ' · ' + num1(e.km) + ' กม.' : '')}</div></div>
+      </div>`;
+    }
+    return `<div class="plan-route-step">
+      <span class="plan-route-dot stop" style="background:${color || '#2563EB'}">${int(e.order)}</span>
+      <div>
+        <b>${int(e.order)}. ${esc(e.place)}</b>
+        <div class="small muted">ถึง ${fmtClock(e.at)} · จอด ${int(e.dwellMin)} น. · ออก ${fmtClock(e.leaveAt)}${e.badGeo ? ' · พิกัดผิด' : (e.km ? ' · ' + num1(e.km) + ' กม.' : '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="plan-route-tl">
+    <div class="plan-route-stats">
+      <span>ออกคลัง <b>${fmtClock(tl.startMs)}</b></span>
+      <span>${num1(tl.totalKm)} กม.</span>
+      <span>${Planner.fmtDur(tl.totalMin)}</span>
+      <span>จอดจุดละ ${int(tl.dwell)} น.</span>
+    </div>
+    ${tl.hasBadGeo ? `<div class="small" style="color:#B45309;margin-bottom:8px">มีจุดพิกัดผิด — ข้ามกม.นั้นตอนคำนวณเวลา</div>` : ''}
+    <div class="plan-route-steps scrolly">${rows}</div>
+  </div>`;
+}
+function planTruckPreviewHtml(i, g, color){
+  const seq = g.seq || [];
+  const zones = (g.districts && g.districts.length) ? g.districts : [...new Set(seq.map(s => s._district || DelView.zone(s)).filter(Boolean))];
+  const tl = planTimelineForSeq(seq);
+  const byId = {};
+  (tl.events || []).filter(e => e.kind === 'stop').forEach(e => { if (e.deliveryId) byId[e.deliveryId] = e; });
+  const billRows = seq.map((s, n) => {
+    const ev = byId[s.DeliveryID] || (tl.events || []).find(e => e.kind === 'stop' && e.order === n + 1);
+    const hint = ev ? `ถึง ${fmtClock(ev.at)} · ออก ${fmtClock(ev.leaveAt)}` : '';
+    return displayBillRow(s, n + 1, hint);
+  }).join('');
+  return `<div class="plan-truck-preview card mb14" data-plan-truck="${i}">
+    <div class="flex between aic wrap gap8 mb8">
+      <div class="strong" style="color:${color}">${esc(planCarTitle(i, g))} · ${int(seq.length)} จุด · เขต ${esc(zones.join(' · ') || '—')}</div>
+      <span class="small muted">เส้นทางอัตโนมัติ คลัง → 1 → 2 → … → กลับคลัง</span>
+    </div>
+    <div class="plan-truck-grid">
+      <div id="planMap${i}" class="map plan-route-map"></div>
+      ${planRouteTimelineHtml(tl, color)}
+    </div>
+    <details class="plan-bills-details">
+      <summary class="small strong">รายการบิล ${int(seq.length)} รายการ</summary>
+      <div class="plan-stop-list scrolly">${billRows || '<div class="muted small">ไม่มีบิล</div>'}</div>
+    </details>
+  </div>`;
+}
+function mountPlanRouteMaps(){
+  if (!Plan.result) return;
+  const groups = (Plan.result.split && Plan.result.split.length >= 2)
+    ? Plan.result.split
+    : [{ seq: Plan.result.seq, v: null, districts: [] }];
+  const wh = warehouse();
+  groups.forEach((g, i) => {
+    const box = el('planMap' + i);
+    if (!box || !window.L) return;
+    try {
+      if (box._leaflet_id) { box._leaflet_id = null; box.innerHTML = ''; }
+      const color = SPLIT_COLORS[i % SPLIT_COLORS.length];
+      const mp = MapUtil.make('planMap' + i, wh);
+      MapUtil.whMarker(mp, wh);
+      const line = [[wh.lat, wh.lng]];
+      const bounds = [[wh.lat, wh.lng]];
+      (g.seq || []).forEach((s, n) => {
+        if (!Planner.hasCoords(s)) return;
+        MapUtil.stopMarker(mp, s, n + 1, color);
+        line.push([+s.Latitude, +s.Longitude]);
+        bounds.push([+s.Latitude, +s.Longitude]);
+      });
+      line.push([wh.lat, wh.lng]);
+      if (line.length > 2) L.polyline(line, { color, weight: 4, opacity: 0.85 }).addTo(mp);
+      if (bounds.length > 1) mp.fitBounds(bounds, { padding: [28, 28] });
+      setTimeout(() => { try { mp.invalidateSize(); } catch (_) {} }, 120);
+      icons();
+    } catch (e) { console.warn('plan map', e); }
+  });
 }
 function renderDecision(){
   const dec = el('decision');
@@ -1276,20 +1377,11 @@ function renderDecision(){
   const timeWarn = !splitReady && m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
   const splitNote = splitReady
-    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบจัดให้ <b>${int(split.length)} คัน</b> ตามเขตที่อยู่ใกล้กัน — ลดจำนวนคันได้จากปุ่ม − ด้านบน แล้วค่อยบันทึก</div></div>`
-    : '';
-  const splitLists = splitReady
-    ? split.map((g, i) => {
-        const zones = (g.districts && g.districts.length) ? g.districts : [...new Set(g.seq.map(s => s._district || DelView.zone(s)).filter(Boolean))];
-        return `<div class="plan-split-bills">
-          <div class="small strong" style="color:${SPLIT_COLORS[i%SPLIT_COLORS.length]}">${esc(planCarTitle(i, g))} · เขต ${esc(zones.join(' · ') || '—')}</div>
-          <div class="plan-stop-list scrolly">${g.seq.map((s, n) => displayBillRow(s, n + 1)).join('')}</div>
-        </div>`;
-      }).join('')
-    : `<div class="plan-stop-section">
-        <div class="small strong muted mb8">รายการบิลที่จัด (${int(m.stops)})</div>
-        <div class="plan-stop-list scrolly">${(seq || []).map((s, i) => displayBillRow(s, i + 1)).join('') || '<div class="muted small">ไม่มีบิล</div>'}</div>
-      </div>`;
+    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบจัดให้ <b>${int(split.length)} คัน</b> ตามเขตที่อยู่ใกล้กัน — แต่ละคันมีแผนที่ลำดับ 1-2-3 และเวลาออก–ถึง–จอดอัตโนมัติ</div></div>`
+    : `<div class="notice info mb14"><i data-lucide="map"></i><div>ระบบวาดเส้นทางให้แล้ว — ออกจากคลัง → จุด 1 จอดส่ง → วิ่งไปจุด 2 … แล้วกลับคลัง พร้อมเวลาประมาณอัตโนมัติ</div></div>`;
+  const routePreviews = splitReady
+    ? split.map((g, i) => planTruckPreviewHtml(i, g, SPLIT_COLORS[i % SPLIT_COLORS.length])).join('')
+    : planTruckPreviewHtml(0, { seq, v: (Plan.sel && Plan.sel.vehId) ? (Store.data.vehicles||[]).find(v=>v.VehicleID===Plan.sel.vehId) : null, districts: [] }, SPLIT_COLORS[0]);
 
   dec.innerHTML = `
     <div class="flex between aic mb14">
@@ -1304,7 +1396,7 @@ function renderDecision(){
       <div class="plan-driver-box" id="driverFormBox">${splitReady ? splitFormAll(Plan.result) : selForm()}</div>
     </div>
     ${splitReady ? `<div id="costBox" style="margin-top:12px">${splitCostBoxAll(Plan.result)}</div>` : ''}
-    ${splitLists}
+    <div class="plan-route-previews mt16">${routePreviews}</div>
     <div class="flex gap8 mt16">
       <button class="btn btn-primary btn-block btn-lg" id="confirmRoute" type="button"><i data-lucide="save"></i>${confirmBtnLabel()}</button>
       <button class="btn btn-block btn-lg" id="confirmRouteReports" type="button"><i data-lucide="bar-chart-3"></i>บันทึกแล้วไปรายงาน</button>
@@ -1312,7 +1404,11 @@ function renderDecision(){
   `;
   icons();
   bindDecisionEvents();
-  setTimeout(() => { const box = el('driverFormBox'); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 60);
+  setTimeout(() => {
+    mountPlanRouteMaps();
+    const box = el('driverFormBox');
+    if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 80);
 }
 function confirmBtnLabel(){
   if (Plan.result && Array.isArray(Plan.result.split) && Plan.result.split.length >= 2) {
