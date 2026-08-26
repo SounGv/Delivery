@@ -3209,15 +3209,37 @@ function driverExitAdmin(){
   // ออกจากโหมดคนขับกลับหน้าจัดการ — ไม่บังคับ logout คนขับ (session ยังอยู่ถ้าอยากกลับมา)
   location.hash = '#/dashboard';
 }
-function driverBackBar(extraRight){
+/** ออกจากบัญชีคนขับ → กลับหน้ารายชื่อพนักงาน (ยังอยู่ #/driver) */
+async function driverBackToPicker(){
+  const sess = driverSession();
+  if (sess) {
+    try { await API.post('driverLogout', { token: sess.token }); } catch (e) {}
+    driverClearSession();
+  }
+  Driver.tab = 'home';
+  if ((location.hash || '').replace(/^#\/?/, '').split('?')[0] !== 'driver') {
+    location.hash = '#/driver';
+  } else {
+    render();
+  }
+}
+function driverBackBar(extraRight, opts){
+  const toPicker = !!(opts && opts.toPicker);
+  const label = toPicker ? 'รายชื่อพนักงาน' : 'กลับ';
+  const id = toPicker ? 'drvBackPicker' : 'drvBackAdmin';
   return `<div class="driver-backbar">
-    <button type="button" class="btn btn-sm" id="drvBackAdmin"><i data-lucide="arrow-left"></i>กลับ</button>
+    <button type="button" class="btn btn-sm" id="${id}"><i data-lucide="arrow-left"></i>${label}</button>
     ${extraRight||''}
   </div>`;
 }
-function bindDriverBack(){
-  const b = el('drvBackAdmin');
-  if(b) b.onclick = ()=>driverExitAdmin();
+function bindDriverBack(opts){
+  const toPicker = !!(opts && opts.toPicker);
+  const b = el(toPicker ? 'drvBackPicker' : 'drvBackAdmin');
+  if (!b) return;
+  b.onclick = () => {
+    if (toPicker) driverBackToPicker();
+    else driverExitAdmin();
+  };
 }
 function driverLoginForm(view){
   // ไม่ต้องใส่รหัส — งานถูกระบบคำนวณ+มอบหมายไว้อยู่แล้ว แค่แตะเลือกว่าเป็นใคร
@@ -3301,19 +3323,19 @@ function drawDriverMap(cur){
 function driverHomeView(view, sess, pool, active, stops){
   if(!active){
     page(view, `<div class="driver">
-      ${driverBackBar()}
+      ${driverBackBar('', { toPicker: true })}
       ${head('วันนี้', `${thDate(Store.date)} · สวัสดี ${esc(sess.emp.EmployeeName)}`)}
       <div class="notice info mb14"><i data-lucide="info"></i><div>ยังไม่มีรอบส่งที่เริ่ม — ไปที่แท็บ <b>งาน</b> เพื่อรับงาน${pool.length?` (มีงานรอรับ ${int(pool.length)} งาน)`:''}</div></div>
       ${emptyState('พร้อมทำงานเมื่อไหร่ก็รับงานได้เลย','')}
     </div>`);
-    bindDriverBack();
+    bindDriverBack({ toPicker: true });
     return;
   }
   const done = stops.filter(s=>s.Status==='Completed').length;
   const pct = stops.length? Math.round(done/stops.length*100):0;
   const cur = stops.find(s=>s.Status!=='Completed');
   page(view, `<div class="driver">
-    ${driverBackBar(`<span class="mono small muted">${esc(active.RouteID)}</span>`)}
+    ${driverBackBar(`<span class="mono small muted">${esc(active.RouteID)}</span>`, { toPicker: true })}
     ${head('วันนี้', `${esc(sess.emp.EmployeeName)} · ${esc(active.VehicleName||active.ProviderName||'')}`)}
     <div class="card mb14">
       <div class="flex between aic mb14"><span class="h-card">ความคืบหน้ารอบส่ง</span><span class="strong tab">${done}/${stops.length} จุด</span></div>
@@ -3333,7 +3355,7 @@ function driverHomeView(view, sess, pool, active, stops){
         <button class="btn btn-danger big-btn" id="dFail"><i data-lucide="x-circle"></i>ส่งไม่สำเร็จ</button>
       </div></div>`:`<div class="notice ok mb14"><i data-lucide="party-popper"></i><div>ส่งครบทุกจุดแล้ว! 🎉</div></div>`}
   </div>`);
-  bindDriverBack();
+  bindDriverBack({ toPicker: true });
   const ds=el('dStart'); if(ds)ds.onclick=async()=>{ ds.disabled=true; try{ await API.post('startRoute',{routeId:active.RouteID,token:sess.token}); }catch(e){} render(); toast('เริ่มรอบส่งแล้ว','ok'); };
   const dm=el('dMap'); if(dm)dm.onclick=()=>{ if(cur&&cur.Latitude) window.open(`https://www.google.com/maps/dir/?api=1&destination=${cur.Latitude},${cur.Longitude}`,'_blank'); };
   const dc=el('dCheckin'); if(dc)dc.onclick=()=>doCheckin(active,cur,sess.token);
@@ -3345,7 +3367,7 @@ function driverHomeView(view, sess, pool, active, stops){
 function driverJobsView(view, sess, routes, pool, active, stops){
   if(!active){
     page(view, `<div class="driver">
-      ${driverBackBar()}
+      ${driverBackBar('', { toPicker: true })}
       ${head('งาน', thDate(Store.date))}
       <div class="strong small muted mb14">งานของฉัน (${routes.length})</div>
       ${routes.length
@@ -3356,7 +3378,7 @@ function driverJobsView(view, sess, routes, pool, active, stops){
         ? pool.map(driverJobCard).join('')
         : emptyState('ไม่มีงานรอรับตอนนี้','')}
     </div>`);
-    bindDriverBack();
+    bindDriverBack({ toPicker: true });
     $$('[data-accept]',view).forEach(b=>b.onclick=async()=>{ const rid=b.dataset.accept;
       const isPool = pool.some(x=>x.RouteID===rid);
       Driver.routeId=rid;
@@ -3367,7 +3389,7 @@ function driverJobsView(view, sess, routes, pool, active, stops){
     return;
   }
   page(view, `<div class="driver">
-    ${driverBackBar(`<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>`)}
+    ${driverBackBar(`<button class="btn btn-sm" id="dChange"><i data-lucide="repeat"></i>เปลี่ยนงาน</button>`, { toPicker: true })}
     ${head(active.RouteID, `${active.DriverName||''} · ${active.VehicleName||''}`)}
     <div class="card">
       <div class="h-card mb14">รายการจุดส่ง</div>
@@ -3376,13 +3398,13 @@ function driverJobsView(view, sess, routes, pool, active, stops){
         <div style="flex:1"><div class="strong" style="font-size:14px">${esc(s.CustomerName)}</div><div class="small muted">${esc(s.BranchName)} · ${int(s.BoxQty)} กล่อง</div></div></div>`).join('')}
     </div>
   </div>`);
-  bindDriverBack();
+  bindDriverBack({ toPicker: true });
   const dch=el('dChange'); if(dch)dch.onclick=()=>{ Driver.routeId=null; render(); };
 }
 /* ---- 👤 ฉัน — โปรไฟล์คนขับ, ออกจากระบบ, บันทึกค่าใช้จ่าย ---- */
 function driverMeView(view, sess, active){
   page(view, `<div class="driver">
-    ${driverBackBar()}
+    ${driverBackBar('', { toPicker: true })}
     ${head('ฉัน', thDate(Store.date))}
     <div class="card mb14" style="text-align:center;padding:26px 20px">
       <div class="avatar" style="width:64px;height:64px;margin:0 auto 12px"><i data-lucide="user" style="width:30px;height:30px"></i></div>
@@ -3390,10 +3412,12 @@ function driverMeView(view, sess, active){
       <div class="small muted">${esc(sess.emp.Phone||'')}${active?' · '+esc(active.VehicleName||active.ProviderName||''):''}</div>
     </div>
     <button class="btn btn-block big-btn mb14" id="dExpense"><i data-lucide="receipt"></i>บันทึกค่าใช้จ่าย</button>
+    <button class="btn btn-block big-btn mb14" id="drvBackPicker2"><i data-lucide="users"></i>เปลี่ยนคนขับ / รายชื่อพนักงาน</button>
     <button class="btn btn-block big-btn mb14" id="drvBackAdmin2"><i data-lucide="layout-dashboard"></i>กลับหน้าจัดการ</button>
     <button class="btn btn-block big-btn" id="drvLogout"><i data-lucide="log-out"></i>ออกจากระบบ</button>
   </div>`);
-  bindDriverBack();
+  bindDriverBack({ toPicker: true });
+  const bp = el('drvBackPicker2'); if (bp) bp.onclick = () => driverBackToPicker();
   const b2 = el('drvBackAdmin2'); if(b2) b2.onclick = ()=>driverExitAdmin();
   el('dExpense').onclick=()=>driverExpenseModal(active, sess);
   bindDriverLogout(sess);
