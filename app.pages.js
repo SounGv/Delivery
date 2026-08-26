@@ -1276,31 +1276,32 @@ function planRouteTimelineHtml(tl, color){
     if (e.kind === 'depart_wh') {
       return `<div class="plan-route-step">
         <span class="plan-route-dot go">ออก</span>
-        <div><b>ออกจากคลัง</b><div class="small muted">${fmtClock(e.at)}</div></div>
+        <div><b>ออกจากคลัง</b><div class="small muted">จุดเริ่ม — เวลารอ GPS จริงหลังรถออก</div></div>
       </div>`;
     }
     if (e.kind === 'return_wh') {
       return `<div class="plan-route-step">
         <span class="plan-route-dot back">กลับ</span>
-        <div><b>กลับถึงคลัง</b><div class="small muted">ถึง ${fmtClock(e.at)}${e.badGeo ? '' : (e.km ? ' · ' + num1(e.km) + ' กม.' : '')}</div></div>
+        <div><b>กลับถึงคลัง</b><div class="small muted">${e.badGeo ? 'พิกัดผิด' : (e.km ? 'ประมาณ ' + num1(e.km) + ' กม. จากจุดสุดท้าย' : 'จุดจบ')}</div></div>
       </div>`;
     }
+    const kmLine = e.badGeo ? 'พิกัดผิด' : (e.km ? 'จากจุดก่อน · ประมาณ ' + num1(e.km) + ' กม.' : 'จุดส่ง');
     return `<div class="plan-route-step">
       <span class="plan-route-dot stop" style="background:${color || '#2563EB'}">${int(e.order)}</span>
       <div>
         <b>${int(e.order)}. ${esc(e.place)}</b>
-        <div class="small muted">ถึง ${fmtClock(e.at)} · จอด ${int(e.dwellMin)} น. · ออก ${fmtClock(e.leaveAt)}${e.badGeo ? ' · พิกัดผิด' : (e.km ? ' · ' + num1(e.km) + ' กม.' : '')}</div>
+        <div class="small muted">${kmLine}</div>
       </div>
     </div>`;
   }).join('');
   return `<div class="plan-route-tl">
     <div class="plan-route-stats">
-      <span>ออกคลัง <b>${fmtClock(tl.startMs)}</b></span>
-      <span>${num1(tl.totalKm)} กม.</span>
-      <span>${Planner.fmtDur(tl.totalMin)}</span>
-      <span>จอดจุดละ ${int(tl.dwell)} น.</span>
+      <span><b>${int((tl.events || []).filter(e => e.kind === 'stop').length)}</b> จุด</span>
+      <span>แผนที่ ~${num1(tl.totalKm)} กม.</span>
+      <span class="muted">เวลาจริงจาก GPS หลังวิ่ง</span>
     </div>
-    ${tl.hasBadGeo ? `<div class="small" style="color:#B45309;margin-bottom:8px">มีจุดพิกัดผิด — ข้ามกม.นั้นตอนคำนวณเวลา</div>` : ''}
+    <div class="small" style="color:var(--brand-ink);margin-bottom:8px;line-height:1.45">ถึง · จอด · ออก = วัดจากรถวิ่งจริง/หยุดจอด ตาม <b>GPS Cartrack</b> ที่หน้ารายงาน — ตอนจัดรถโชว์แค่ลำดับ 1-2-3 ไม่ใส่เวลาปลอม</div>
+    ${tl.hasBadGeo ? `<div class="small" style="color:#B45309;margin-bottom:8px">มีจุดพิกัดผิด — ข้ามกม.นั้น</div>` : ''}
     <div class="plan-route-steps scrolly">${rows}</div>
   </div>`;
 }
@@ -1308,17 +1309,11 @@ function planTruckPreviewHtml(i, g, color){
   const seq = g.seq || [];
   const zones = (g.districts && g.districts.length) ? g.districts : [...new Set(seq.map(s => s._district || DelView.zone(s)).filter(Boolean))];
   const tl = planTimelineForSeq(seq);
-  const byId = {};
-  (tl.events || []).filter(e => e.kind === 'stop').forEach(e => { if (e.deliveryId) byId[e.deliveryId] = e; });
-  const billRows = seq.map((s, n) => {
-    const ev = byId[s.DeliveryID] || (tl.events || []).find(e => e.kind === 'stop' && e.order === n + 1);
-    const hint = ev ? `ถึง ${fmtClock(ev.at)} · ออก ${fmtClock(ev.leaveAt)}` : '';
-    return displayBillRow(s, n + 1, hint);
-  }).join('');
+  const billRows = seq.map((s, n) => displayBillRow(s, n + 1)).join('');
   return `<div class="plan-truck-preview card mb14" data-plan-truck="${i}">
     <div class="flex between aic wrap gap8 mb8">
       <div class="strong" style="color:${color}">${esc(planCarTitle(i, g))} · ${int(seq.length)} จุด · เขต ${esc(zones.join(' · ') || '—')}</div>
-      <span class="small muted">เส้นทางอัตโนมัติ คลัง → 1 → 2 → … → กลับคลัง</span>
+      <span class="small muted">ลำดับแผน คลัง → 1 → 2 → … → กลับคลัง</span>
     </div>
     <div class="plan-truck-grid">
       <div id="planMap${i}" class="map plan-route-map"></div>
@@ -1377,8 +1372,8 @@ function renderDecision(){
   const timeWarn = !splitReady && m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกรายการนี้ก่อน แล้วค่อยเลือกเขตใหม่เพื่อจัดรอบถัดไป</div></div>` : '';
   const splitNote = splitReady
-    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบจัดให้ <b>${int(split.length)} คัน</b> ตามเขตที่อยู่ใกล้กัน — แต่ละคันมีแผนที่ลำดับ 1-2-3 และเวลาออก–ถึง–จอดอัตโนมัติ</div></div>`
-    : `<div class="notice info mb14"><i data-lucide="map"></i><div>ระบบวาดเส้นทางให้แล้ว — ออกจากคลัง → จุด 1 จอดส่ง → วิ่งไปจุด 2 … แล้วกลับคลัง พร้อมเวลาประมาณอัตโนมัติ</div></div>`;
+    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>ระบบจัดให้ <b>${int(split.length)} คัน</b> ตามเขตที่อยู่ใกล้กัน — แต่ละคันมีแผนที่ลำดับ 1-2-3 (ยังไม่ใส่เวลาถึง/จอด/ออก เพราะต้องวัดจาก GPS จริงหลังรถวิ่ง)</div></div>`
+    : `<div class="notice info mb14"><i data-lucide="map"></i><div>ระบบวาดลำดับเส้นทางให้แล้ว คลัง → 1 → 2 → … → กลับคลัง — เวลาถึง/จอด/ออกจริงดูจาก GPS Cartrack ที่หน้ารายงานหลังวิ่ง ไม่ใส่เวลาปลอมตอนจัดรถ</div></div>`;
   const routePreviews = splitReady
     ? split.map((g, i) => planTruckPreviewHtml(i, g, SPLIT_COLORS[i % SPLIT_COLORS.length])).join('')
     : planTruckPreviewHtml(0, { seq, v: (Plan.sel && Plan.sel.vehId) ? (Store.data.vehicles||[]).find(v=>v.VehicleID===Plan.sel.vehId) : null, districts: [] }, SPLIT_COLORS[0]);
