@@ -555,6 +555,15 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
     font-size:12px;font-weight:600;color:var(--green-ink);padding:0 2px 8px
   }
 
+  .del-scope-bar{padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#FAFBFC;margin-bottom:14px}
+  .del-scope-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .del-scope-row + .del-scope-row{margin-top:10px;padding-top:10px;border-top:1px solid #EEF1F5}
+  .del-scope-label{font-size:12px;font-weight:800;color:var(--muted);min-width:3.2em}
+  .del-scope-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+  .del-scope-chips .pw-step{font-size:12px;padding:6px 10px;min-height:34px}
+  .del-scope-zone-ctrl{min-width:160px;max-width:260px;flex:1}
+  .del-scope-zone-ctrl .del-zone-btn{width:100%}
+
   .del-district-bar{margin-bottom:6px}
   .del-district-cap{display:flex;align-items:center;justify-content:space-between;min-height:18px;margin-bottom:6px}
   .del-district-hint,.del-district-picked{font-size:12px;font-weight:600;color:var(--muted)}

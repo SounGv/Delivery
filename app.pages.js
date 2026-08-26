@@ -151,9 +151,11 @@ ROUTES.dashboard = async function(view){
   const statsBase = viewMode === 'done' ? done : open;
   const zoneNamed = districtCounts(statsBase).filter(([n]) => n !== 'ไม่ระบุเขต').length;
   const kpi = DelView.kpi(statsBase);
+  const dueTodayN = open.filter(d => DelView.sendOnIso(d) === Store.date).length;
+  const overdueN = open.filter(d => DelView.isOverdue(d)).length;
   const headSub = viewMode === 'done'
     ? `${thDate(Store.date)} · ส่งแล้ว ${int(done.length)} ร้าน`
-    : `${thDate(Store.date)} · รอส่ง ${int(open.length)} ร้าน${zoneNamed ? ` · ${int(zoneNamed)} เขต` : ''}`;
+    : `${thDate(Store.date)} · ต้องส่ง ${int(dueTodayN)} บิล${overdueN ? ` · ค้าง ${int(overdueN)}` : ''}`;
 
   page(view, `
     <div class="del-page">
@@ -167,7 +169,7 @@ ROUTES.dashboard = async function(view){
         <input id="delSearchDesk" class="input" placeholder="ค้นหาร้าน เขต PO บิล…" value="${esc(Store.search || '')}" enterkeyhint="search" autocomplete="off">
       </div>
     </div>
-    ${viewMode === 'queue' ? districtChipsHtml(open, { deskOnly: true }) : delFilterChipsHtml(statsBase, { deskOnly: true })}
+    ${viewMode === 'queue' ? delScopeBarHtml(open, zoneList) : delFilterChipsHtml(statsBase, { keys: ['workAll', 'syncArchive'] })}
     <div class="card del-list-card ${selN ? 'has-sel' : ''}" style="padding:0">
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
@@ -307,6 +309,7 @@ ROUTES.dashboard = async function(view){
       document.addEventListener('click', onDoc);
     }, 0);
   }
+  // เลิกใช้ชิปเขตยาว — ไม่ bind data-district จากแถบเก่าแล้ว
   $$('[data-district]', view).forEach(b => b.onclick = () => {
     toggleDistrictPick(b.dataset.district || '', open);
     ROUTES.dashboard(view);
@@ -375,18 +378,24 @@ ROUTES.dashboard = async function(view){
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), districts: new Set(), filter: 'all', viewMode: 'queue', nameFilter: '', staffFilter: '', amountFilter: '', poFilter: '', invFilter: '', docDateFilter: '', dueDateFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'dueToday', viewMode: 'queue', nameFilter: '', staffFilter: '', amountFilter: '', poFilter: '', invFilter: '', docDateFilter: '', dueDateFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
-  { key:'all', label:'ทั้งหมด' },
-  { key:'noRoute', label:'ยังไม่จัดรถ' },
-  { key:'dueToday', label:'กำหนดส่งวันนี้' },
+  { key:'dueToday', label:'ต้องส่งวันนี้' },
   { key:'overdue', label:'เลยกำหนด' },
+  { key:'noRoute', label:'ยังไม่จัดรถ' },
+  { key:'workAll', label:'ทั้งคิว' },
   { key:'syncArchive', label:'บิลเก่า sync' },
 ];
 
 /** View Model: อ่าน field เดิมเท่านั้น — ไม่เปลี่ยนชื่อ API */
 const DelView = {
-  dueIso(d){ return String(d.DueDate || d.DeliveryDate || '').slice(0, 10); },
+  /** วันต้องส่งจริง = DueDate ถ้ามี ไม่ก็วันทำงาน (DeliveryDate) */
+  sendOnIso(d){
+    const due = String(d.DueDate || '').slice(0, 10);
+    if (due && due !== '0000-00-00') return due;
+    return String(d.DeliveryDate || '').slice(0, 10);
+  },
+  dueIso(d){ return this.sendOnIso(d); },
   docIso(d){ return String(d.DocumentDate || '').slice(0, 10); },
   isOpen(d){ return ['Draft','Pending','Planned','Assigned','In Progress',''].includes(d.Status || ''); },
   isDone(d){ return d.Status === 'Completed'; },
@@ -408,8 +417,8 @@ const DelView = {
     return /auto-complete-past|trcloud-sync/i.test(note) || note.includes('[DISPATCH:DELIVERED]');
   },
   isNoRoute(d){ return !(d.RouteID) && (d.Status === 'Draft' || d.Status === 'Pending' || !d.Status); },
-  isDueToday(d){ return this.dueIso(d) === Store.date && this.isOpen(d); },
-  isOverdue(d){ const due = this.dueIso(d); return !!(due && due < Store.date && this.isOpen(d)); },
+  isDueToday(d){ return this.sendOnIso(d) === Store.date && this.isOpen(d); },
+  isOverdue(d){ const due = this.sendOnIso(d); return !!(due && due < Store.date && this.isOpen(d)); },
   /** มูลค่า — ใช้เฉพาะถ้า API มี Amount/GrandTotal/Total อยู่แล้ว */
   amount(d){
     const n = Number(d.Amount ?? d.GrandTotal ?? d.Total ?? d.OrderAmount);
@@ -472,11 +481,18 @@ const DelView = {
 
 function applyDeliveryFilter(rows){
   let out = rows;
-  const f = dPick.filter;
-  if (f === 'noRoute') out = out.filter(d => DelView.isNoRoute(d));
-  if (f === 'dueToday') out = out.filter(d => DelView.isDueToday(d));
-  if (f === 'overdue') out = out.filter(d => DelView.isOverdue(d));
-  if (f === 'syncArchive') out = out.filter(d => DelView.isSyncArchive(d));
+  const f = dPick.filter || 'dueToday';
+  const doneView = dPick.viewMode === 'done';
+  // คิวรอส่ง: ค่าเริ่มต้น = ต้องส่งตามวันที่เลือก (ไม่ปนวันอื่น) — กด "ทั้งคิว" ถ้าอยากเห็นของค้างปน
+  if (!doneView) {
+    if (f === 'dueToday' || f === 'all') out = out.filter(d => DelView.sendOnIso(d) === Store.date);
+    else if (f === 'overdue') out = out.filter(d => DelView.isOverdue(d));
+    else if (f === 'noRoute') out = out.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date);
+    else if (f === 'workAll') { /* ทั้งคิววันทำงาน รวมเลยกำหนด */ }
+  } else {
+    if (f === 'syncArchive') out = out.filter(d => DelView.isSyncArchive(d));
+    if (f === 'noRoute') out = out.filter(d => DelView.isNoRoute(d));
+  }
   if (f === 'selected') out = out.filter(d => dPick.sel.has(d.DeliveryID));
   if (dPick.districts.size) {
     out = out.filter(d => dPick.districts.has(deliveryDistrictKey(d)));
@@ -497,8 +513,8 @@ function applyDeliveryFilter(rows){
   else if (dPick.invFilter) out = out.filter(d => DelView.invoiceNo(d) === dPick.invFilter);
   if (dPick.docDateFilter === '__none__') out = out.filter(d => !DelView.docIso(d));
   else if (dPick.docDateFilter) out = out.filter(d => DelView.docIso(d) === dPick.docDateFilter);
-  if (dPick.dueDateFilter === '__none__') out = out.filter(d => !DelView.dueIso(d));
-  else if (dPick.dueDateFilter) out = out.filter(d => DelView.dueIso(d) === dPick.dueDateFilter);
+  if (dPick.dueDateFilter === '__none__') out = out.filter(d => !String(d.DueDate || '').slice(0, 10));
+  else if (dPick.dueDateFilter) out = out.filter(d => DelView.sendOnIso(d) === dPick.dueDateFilter);
   return out;
 }
 function deliveryDistrictKey(d){
@@ -533,13 +549,15 @@ function delDistrictFilterLabel(){
   return int(ds.size) + ' เขต';
 }
 function deliveryFilterCounts(allRows){
+  const list = allRows || [];
   return {
-    all: allRows.length,
-    noRoute: allRows.filter(d => DelView.isNoRoute(d)).length,
-    dueToday: allRows.filter(d => DelView.isDueToday(d)).length,
-    overdue: allRows.filter(d => DelView.isOverdue(d)).length,
-    syncArchive: allRows.filter(d => DelView.isSyncArchive(d)).length,
-    selected: allRows.filter(d => dPick.sel.has(d.DeliveryID)).length,
+    dueToday: list.filter(d => DelView.sendOnIso(d) === Store.date).length,
+    overdue: list.filter(d => DelView.isOverdue(d)).length,
+    noRoute: list.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date).length,
+    workAll: list.length,
+    all: list.filter(d => DelView.sendOnIso(d) === Store.date).length,
+    syncArchive: list.filter(d => DelView.isSyncArchive(d)).length,
+    selected: list.filter(d => dPick.sel.has(d.DeliveryID)).length,
   };
 }
 function routeVehicleLabel(routeId){
@@ -607,16 +625,17 @@ function delDocDateFilterHtml(list){
 function delDueDateFilterHtml(list){
   return delSelectFilterHtml('fDueDate', dPick.dueDateFilter, 'กรองกำหนดส่งของ', delValueCounts(list, d => DelView.dueIso(d)), v => thDate(v));
 }
-function delDistrictFilterHtml(districtList){
+function delDistrictFilterHtml(districtList, prefix){
+  const p = prefix || 'fZone';
   const ds = dPick.districts;
   const items = (districtList || []).map(([name, n]) => {
     const key = name === 'ไม่ระบุเขต' ? '__none__' : name;
     const on = ds.has(key);
     return `<label class="del-zone-opt"><input type="checkbox" data-zone-filter="${esc(key)}"${on ? ' checked' : ''}> ${esc(name)} (${int(n)})</label>`;
   });
-  return `<div class="del-zone-multi" id="fZoneWrap">
-    <button type="button" class="del-zone-btn del-filter-input" id="fZoneBtn" aria-expanded="false" title="เลือกได้หลายเขต">${esc(delDistrictFilterLabel())}</button>
-    <div class="del-zone-pop scrolly" id="fZonePop" hidden>
+  return `<div class="del-zone-multi" id="${p}Wrap">
+    <button type="button" class="del-zone-btn del-filter-input" id="${p}Btn" aria-expanded="false" title="เลือกได้หลายเขต">${esc(delDistrictFilterLabel())}</button>
+    <div class="del-zone-pop scrolly" id="${p}Pop" hidden>
       <button type="button" class="del-zone-clear" data-zone-clear>ล้าง · แสดงทั้งหมด</button>
       ${items.join('') || '<div class="small muted" style="padding:6px 8px">ไม่มีข้อมูลเขต</div>'}
     </div>
@@ -642,7 +661,6 @@ function delMobShell({ openN, doneN, zoneNamed, viewMode, openList, baseList, kp
       <i data-lucide="search"></i>
       <input id="delSearch" class="input" placeholder="ค้นหาร้าน เขต PO บิล…" value="${esc(Store.search || '')}" enterkeyhint="search" autocomplete="off">
     </div>
-    ${viewMode === 'queue' ? districtChipsHtml(openList) : delFilterChipsHtml(baseList)}
   </div>`;
 }
 function delMobPageHead(title, sub){
@@ -660,9 +678,9 @@ function delMobPageHead(title, sub){
 function delMobQueueHint(){
   return `<details class="del-mob-tip m-only">
     <summary><i data-lucide="help-circle"></i> วิธีจัดรถ</summary>
-    <div class="del-mob-tip-body">เลือก chip เขต → ติ๊กร้าน → กด <b>จัดรถอัตโนมัติ</b> ด้านล่าง</div>
+    <div class="del-mob-tip-body">กดตัวกรอง <b>เขต</b> → ติ๊กร้าน → กด <b>จัดรถอัตโนมัติ</b> ด้านล่าง</div>
   </details>
-  <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>ติ๊กเลือกเขต</b> (หลายเขตได้ — ชิปด้านบนหรือกรองคอลัมน์เขต) → กด <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึกรายการ</b></div></div>`;
+  <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>ต้องส่งวันนี้</b> = ตามวันที่เลือกด้านบน · กด <b>เขต</b> เพื่อเลือกเขตจัดรถ → <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึก</b></div></div>`;
 }
 function delMobDoneHint(){
   return `<div class="del-mob-done-note m-only">บิลส่งแล้ว — ไม่แสดงในคิวจัดรถ</div>
@@ -677,11 +695,35 @@ function delViewTabsHtml(openN, doneN, opts){
   return `<div class="del-view-tabs plan-wizard-steps${compact ? ' del-view-tabs-compact' : ''} mb14" id="delViewTabs" role="tablist">${tab('queue', qLabel, openN)}${tab('done', dLabel, doneN)}</div>`;
 }
 function delFilterChipsHtml(list, opts){
-  const f = dPick.filter || 'all';
+  const f = dPick.filter || 'dueToday';
   const counts = deliveryFilterCounts(list || []);
+  const keys = (opts && opts.keys) || (dPick.viewMode === 'done'
+    ? ['workAll', 'syncArchive']
+    : ['dueToday', 'overdue', 'noRoute', 'workAll']);
   const chip = (key, label) => `<button type="button" class="pw-step ${f === key ? 'on' : ''}" data-dfilter="${key}">${esc(label)} (${int(counts[key] || 0)})</button>`;
-  const inner = `<div class="del-mob-chips plan-wizard-steps mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
+  const inner = `<div class="del-scope-chips plan-wizard-steps">${DFILTERS.filter(x => keys.includes(x.key)).map(x => chip(x.key, x.label)).join('')}</div>`;
   return (opts && opts.deskOnly) ? `<div class="desk-only">${inner}</div>` : inner;
+}
+/** แถบตัวกรองแบบ BigSeller: วันต้องส่ง + กดเลือกเขต (ไม่โชว์ชิปเขตทั้งแถบ) */
+function delScopeBarHtml(list, districtList){
+  const counts = deliveryFilterCounts(list || []);
+  const overdueN = counts.overdue || 0;
+  return `<div class="del-scope-bar mb14">
+    <div class="del-scope-row">
+      <span class="del-scope-label">ต้องส่ง</span>
+      ${delFilterChipsHtml(list)}
+    </div>
+    <div class="del-scope-row del-scope-zone">
+      <span class="del-scope-label">เขต</span>
+      <div class="del-scope-zone-ctrl">${delDistrictFilterHtml(districtList)}</div>
+      <span class="small muted">กดเลือกเขตเอง · ไม่โชว์ทุกเขตด้านบน</span>
+    </div>
+    ${overdueN ? `<div class="small" style="color:#B45309;margin-top:6px">มีค้างส่ง ${int(overdueN)} บิล — กดแท็บ <b>เลยกำหนด</b> ถ้าต้องการจัดรวม</div>` : ''}
+  </div>`;
+}
+function districtChipsHtml(list, opts){
+  // เลิกใช้ชิปเขตยาวด้านบน — คงฟังก์ชันไว้เผื่อเรียกเก่า แต่ชี้ไปแถบกรองใหม่
+  return delScopeBarHtml(list, districtCounts(list));
 }
 function delTableHead(staffList, districtList, showStatus, filterList){
   const src = filterList || [];
@@ -703,7 +745,7 @@ function delTableHead(staffList, districtList, showStatus, filterList){
       <th class="c"></th>
       <th><input class="input del-filter-input" id="fName" placeholder="กรองชื่อร้าน…" value="${esc(dPick.nameFilter || '')}"></th>
       <th>${delStaffFilterHtml(staffList)}</th>
-      <th>${delDistrictFilterHtml(districtList)}</th>
+      <th><span class="small muted">ใช้ตัวกรองด้านบน</span></th>
       <th>${delAmountFilterHtml(src)}</th>
       <th>${delPoFilterHtml(src)}</th>
       <th>${delInvFilterHtml(src)}</th>
@@ -728,27 +770,13 @@ function districtCounts(list){
   });
   return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
 }
-function districtChipsHtml(list, opts){
-  const counts = districtCounts(list);
-  const noneN = (list || []).filter(d => !DelView.zone(d)).length;
-  const ds = dPick.districts;
-  const allOn = !ds.size;
-  const chip = (key, label, n) => {
-    const on = ds.has(key);
-    return `<button type="button" class="pw-step ${on ? 'on' : ''}" data-district="${esc(key)}" title="ติ๊กเลือก/ยกเลิกเขต">${on ? '✓ ' : ''}${esc(label)} <span class="del-chip-n">${int(n)}</span></button>`;
-  };
-  const chips = [`<button type="button" class="pw-step ${allOn ? 'on' : ''}" data-district="">ทั้งหมด <span class="del-chip-n">${int((list || []).length)}</span></button>`]
-    .concat(counts.filter(([name]) => name !== 'ไม่ระบุเขต').map(([name, n]) => chip(name, name, n)));
-  if (noneN) chips.push(chip('__none__', 'ไม่ระบุเขต', noneN));
-  const picked = ds.size ? `<span class="del-district-picked">${int(ds.size)} เขต</span>` : '';
-  const inner = `<div class="del-district-bar">
-    <div class="del-district-cap">
-      <span class="small muted desk-only">chip เขต = ติ๊กเลือกบิลจัดรถ · dropdown ใต้หัวคอลัมน์ = กรองดู</span>
-      ${picked || '<span class="del-district-hint">เลื่อนเลือกเขต</span>'}
-    </div>
-    <div class="del-mob-chips plan-wizard-steps" id="districtChips">${chips.join('')}</div>
-  </div>`;
-  return (opts && opts.deskOnly) ? `<div class="desk-only">${inner}</div>` : inner;
+function districtCounts(list){
+  const map = new Map();
+  (list || []).forEach(d => {
+    const z = DelView.zone(d) || 'ไม่ระบุเขต';
+    map.set(z, (map.get(z) || 0) + 1);
+  });
+  return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
 }
 function delKpiStrip(kpi){
   const cell = (label, val, color) => `<div class="del-kpi-card" style="--kpi:${color}">

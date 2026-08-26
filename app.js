@@ -869,18 +869,22 @@ function openDatePicker(e){
   if (!pop.hidden) { closeDatePop(); return; }
 
   const today = new Date().toISOString().slice(0, 10);
+  const ydayDate = new Date(); ydayDate.setDate(ydayDate.getDate() - 1);
+  const yday = ydayDate.toISOString().slice(0, 10);
   const isToday = Store.date === today;
+  const isYday = Store.date === yday;
   const isMock = Store.date === DATA_DATE;
   pop.innerHTML = `
     <div class="date-pop-inner">
-      <div class="date-pop-title">เลือกวันทำงาน</div>
+      <div class="date-pop-title">วันต้องส่ง</div>
       <input type="date" class="input" id="pkDate" value="${Store.date}">
       <div class="date-pick-preview" id="pkDateTh">${thDate(Store.date)}</div>
       <div class="date-pick-quick">
         <button class="btn btn-sm ${isToday ? 'btn-primary' : ''}" data-quick="today" type="button"><i data-lucide="calendar-check"></i>วันนี้</button>
+        <button class="btn btn-sm ${isYday ? 'btn-primary' : ''}" data-quick="yesterday" type="button"><i data-lucide="calendar"></i>เมื่อวาน</button>
         <button class="btn btn-sm ${isMock ? 'btn-primary' : ''}" data-quick="data" type="button"><i data-lucide="flask-conical"></i>ทดลอง</button>
       </div>
-      <div class="small muted" style="margin:8px 0 10px">ทดลอง = ${thDate(DATA_DATE)}</div>
+      <div class="small muted" style="margin:8px 0 10px">รายการหลัก = บิลที่ <b>กำหนดส่ง</b> ตรงวันนี้ที่เลือก · ของค้างดูแท็บเลยกำหนด</div>
       <button class="btn btn-primary btn-block" id="pkOk" type="button"><i data-lucide="check"></i>ยืนยัน</button>
     </div>`;
   pop.hidden = false;
@@ -895,12 +899,15 @@ function openDatePicker(e){
   const pk = el('pkDate');
   if (pk) pk.onchange = refreshPreview;
   $$('[data-quick]', pop).forEach(b => b.onclick = () => {
-    pk.value = b.dataset.quick === 'today' ? today : DATA_DATE;
+    if (b.dataset.quick === 'today') pk.value = today;
+    else if (b.dataset.quick === 'yesterday') pk.value = yday;
+    else pk.value = DATA_DATE;
     $$('[data-quick]', pop).forEach(x => x.classList.toggle('btn-primary', x === b));
     refreshPreview();
   });
   el('pkOk').onclick = async () => {
     Store.date = pk.value;
+    if (typeof dPick !== 'undefined') dPick.filter = 'dueToday';
     closeDatePop();
     setDateLabel();
     await loadBootstrap();
