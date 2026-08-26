@@ -172,7 +172,7 @@ ROUTES.dashboard = async function(view){
       <div class="desk-only">
         <div class="tbl-wrap del-tbl-sticky">
         ${rows.length ? `<table class="tbl del-tbl">
-          ${delTableHead(staffList, zoneList, viewMode === 'done')}
+          ${delTableHead(staffList, zoneList, viewMode === 'done', baseList)}
           <tbody>${rows.map(d => {
             const zone = DelView.zone(d);
             const po = DelView.poNo(d);
@@ -262,6 +262,15 @@ ROUTES.dashboard = async function(view){
   }
   const fs = view.querySelector('#fStaff');
   if (fs) fs.onchange = () => { dPick.staffFilter = fs.value; ROUTES.dashboard(view); };
+  const bindColSelect = (id, key) => {
+    const elSel = view.querySelector('#' + id);
+    if (elSel) elSel.onchange = () => { dPick[key] = elSel.value; ROUTES.dashboard(view); };
+  };
+  bindColSelect('fAmount', 'amountFilter');
+  bindColSelect('fPo', 'poFilter');
+  bindColSelect('fInv', 'invFilter');
+  bindColSelect('fDocDate', 'docDateFilter');
+  bindColSelect('fDueDate', 'dueDateFilter');
   const fZoneWrap = view.querySelector('#fZoneWrap');
   const fZoneBtn = view.querySelector('#fZoneBtn');
   const fZonePop = view.querySelector('#fZonePop');
@@ -366,7 +375,7 @@ ROUTES.dashboard = async function(view){
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), districts: new Set(), filter: 'all', viewMode: 'queue', nameFilter: '', staffFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'all', viewMode: 'queue', nameFilter: '', staffFilter: '', amountFilter: '', poFilter: '', invFilter: '', docDateFilter: '', dueDateFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
   { key:'all', label:'ทั้งหมด' },
   { key:'noRoute', label:'ยังไม่จัดรถ' },
@@ -477,6 +486,19 @@ function applyDeliveryFilter(rows){
   const sf = dPick.staffFilter;
   if (sf === '__walkin__') out = out.filter(d => DelView.isWalkIn(d));
   else if (sf) out = out.filter(d => DelView.salesStaff(d) === sf);
+  if (dPick.amountFilter === '__none__') out = out.filter(d => DelView.amount(d) == null);
+  else if (dPick.amountFilter) {
+    const want = Number(dPick.amountFilter);
+    out = out.filter(d => DelView.amount(d) === want);
+  }
+  if (dPick.poFilter === '__none__') out = out.filter(d => !DelView.poNo(d));
+  else if (dPick.poFilter) out = out.filter(d => DelView.poNo(d) === dPick.poFilter);
+  if (dPick.invFilter === '__none__') out = out.filter(d => !DelView.invoiceNo(d));
+  else if (dPick.invFilter) out = out.filter(d => DelView.invoiceNo(d) === dPick.invFilter);
+  if (dPick.docDateFilter === '__none__') out = out.filter(d => !DelView.docIso(d));
+  else if (dPick.docDateFilter) out = out.filter(d => DelView.docIso(d) === dPick.docDateFilter);
+  if (dPick.dueDateFilter === '__none__') out = out.filter(d => !DelView.dueIso(d));
+  else if (dPick.dueDateFilter) out = out.filter(d => DelView.dueIso(d) === dPick.dueDateFilter);
   return out;
 }
 function deliveryDistrictKey(d){
@@ -542,6 +564,48 @@ function delStaffFilterHtml(staffList){
       `<option value="${esc(name)}"${dPick.staffFilter === name ? ' selected' : ''}>${esc(name)} (${int(n)})</option>`
     ));
   return `<select class="select del-filter-input" id="fStaff" title="กรองช่องทาง / พนักงานขาย">${opts.join('')}</select>`;
+}
+function delValueCounts(list, getKey){
+  const map = new Map();
+  let none = 0;
+  (list || []).forEach(d => {
+    const key = getKey(d);
+    if (key == null || key === '') { none += 1; return; }
+    const k = String(key);
+    map.set(k, (map.get(k) || 0) + 1);
+  });
+  const rows = [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
+  return { rows, none };
+}
+function delSelectFilterHtml(id, cur, title, counts, labelFn){
+  const opts = [`<option value="">ทั้งหมด</option>`];
+  if (counts.none) {
+    opts.push(`<option value="__none__"${cur === '__none__' ? ' selected' : ''}>ไม่ระบุ (${int(counts.none)})</option>`);
+  }
+  counts.rows.forEach(([val, n]) => {
+    const label = labelFn ? labelFn(val) : val;
+    opts.push(`<option value="${esc(val)}"${cur === val ? ' selected' : ''}>${esc(label)} (${int(n)})</option>`);
+  });
+  return `<select class="select del-filter-input" id="${esc(id)}" title="${esc(title)}">${opts.join('')}</select>`;
+}
+function delAmountFilterHtml(list){
+  const c = delValueCounts(list, d => {
+    const a = DelView.amount(d);
+    return a == null ? '' : String(a);
+  });
+  return delSelectFilterHtml('fAmount', dPick.amountFilter, 'กรองมูลค่า', c, v => money(Number(v)));
+}
+function delPoFilterHtml(list){
+  return delSelectFilterHtml('fPo', dPick.poFilter, 'กรองเลขที่เอกสารอ้างอิง', delValueCounts(list, d => DelView.poNo(d)));
+}
+function delInvFilterHtml(list){
+  return delSelectFilterHtml('fInv', dPick.invFilter, 'กรองเลขบิล', delValueCounts(list, d => DelView.invoiceNo(d)));
+}
+function delDocDateFilterHtml(list){
+  return delSelectFilterHtml('fDocDate', dPick.docDateFilter, 'กรองวันที่ออกเอกสาร', delValueCounts(list, d => DelView.docIso(d)), v => thDate(v));
+}
+function delDueDateFilterHtml(list){
+  return delSelectFilterHtml('fDueDate', dPick.dueDateFilter, 'กรองกำหนดส่งของ', delValueCounts(list, d => DelView.dueIso(d)), v => thDate(v));
 }
 function delDistrictFilterHtml(districtList){
   const ds = dPick.districts;
@@ -619,7 +683,8 @@ function delFilterChipsHtml(list, opts){
   const inner = `<div class="del-mob-chips plan-wizard-steps mb14">${DFILTERS.filter(x => x.key === 'all' || x.key === 'syncArchive').map(x => chip(x.key, x.label)).join('')}</div>`;
   return (opts && opts.deskOnly) ? `<div class="desk-only">${inner}</div>` : inner;
 }
-function delTableHead(staffList, districtList, showStatus){
+function delTableHead(staffList, districtList, showStatus, filterList){
+  const src = filterList || [];
   return `<thead>
     <tr class="del-head-row">
       <th class="c" style="width:42px">${showStatus ? '' : '<input type="checkbox" id="dSelAll">'}</th>
@@ -639,7 +704,12 @@ function delTableHead(staffList, districtList, showStatus){
       <th><input class="input del-filter-input" id="fName" placeholder="กรองชื่อร้าน…" value="${esc(dPick.nameFilter || '')}"></th>
       <th>${delStaffFilterHtml(staffList)}</th>
       <th>${delDistrictFilterHtml(districtList)}</th>
-      <th colspan="${showStatus ? 6 : 5}"></th>
+      <th>${delAmountFilterHtml(src)}</th>
+      <th>${delPoFilterHtml(src)}</th>
+      <th>${delInvFilterHtml(src)}</th>
+      <th>${delDocDateFilterHtml(src)}</th>
+      <th>${delDueDateFilterHtml(src)}</th>
+      ${showStatus ? '<th></th>' : ''}
       <th class="del-act"></th>
     </tr>
   </thead>`;
