@@ -4,14 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GV ส่งของ">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#ffffff">
+<meta name="application-name" content="GV ส่งของ">
+<meta name="theme-color" content="#F5F7FA">
+<meta name="theme-color" media="(display-mode: standalone)" content="#0B1220">
 <title>ระบบจัดส่งประจำวัน — GV Dispatch</title>
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 </head>
 <body>
   <div class="app">
@@ -48,10 +54,21 @@
           <input id="globalSearch" placeholder="ค้นหา PO, เลขบิล, ลูกค้า…" autocomplete="off">
         </div>
         <div class="topbar-actions">
+          <button class="icon-btn" id="installTopBtn" title="ติดตั้งเมนูลัดหน้าจอ" aria-label="ติดตั้งเมนูลัดหน้าจอ" hidden><i data-lucide="download"></i></button>
           <button class="icon-btn" id="driverModeBtn" title="โหมดคนขับ / QR"><i data-lucide="smartphone"></i></button>
           <div class="avatar topbar-user" title="หัวหน้างาน"><i data-lucide="user"></i></div>
         </div>
       </header>
+      <div class="install-banner" id="installBanner" hidden>
+        <img class="install-banner-icon" src="icon-192.png" alt="" width="40" height="40">
+        <div class="install-banner-text">
+          <b>ติดตั้งเมนูลัดหน้าจอ</b>
+          <span>เปิดเป็นแอปบนมือถือได้เลย ไม่ต้องหาแท็บเบราว์เซอร์</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" id="installBtn">ติดตั้ง</button>
+        <button type="button" class="icon-btn install-banner-hide" id="installHide" aria-label="ปิด">×</button>
+        <div class="install-ios-hint" id="installIosHint" hidden></div>
+      </div>
       <main class="view scrolly" id="view"></main>
     </div>
 
@@ -68,5 +85,12 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
   <script src="app.pages.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  </script>
 </body>
 </html>

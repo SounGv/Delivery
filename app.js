@@ -158,6 +158,7 @@ const NAV = [
   ]},
   { group:'อื่นๆ', items:[
     { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
+    { id:'guide',    label:'คู่มือ / ติดตั้งแอป', icon:'smartphone', href:'user-guide.html', external:true },
   ]},
 ];
 
@@ -1061,13 +1062,21 @@ function currentRoute(){
   const h = location.hash.replace(/^#\//,'') || 'dashboard';
   return h === 'deliveries' ? 'dashboard' : h;
 }
+function applyAppShell(){
+  const page = currentRoute();
+  const mobile = window.innerWidth <= 720;
+  document.body.classList.toggle('driver-mode', page==='driver');
+  document.body.classList.toggle('app-mobile', mobile && page!=='driver');
+  document.body.classList.toggle('del-app-page', mobile && page==='dashboard');
+  document.body.classList.toggle('pwa-standalone', isStandaloneApp());
+  refreshInstallUi();
+}
 async function render(){
   const page = currentRoute();
   Store.page = page;
   buildNav(); setDateLabel(); updateSync();
   const view = el('view');
-  document.body.classList.toggle('driver-mode', page==='driver');
-  document.body.classList.toggle('del-app-page', page==='dashboard' && window.innerWidth <= 720);
+  applyAppShell();
   if(page==='driver'){ view.classList.add('driver'); } else { view.classList.remove('driver'); el('dnav').innerHTML=''; }
   const fn = ROUTES[page] || ROUTES.dashboard;
   view.innerHTML = loadingState();
@@ -1081,9 +1090,7 @@ async function render(){
 }
 window.render = render;
 window.addEventListener('hashchange', render);
-window.addEventListener('resize', () => {
-  document.body.classList.toggle('del-app-page', currentRoute() === 'dashboard' && window.innerWidth <= 720);
-});
+window.addEventListener('resize', applyAppShell);
 
 /* ================================================================
    PLANNER — route optimization + options + cost
@@ -1704,6 +1711,7 @@ function bindShell(){
   el('dateBtn').onclick = openDatePicker;
   const drvBtn = el('driverModeBtn');
   if(drvBtn) drvBtn.onclick = ()=> openDriverAccessModal();
+  bindInstallPrompt();
   let _searchT;
   el('globalSearch').addEventListener('input', e=>{
     const v = e.target.value.trim().toLowerCase();
@@ -1804,4 +1812,121 @@ async function silentTrcloudSync(){
   }catch(e){}
   finally{ Store._trcloudSyncing = false; }
 }
+/* ================================================================
+   PWA — ติดตั้งเมนูลัดหน้าจอ
+   ================================================================ */
+const LS_INSTALL_HIDE = 'ddc_install_hide';
+let _deferredInstall = null;
+
+function isStandaloneApp(){
+  try{
+    return !!(window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || window.navigator.standalone === true);
+  }catch(e){ return false; }
+}
+function isIosDevice(){
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function isNarrowPhone(){ return window.innerWidth <= 720; }
+function installHintHtml(){
+  if (isIosDevice()) {
+    return 'บน iPhone / iPad: กดปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรขึ้น) ด้านล่าง → เลื่อนหา <b>เพิ่มไปยังหน้าจอโฮม</b>';
+  }
+  return 'บน Android: กดเมนู <b>⋮</b> มุมบนขวา → เลือก <b>ติดตั้งแอป</b> หรือ <b>เพิ่มไปยังหน้าจอหลัก</b>';
+}
+function shouldOfferInstall(){
+  if (isStandaloneApp()) return false;
+  try { if (localStorage.getItem(LS_INSTALL_HIDE) === '1') return false; } catch(e){}
+  if (_deferredInstall) return true;
+  if (isIosDevice()) return true;
+  return isNarrowPhone();
+}
+function hideInstallBanner(){
+  const b = el('installBanner');
+  if (b) b.hidden = true;
+  document.body.classList.remove('has-install-banner');
+  const top = el('installTopBtn');
+  if (top) top.hidden = isStandaloneApp();
+}
+function refreshInstallUi(){
+  const offer = shouldOfferInstall();
+  const banner = el('installBanner');
+  const top = el('installTopBtn');
+  const btn = el('installBtn');
+  if (isStandaloneApp()) {
+    hideInstallBanner();
+    if (top) top.hidden = true;
+    document.body.classList.add('pwa-standalone');
+    return;
+  }
+  document.body.classList.remove('pwa-standalone');
+  if (top) top.hidden = !offer && !_deferredInstall;
+  if (!banner) return;
+  if (!offer) { hideInstallBanner(); return; }
+  banner.hidden = false;
+  document.body.classList.add('has-install-banner');
+  if (btn) btn.textContent = _deferredInstall ? 'ติดตั้ง' : 'วิธีติดตั้ง';
+}
+function runInstallFlow(){
+  const hint = el('installIosHint');
+  if (_deferredInstall) {
+    const promptEvt = _deferredInstall;
+    _deferredInstall = null;
+    promptEvt.prompt();
+    Promise.resolve(promptEvt.userChoice).then(r => {
+      if (r && r.outcome === 'accepted') {
+        try { localStorage.setItem(LS_INSTALL_HIDE, '1'); } catch(e){}
+        hideInstallBanner();
+      } else {
+        refreshInstallUi();
+      }
+    }).catch(() => refreshInstallUi());
+    return;
+  }
+  if (hint) {
+    hint.innerHTML = installHintHtml();
+    hint.hidden = !hint.hidden;
+    return;
+  }
+  toast(isIosDevice()
+    ? 'กดแชร์ แล้วเลือก เพิ่มไปยังหน้าจอโฮม'
+    : 'เปิดเมนูเบราว์เซอร์ แล้วเลือก ติดตั้งแอป / เพิ่มไปยังหน้าจอหลัก', 'info');
+}
+function bindInstallPrompt(){
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredInstall = e;
+    refreshInstallUi();
+  });
+  window.addEventListener('appinstalled', () => {
+    _deferredInstall = null;
+    try { localStorage.setItem(LS_INSTALL_HIDE, '1'); } catch(e){}
+    hideInstallBanner();
+    toast('ติดตั้งเมนูลัดหน้าจอแล้ว — เปิดจากไอคอน GV ส่งของ ได้เลย', 'ok');
+  });
+  const hideBtn = el('installHide');
+  if (hideBtn) hideBtn.onclick = () => {
+    try { localStorage.setItem(LS_INSTALL_HIDE, '1'); } catch(e){}
+    hideInstallBanner();
+    const top = el('installTopBtn');
+    if (top) top.hidden = false;
+  };
+  const btn = el('installBtn');
+  if (btn) btn.onclick = runInstallFlow;
+  const top = el('installTopBtn');
+  if (top) top.onclick = () => {
+    try { localStorage.removeItem(LS_INSTALL_HIDE); } catch(e){}
+    refreshInstallUi();
+    runInstallFlow();
+  };
+  try {
+    const mq = window.matchMedia('(display-mode: standalone)');
+    if (mq.addEventListener) mq.addEventListener('change', applyAppShell);
+    else if (mq.addListener) mq.addListener(applyAppShell);
+  } catch(e){}
+  refreshInstallUi();
+}
+
 document.addEventListener('DOMContentLoaded', init);

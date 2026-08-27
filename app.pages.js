@@ -720,7 +720,7 @@ function delMobPageHead(title, sub){
 function delMobQueueHint(){
   return `<details class="del-mob-tip m-only">
     <summary><i data-lucide="help-circle"></i> วิธีใช้วันนี้</summary>
-    <div class="del-mob-tip-body">คีย์บิลแล้วร้านขึ้นทันทีด้านบน → <b>พิมพ์ให้น้าเอ๋</b> (ก่อนจัดรถ) → กดเขต → ติ๊กร้าน → <b>จัดรถอัตโนมัติ</b></div>
+    <div class="del-mob-tip-body">ติดตั้งเมนูลัดหน้าจอครั้งเดียว แล้วเปิดแอปนี้ทุกเช้า → คีย์บิลแล้วร้านขึ้นทันทีด้านบน → <b>พิมพ์ให้น้าเอ๋</b> (ก่อนจัดรถ) → กดเขต → ติ๊กร้าน → <b>จัดรถอัตโนมัติ</b></div>
   </details>
   <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>รู้ร้านล่วงหน้า:</b> แอดมินคีย์ SO แล้วร้าน/ช่องทางขึ้นทันที ไม่ต้องรอจัดรถเสร็จ · กด <b>พิมพ์ให้น้าเอ๋</b> เพื่อใบสั่งขายขึ้นของ · จัดรถทีหลังได้</div></div>`;
 }
@@ -862,9 +862,9 @@ function todayGlanceHtml(openList){
   const g = todayGlanceModel(openList);
   const totalCh = g.nDue || 1;
   const chOn = dPick.shipFilter || '';
-  const chBtn = (key, label, n, color) => `<button type="button" class="glance-ch ${chOn === key ? 'on' : ''}" data-ship-filter="${esc(key)}" style="--ch:${color}">
+  const chBtn = (key, shortL, longL, n, color) => `<button type="button" class="glance-ch ${chOn === key ? 'on' : ''}" data-ship-filter="${esc(key)}" style="--ch:${color}">
     <span class="glance-ch-n tab">${int(n)}</span>
-    <span class="glance-ch-l">${esc(label)}</span>
+    <span class="glance-ch-l">${esc(shortL)}<span class="glance-ch-long"> — ${esc(longL)}</span></span>
     <span class="glance-ch-bar"><span style="width:${glanceBarPct(n, totalCh)}%;background:${color}"></span></span>
     <span class="glance-ch-p">${totalCh ? Math.round(n / totalCh * 100) : 0}%</span>
   </button>`;
@@ -902,9 +902,9 @@ function todayGlanceHtml(openList){
       </div>
     </div>
     <div class="glance-split">
-      ${chBtn('self', 'ส่งเอง — คนขับต้องรู้ร้าน', g.nSelf, '#4F7A0A')}
-      ${chBtn('courier', 'ขนส่งอื่น', g.nCourier, '#7C3AED')}
-      ${chBtn('walkin', 'WALK-IN มารับเอง', g.nWalk, '#6B7383')}
+      ${chBtn('self', 'ส่งเอง', 'คนขับต้องรู้ร้าน', g.nSelf, '#4F7A0A')}
+      ${chBtn('courier', 'ขนส่ง', 'Kerry / Flash / อื่น', g.nCourier, '#7C3AED')}
+      ${chBtn('walkin', 'WALK-IN', 'มารับเอง', g.nWalk, '#6B7383')}
       ${chOn ? `<button type="button" class="glance-ch-clear" data-ship-filter="">ล้างตัวกรองช่องทาง</button>` : ''}
     </div>
     <div class="glance-shops">
@@ -913,7 +913,7 @@ function todayGlanceHtml(openList){
           <div class="strong">วันนี้รถบริษัทต้องไปร้านเหล่านี้</div>
           <div class="small muted">แอดมินคีย์บิลแล้ว ร้านขึ้นทันที — ไม่ต้องรอจัดรถเสร็จ</div>
         </div>
-        <div class="flex gap8 wrap">
+        <div class="flex gap8 wrap glance-print-acts">
           <button type="button" class="btn btn-sm" data-act="printShops" ${g.nShops ? '' : 'disabled'}><i data-lucide="map-pinned"></i>พิมพ์รายร้าน</button>
           <button type="button" class="btn btn-sm btn-primary" data-act="printSo" ${g.nSelf ? '' : 'disabled'}><i data-lucide="printer"></i>พิมพ์ให้น้าเอ๋</button>
         </div>
