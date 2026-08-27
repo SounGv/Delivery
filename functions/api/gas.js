@@ -60,6 +60,8 @@ const GET_ACTIONS = {
   getRealtime: reads.getRealtime,
   getCartrackStatus: reads.getCartrackStatus,
   getTrcloudStatus: (env) => trcloud.getTrcloudStatus(env),
+  getSaleOrderPrint: (env, p) => trcloud.getSaleOrderPrint(env, p),
+  getSaleOrdersPrint: (env, p) => trcloud.getSaleOrdersPrint(env, p),
   geocode: reads.geocode,
   ping: async () => reads.ping(),
   debugTrcloudSearch, debugTrcloudRead,

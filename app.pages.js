@@ -161,8 +161,9 @@ ROUTES.dashboard = async function(view){
     <div class="del-page">
     ${delMobShell({ openN: open.length, doneN: done.length, zoneNamed, viewMode, openList: open, baseList: statsBase, kpi })}
     ${viewMode === 'queue' ? delMobQueueHint() : delMobDoneHint()}
-    <div class="desk-only">${head('วันนี้', headSub, `<button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}</div>
+    <div class="desk-only">${head('วันนี้', headSub, `<button class="btn btn-sm" data-act="printSo"><i data-lucide="printer"></i>พิมพ์ให้น้าเอ๋</button><button class="btn btn-sm" data-act="sync"><i data-lucide="refresh-cw"></i>รีเฟรช</button>`)}</div>
     <div class="desk-only">${delViewTabsHtml(open.length, done.length)}</div>
+    ${viewMode === 'queue' ? todayGlanceHtml(open) : ''}
     <div class="del-mob-toolbar desk-only">
       <div class="del-search mb14">
         <i data-lucide="search"></i>
@@ -185,7 +186,7 @@ ROUTES.dashboard = async function(view){
               : '';
             return `<tr class="${dPick.sel.has(d.DeliveryID) ? 'row-sel' : ''}">
               <td class="c">${chk}</td>
-              <td class="strong">${esc(d.CustomerName || '—')}${d.Address ? `<div class="small muted" style="font-weight:400;margin-top:2px">${esc(shortAddr(d.Address, 64))}</div>` : ''}</td>
+              <td class="strong">${esc(d.CustomerName || '—')}${isSoPrinted(d.DeliveryID) ? ' <span class="so-printed">พิมพ์แล้ว</span>' : ''}${d.Address ? `<div class="small muted" style="font-weight:400;margin-top:2px">${esc(shortAddr(d.Address, 64))}</div>` : ''}</td>
               <td>${delStaffBadge(d)}</td>
               <td>${zone ? esc(zone) : '<span class="muted">—</span>'}</td>
               <td class="r">${delAmountHtml(d)}</td>
@@ -372,13 +373,41 @@ ROUTES.dashboard = async function(view){
   const delSelBtn = view.querySelector('[data-act="dselDelete"]');
   if (delSelBtn) delSelBtn.onclick = () => bulkDeleteSelectedDeliveries(view);
   const clr = view.querySelector('[data-act="dselClear"]'); if (clr) clr.onclick = () => { dPick.sel.clear(); dPick.districts.clear(); ROUTES.dashboard(view); };
+  $$('[data-ship-filter]', view).forEach(b => b.onclick = () => {
+    dPick.shipFilter = b.dataset.shipFilter || '';
+    ROUTES.dashboard(view);
+  });
+  $$('[data-shop-ids]', view).forEach(b => b.onclick = () => {
+    String(b.dataset.shopIds || '').split(',').filter(Boolean).forEach(id => dPick.sel.add(id));
+    ROUTES.dashboard(view);
+  });
+  const bindPrintSo = (btn, getList) => {
+    if (!btn) return;
+    btn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.disabled = true;
+      try { await printSaleOrdersForNaaAe(getList()); }
+      catch (err) { toast(String((err && err.message) || err), 'err'); }
+      finally { btn.disabled = false; if (view.isConnected) ROUTES.dashboard(view); }
+    };
+  };
+  $$('[data-act="printSo"]', view).forEach(btn => bindPrintSo(btn, () => billsForNaaAePrint(open, rows)));
+  bindPrintSo(view.querySelector('[data-act="dselPrintSo"]'), () => (open || []).filter(d => dPick.sel.has(d.DeliveryID)));
+  const printShopsBtn = view.querySelector('[data-act="printShops"]');
+  if (printShopsBtn) printShopsBtn.onclick = () => printTodayShopList(todayGlanceModel(open).self);
+  $$('[data-print-so]', view).forEach(btn => btn.onclick = async (e) => {
+    e.stopPropagation();
+    const d = allDel.find(x => x.DeliveryID === btn.dataset.printSo) || rows.find(x => x.DeliveryID === btn.dataset.printSo);
+    if (d) await printSaleOrdersForNaaAe([d]);
+  });
 };
 
 /* ================================================================
    DELIVERIES — UI Phase (frontend only)
    ใช้ field จาก API เดิมผ่าน View Model — ไม่แตะ backend / mapping
    ================================================================ */
-const dPick = { sel: new Set(), districts: new Set(), filter: 'dueToday', viewMode: 'queue', nameFilter: '', staffFilter: '', amountFilter: '', poFilter: '', invFilter: '', docDateFilter: '', dueDateFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
+const dPick = { sel: new Set(), districts: new Set(), filter: 'dueToday', viewMode: 'queue', nameFilter: '', staffFilter: '', shipFilter: '', amountFilter: '', poFilter: '', invFilter: '', docDateFilter: '', dueDateFilter: '', lastSyncAt: localStorage.getItem('ddc_trc_sync_at') || '' };
 const DFILTERS = [
   { key:'dueToday', label:'ต้องส่งวันนี้' },
   { key:'overdue', label:'เลยกำหนด' },
@@ -441,7 +470,17 @@ const DelView = {
     m = note.match(/\b(\d{2,3}-[A-Z0-9-]+)\b/i);
     return m ? m[1].trim() : '';
   },
-  isWalkIn(d){ return /WALK-IN/i.test(this.salesStaff(d)); },
+  isWalkIn(d){ return /WALK-IN/i.test(this.salesStaff(d) + ' ' + (d.Note || '') + ' ' + (d.BranchName || '')); },
+  /** ช่องทางส่ง — แยกตั้งแต่เปิดบิล ไม่ต้องรอจัดรถ: ส่งเอง / ขนส่งอื่น / WALK-IN */
+  shipChannel(d){
+    if (this.isWalkIn(d)) return 'walkin';
+    const blob = [d.Note, d.BranchName, d.Address, d.CustomerName, this.salesStaff(d)].join(' ');
+    if (/(Kerry|Flash|SPX|J&T|JNT|BEST\s*Express|Ninja|ไปรษณีย์|Kerry Express|ขนส่งอื่น|ขนส่งKerry|Lalamove)/i.test(blob)) return 'courier';
+    return 'self';
+  },
+  shipLabel(ch){
+    return ch === 'walkin' ? 'WALK-IN' : (ch === 'courier' ? 'ขนส่งอื่น' : 'ส่งเอง');
+  },
   poNo(d){ return String(d.PoNo || '').trim(); },
   invoiceNo(d){ return String(d.InvoiceNo || '').trim(); },
   /** เขต จากที่อยู่เดิม — ไม่คิดทิศเข็มทิศ */
@@ -502,6 +541,8 @@ function applyDeliveryFilter(rows){
   const sf = dPick.staffFilter;
   if (sf === '__walkin__') out = out.filter(d => DelView.isWalkIn(d));
   else if (sf) out = out.filter(d => DelView.salesStaff(d) === sf);
+  const ch = dPick.shipFilter;
+  if (ch) out = out.filter(d => DelView.shipChannel(d) === ch);
   if (dPick.amountFilter === '__none__') out = out.filter(d => DelView.amount(d) == null);
   else if (dPick.amountFilter) {
     const want = Number(dPick.amountFilter);
@@ -653,6 +694,7 @@ function delMobShell({ openN, doneN, zoneNamed, viewMode, openList, baseList, kp
         <div class="del-mob-app-title">วันนี้</div>
         <div class="del-mob-app-date">${esc(thDate(Store.date))}</div>
       </div>
+      <button type="button" class="icon-btn del-mob-sync" data-act="printSo" title="พิมพ์ให้น้าเอ๋" aria-label="พิมพ์ให้น้าเอ๋"><i data-lucide="printer"></i></button>
       <button type="button" class="icon-btn del-mob-sync" data-act="sync" title="รีเฟรช" aria-label="รีเฟรช"><i data-lucide="refresh-cw"></i></button>
     </div>
     <div class="del-mob-stats">${queueStat}${zoneStat}${amt}</div>
@@ -677,10 +719,10 @@ function delMobPageHead(title, sub){
 }
 function delMobQueueHint(){
   return `<details class="del-mob-tip m-only">
-    <summary><i data-lucide="help-circle"></i> วิธีจัดรถ</summary>
-    <div class="del-mob-tip-body">กดตัวกรอง <b>เขต</b> → ติ๊กร้าน → กด <b>จัดรถอัตโนมัติ</b> ด้านล่าง</div>
+    <summary><i data-lucide="help-circle"></i> วิธีใช้วันนี้</summary>
+    <div class="del-mob-tip-body">คีย์บิลแล้วร้านขึ้นทันทีด้านบน → <b>พิมพ์ให้น้าเอ๋</b> (ก่อนจัดรถ) → กดเขต → ติ๊กร้าน → <b>จัดรถอัตโนมัติ</b></div>
   </details>
-  <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>ต้องส่งวันนี้</b> = ตามวันที่เลือกด้านบน · กด <b>เขต</b> เพื่อเลือกเขตจัดรถ → <b>จัดรถอัตโนมัติ</b> → เลือกรถ + คนขับ → <b>บันทึก</b></div></div>`;
+  <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>รู้ร้านล่วงหน้า:</b> แอดมินคีย์ SO แล้วร้าน/ช่องทางขึ้นทันที ไม่ต้องรอจัดรถเสร็จ · กด <b>พิมพ์ให้น้าเอ๋</b> เพื่อใบสั่งขายขึ้นของ · จัดรถทีหลังได้</div></div>`;
 }
 function delMobDoneHint(){
   return `<div class="del-mob-done-note m-only">บิลส่งแล้ว — ไม่แสดงในคิวจัดรถ</div>
@@ -757,10 +799,12 @@ function delTableHead(staffList, districtList, showStatus, filterList){
   </thead>`;
 }
 function delStaffBadge(d){
+  const ch = DelView.shipChannel(d);
+  const chCls = ch === 'self' ? 'b-green' : (ch === 'courier' ? 'b-violet' : 'b-gray');
+  const chHtml = `<span class="badge ${chCls}" style="font-size:10px">${esc(DelView.shipLabel(ch))}</span>`;
   const s = DelView.salesStaff(d);
-  if (!s) return '<span class="muted">—</span>';
-  const walk = DelView.isWalkIn(d);
-  return `<span class="badge ${walk ? 'b-cyan' : 'b-blue'}" style="font-size:10px">${esc(s)}</span>`;
+  if (!s) return chHtml;
+  return `<div class="flex gap8 wrap aic">${chHtml}<span class="badge ${ch === 'walkin' ? 'b-cyan' : 'b-blue'}" style="font-size:10px">${esc(s)}</span></div>`;
 }
 function districtCounts(list){
   const map = new Map();
@@ -770,26 +814,244 @@ function districtCounts(list){
   });
   return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
 }
-function districtCounts(list){
+function shopVisitKey(d){
+  return [String(d.CustomerName||'').trim(), String(d.BranchName||'').trim(), DelView.zone(d)||''].join('|');
+}
+function shopVisitLabel(d){
+  const name = String(d.CustomerName || 'ไม่ระบุร้าน').trim();
+  const br = trcBranchLabel(d);
+  return br && br !== name ? name + ' · ' + br : name;
+}
+function groupShopsForVisit(list){
   const map = new Map();
   (list || []).forEach(d => {
-    const z = DelView.zone(d) || 'ไม่ระบุเขต';
-    map.set(z, (map.get(z) || 0) + 1);
+    const key = shopVisitKey(d);
+    if (!map.has(key)) {
+      map.set(key, {
+        key, name: shopVisitLabel(d), zone: DelView.zone(d) || 'ไม่ระบุเขต',
+        bills: 0, qty: 0, amount: 0, ids: [], channel: DelView.shipChannel(d),
+      });
+    }
+    const g = map.get(key);
+    g.bills += 1;
+    g.qty += Number(d.BoxQty) || 0;
+    g.amount += DelView.amount(d) || 0;
+    g.ids.push(d.DeliveryID);
   });
-  return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'th'));
+  return [...map.values()].sort((a, b) => a.zone.localeCompare(b.zone, 'th') || b.bills - a.bills || a.name.localeCompare(b.name, 'th'));
 }
-function delKpiStrip(kpi){
-  const cell = (label, val, color) => `<div class="del-kpi-card" style="--kpi:${color}">
-    <div class="del-kpi-label">${esc(label)}</div>
-    <div class="del-kpi-val tab">${int(val)} <span>บิล</span></div>
+function todayGlanceModel(openList){
+  const due = (openList || []).filter(d => DelView.sendOnIso(d) === Store.date || DelView.isOverdue(d));
+  const self = due.filter(d => DelView.shipChannel(d) === 'self');
+  const walk = due.filter(d => DelView.shipChannel(d) === 'walkin');
+  const courier = due.filter(d => DelView.shipChannel(d) === 'courier');
+  const shops = groupShopsForVisit(self);
+  const qty = (arr) => arr.reduce((n, d) => n + (Number(d.BoxQty) || 0), 0);
+  const amt = (arr) => arr.reduce((n, d) => n + (DelView.amount(d) || 0), 0);
+  return {
+    due, self, walk, courier, shops,
+    nDue: due.length, nSelf: self.length, nWalk: walk.length, nCourier: courier.length,
+    nShops: shops.length, qtySelf: qty(self), qtyDue: qty(due), amtSelf: amt(self), amtDue: amt(due),
+  };
+}
+function glanceBarPct(n, total){
+  if (!total) return 0;
+  return Math.max(2, Math.round((n / total) * 100));
+}
+function todayGlanceHtml(openList){
+  const g = todayGlanceModel(openList);
+  const totalCh = g.nDue || 1;
+  const chOn = dPick.shipFilter || '';
+  const chBtn = (key, label, n, color) => `<button type="button" class="glance-ch ${chOn === key ? 'on' : ''}" data-ship-filter="${esc(key)}" style="--ch:${color}">
+    <span class="glance-ch-n tab">${int(n)}</span>
+    <span class="glance-ch-l">${esc(label)}</span>
+    <span class="glance-ch-bar"><span style="width:${glanceBarPct(n, totalCh)}%;background:${color}"></span></span>
+    <span class="glance-ch-p">${totalCh ? Math.round(n / totalCh * 100) : 0}%</span>
+  </button>`;
+  const byZone = new Map();
+  g.shops.forEach(s => {
+    if (!byZone.has(s.zone)) byZone.set(s.zone, []);
+    byZone.get(s.zone).push(s);
+  });
+  const shopRows = [...byZone.entries()].map(([zone, shops]) => {
+    const q = shops.reduce((n, s) => n + s.qty, 0);
+    return `<div class="glance-zone">
+      <div class="glance-zone-h"><b>${esc(zone)}</b><span>${int(shops.length)} ร้าน · ${int(q)} ชิ้น</span></div>
+      ${shops.map(s => `<button type="button" class="glance-shop" data-shop-ids="${esc(s.ids.join(','))}">
+        <span class="glance-shop-name">${esc(s.name)}</span>
+        <span class="glance-shop-meta">${int(s.bills)} บิล · ${int(s.qty)} ชิ้น</span>
+      </button>`).join('')}
+    </div>`;
+  }).join('') || `<div class="small muted" style="padding:8px 2px">ยังไม่มีบิลส่งเองวันนี้ — คีย์ SO แล้วรีเฟรช ร้านจะโผล่ที่นี่ทันที</div>`;
+  return `<div class="today-glance mb14" id="todayGlance">
+    <div class="glance-kpis">
+      <div class="glance-kpi" style="--kpi:#4F7A0A">
+        <div class="glance-kpi-l">ร้านที่รถต้องไป</div>
+        <div class="glance-kpi-v tab">${int(g.nShops)} <span>ร้าน</span></div>
+        <div class="glance-kpi-s">ไม่รวม WALK-IN / ขนส่งอื่น</div>
+      </div>
+      <div class="glance-kpi" style="--kpi:#2563EB">
+        <div class="glance-kpi-l">บิลเปิดวันนี้</div>
+        <div class="glance-kpi-v tab">${int(g.nDue)} <span>บิล</span></div>
+        <div class="glance-kpi-s">${int(g.qtyDue)} ชิ้น · รู้ได้ตั้งแต่คีย์บิล</div>
+      </div>
+      <div class="glance-kpi" style="--kpi:#EA580C">
+        <div class="glance-kpi-l">ขึ้นของ (ส่งเอง)</div>
+        <div class="glance-kpi-v tab">${int(g.qtySelf)} <span>ชิ้น</span></div>
+        <div class="glance-kpi-s">พิมพ์ใบสั่งขายให้น้าเอ๋ได้เลย</div>
+      </div>
+    </div>
+    <div class="glance-split">
+      ${chBtn('self', 'ส่งเอง — คนขับต้องรู้ร้าน', g.nSelf, '#4F7A0A')}
+      ${chBtn('courier', 'ขนส่งอื่น', g.nCourier, '#7C3AED')}
+      ${chBtn('walkin', 'WALK-IN มารับเอง', g.nWalk, '#6B7383')}
+      ${chOn ? `<button type="button" class="glance-ch-clear" data-ship-filter="">ล้างตัวกรองช่องทาง</button>` : ''}
+    </div>
+    <div class="glance-shops">
+      <div class="glance-shops-h">
+        <div>
+          <div class="strong">วันนี้รถบริษัทต้องไปร้านเหล่านี้</div>
+          <div class="small muted">แอดมินคีย์บิลแล้ว ร้านขึ้นทันที — ไม่ต้องรอจัดรถเสร็จ</div>
+        </div>
+        <div class="flex gap8 wrap">
+          <button type="button" class="btn btn-sm" data-act="printShops" ${g.nShops ? '' : 'disabled'}><i data-lucide="map-pinned"></i>พิมพ์รายร้าน</button>
+          <button type="button" class="btn btn-sm btn-primary" data-act="printSo" ${g.nSelf ? '' : 'disabled'}><i data-lucide="printer"></i>พิมพ์ให้น้าเอ๋</button>
+        </div>
+      </div>
+      <div class="glance-shop-list">${shopRows}</div>
+    </div>
   </div>`;
-  return `<div class="del-kpi-row">
-    ${cell('งานส่งวันนี้', kpi.total, '#16A34A')}
-    ${cell('ยังไม่จัดรถ', kpi.noRoute, '#EA580C')}
-    ${cell('กำหนดส่งวันนี้', kpi.dueToday, '#CA8A04')}
-    ${cell('เลยกำหนด', kpi.overdue, '#DC2626')}
-  </div>
-  ${kpi.amountSum > 0 ? `<div class="del-kpi-total">มูลค่ารวม <b class="tab">${money(kpi.amountSum)}</b> บาท</div>` : ''}`;
+}
+function soPrintedKey(){ return 'ddc_so_printed_' + (Store.date || ''); }
+function soPrintedMap(){
+  try { return JSON.parse(localStorage.getItem(soPrintedKey()) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+function markSoPrinted(ids){
+  const map = soPrintedMap();
+  const at = new Date().toISOString();
+  (ids || []).forEach(id => { if (id) map[id] = at; });
+  try { localStorage.setItem(soPrintedKey(), JSON.stringify(map)); } catch (e) {}
+}
+function isSoPrinted(id){ return !!soPrintedMap()[id]; }
+function parseSoLinesFromNote(note){
+  const s = String(note || '');
+  const chunk = (s.split('สินค้า:')[1] || '').split('·')[0];
+  if (!chunk) return [];
+  return chunk.split('|').map(part => {
+    const t = part.trim();
+    if (!t || t.startsWith('…')) return null;
+    const m = t.match(/^(.*?)\s*×\s*([\d.]+)\s*(\S+)?(?:\s*@\s*([\d,.]+))?/);
+    if (!m) return { sku:'', name: t, qty: 0, unit:'ชิ้น', price: 0, total: 0 };
+    return { sku:'', name: m[1].trim(), qty: Number(m[2]) || 0, unit: m[3] || 'ชิ้น', price: Number(String(m[4]||'').replace(/,/g,'')) || 0, total: 0 };
+  }).filter(Boolean);
+}
+function soDocFromDelivery(d){
+  return { delivery: d, lines: parseSoLinesFromNote(d.Note), salesman: DelView.salesStaff(d), soId: '' };
+}
+function soSlipHtml(doc){
+  const d = (doc && doc.delivery) || {};
+  const lines = (doc && doc.lines) || [];
+  const ch = DelView.shipChannel(d);
+  const qty = lines.length ? lines.reduce((n, l) => n + (Number(l.qty) || 0), 0) : (Number(d.BoxQty) || 0);
+  const row = (l, v) => `<div><span>${l}:</span> <b>${esc(v == null || v === '' ? '-' : v)}</b></div>`;
+  const lineRows = lines.length
+    ? lines.map((l, i) => `<tr>
+        <td class="c">☐</td><td class="c">${i + 1}</td>
+        <td class="mono">${esc(l.sku || '—')}</td>
+        <td>${esc(l.name || '—')}</td>
+        <td class="r">${int(l.qty)}</td>
+        <td class="c">${esc(l.unit || 'ชิ้น')}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="6" class="c muted">ยังไม่มีรายการสินค้าจาก TRCloud — ใช้จำนวนรวม ${int(d.BoxQty)} ชิ้นขึ้นของได้</td></tr>`;
+  return `<div class="so-slip">
+    <div class="kv">
+      ${row('ร้าน', shopVisitLabel(d))}${row('เขต', DelView.zone(d) || '—')}
+      ${row('เลข PO', DelView.poNo(d) || '—')}${row('เลขบิล', DelView.invoiceNo(d) || '—')}
+      ${row('กำหนดส่ง', d.DueDate ? thDate(d.DueDate) : thDate(d.DeliveryDate))}
+      ${row('ช่องทาง', DelView.shipLabel(ch))}
+      ${row('จำนวน', int(qty) + ' ชิ้น')}${row('พนักงานขาย', (doc && doc.salesman) || DelView.salesStaff(d) || '—')}
+    </div>
+    ${d.Address ? `<p class="small" style="margin:8px 0 0"><b>ที่อยู่:</b> ${esc(trcAddressOnly(d) || d.Address)}</p>` : ''}
+    <div class="sec-title">รายการขึ้นของ — น้าเอ๋เช็ค ☐</div>
+    <table class="slip-table">
+      <thead><tr><th>☐</th><th>#</th><th>รหัส</th><th>สินค้า</th><th>จำนวน</th><th>หน่วย</th></tr></thead>
+      <tbody>${lineRows}</tbody>
+      <tfoot><tr><th colspan="4" class="r">รวม</th><th class="r">${int(qty)}</th><th></th></tr></tfoot>
+    </table>
+    <div class="sign"><div>ผู้จัดของ (น้าเอ๋)</div><div>ผู้ตรวจ</div></div>
+    <div style="page-break-after:always;height:8px"></div>
+  </div>`;
+}
+function soShopListHtml(selfBills){
+  const shops = groupShopsForVisit(selfBills);
+  const byZone = new Map();
+  shops.forEach(s => { if (!byZone.has(s.zone)) byZone.set(s.zone, []); byZone.get(s.zone).push(s); });
+  const qty = shops.reduce((n, s) => n + s.qty, 0);
+  const body = [...byZone.entries()].map(([zone, list]) =>
+    `<div class="sec-title">${esc(zone)} · ${int(list.length)} ร้าน</div>
+     <table class="slip-table"><thead><tr><th>☐</th><th>ร้าน</th><th>บิล</th><th>ชิ้น</th></tr></thead>
+     <tbody>${list.map(s => `<tr><td class="c">☐</td><td>${esc(s.name)}</td><td class="r">${int(s.bills)}</td><td class="r">${int(s.qty)}</td></tr>`).join('')}</tbody></table>`
+  ).join('');
+  const row = (l, v) => `<div><span>${l}:</span> <b>${esc(v)}</b></div>`;
+  return `<div class="kv">
+      ${row('วันที่', thDate(Store.date))}${row('ร้านที่รถต้องไป', int(shops.length) + ' ร้าน')}
+      ${row('บิลส่งเอง', int(selfBills.length))}${row('ชิ้นที่ต้องขึ้น', int(qty))}
+    </div>
+    <p class="small muted">ใบนี้รู้ได้ตั้งแต่แอดมินคีย์บิล — คนขับ/น้าเอ๋เห็นร้านก่อนจัดรถเสร็จ · ไม่รวม WALK-IN และขนส่งอื่น</p>
+    ${body || '<p class="muted">ไม่มีร้านส่งเอง</p>'}
+    <div class="sign"><div>ผู้จัดงาน</div><div>น้าเอ๋ / คนขับ</div></div>
+    <div style="page-break-after:always;height:8px"></div>`;
+}
+async function fetchSaleOrderDocs(deliveries){
+  const list = deliveries || [];
+  if (!list.length) return [];
+  try {
+    const ids = list.map(d => d.DeliveryID).filter(Boolean).join(',');
+    const data = await API.get('getSaleOrdersPrint', { ids }, 1, 90000);
+    const arr = Array.isArray(data) ? data : [];
+    const byId = new Map(arr.map(x => [String((x.delivery || {}).DeliveryID || ''), x]));
+    return list.map(d => {
+      const hit = byId.get(String(d.DeliveryID));
+      if (!hit) return soDocFromDelivery(d);
+      return {
+        delivery: Object.assign({}, d, hit.delivery || {}),
+        lines: (hit.lines && hit.lines.length) ? hit.lines : parseSoLinesFromNote(d.Note),
+        salesman: hit.salesman || DelView.salesStaff(d),
+        soId: hit.soId || '',
+      };
+    });
+  } catch (e) {
+    return list.map(soDocFromDelivery);
+  }
+}
+async function printSaleOrdersForNaaAe(deliveries){
+  const all = (deliveries || []).filter(d => d && !DelView.isGhost(d));
+  const self = all.filter(d => DelView.shipChannel(d) === 'self');
+  const skipped = all.length - self.length;
+  if (!self.length) {
+    toast(skipped ? 'บิลที่เลือกเป็น WALK-IN / ขนส่งอื่น — น้าเอ๋ใช้ใบส่งเอง' : 'ยังไม่มีบิลส่งเองให้น้าเอ๋', 'warn');
+    return;
+  }
+  toast('กำลังเตรียมใบสั่งขาย ' + int(self.length) + ' บิล…', 'ok');
+  const docs = await fetchSaleOrderDocs(self);
+  const body = soShopListHtml(self) + docs.map(soSlipHtml).join('');
+  Printer.open('ใบสั่งขาย — ขึ้นของให้น้าเอ๋', 'A4', body);
+  markSoPrinted(self.map(d => d.DeliveryID));
+  toast('เปิดใบสั่งขายแล้ว' + (skipped ? ' · ข้าม WALK-IN/ขนส่งอื่น ' + int(skipped) + ' บิล' : ''), 'ok');
+}
+async function printTodayShopList(deliveries){
+  const self = (deliveries || []).filter(d => DelView.shipChannel(d) === 'self' && !DelView.isGhost(d));
+  if (!self.length) { toast('ยังไม่มีร้านที่รถบริษัทต้องไปวันนี้', 'warn'); return; }
+  Printer.open('ร้านที่ต้องไปวันนี้', 'A4', soShopListHtml(self));
+}
+function billsForNaaAePrint(openList, rows){
+  if (dPick.sel.size) {
+    const selected = (openList || []).filter(d => dPick.sel.has(d.DeliveryID));
+    return selected.length ? selected : (rows || []);
+  }
+  const g = todayGlanceModel(openList || []);
+  return g.self;
 }
 function delStatusBadge(d){
   const st = DelView.uiStatus(d);
@@ -804,6 +1066,7 @@ function delRowActionsHtml(d, viewMode){
     return `<button type="button" class="icon-btn" data-del-edit="${esc(d.DeliveryID)}" title="ดู / แก้ไข"><i data-lucide="pencil"></i></button>`;
   }
   return `<div class="del-row-acts">
+    <button type="button" class="icon-btn" data-print-so="${esc(d.DeliveryID)}" title="พิมพ์ใบสั่งขายให้น้าเอ๋"><i data-lucide="printer"></i></button>
     <button type="button" class="icon-btn" data-del-edit="${esc(d.DeliveryID)}" title="แก้ไขบิล (ด่วน/ปกติ)"><i data-lucide="pencil"></i></button>
     <button type="button" class="icon-btn del-row-del" data-del-row-del="${esc(d.DeliveryID)}" title="ลบ"><i data-lucide="trash-2"></i></button>
   </div>`;
@@ -824,6 +1087,7 @@ function delSelectionBar(selN, selAmount){
       <button class="btn btn-sm" data-act="dselPriority">ปรับด่วน/ปกติ</button>
       <button class="btn btn-sm btn-danger" data-act="dselDelete">ลบที่เลือก</button>
       <button class="btn btn-sm" data-act="dselClear">ล้าง</button>
+      <button class="btn btn-sm" data-act="dselPrintSo"><i data-lucide="printer"></i>พิมพ์ให้น้าเอ๋</button>
       <a class="btn btn-primary" href="#/planning" id="dselPlan">จัดรถอัตโนมัติ <i data-lucide="chevron-right"></i></a>
     </div>
   </div>`;
@@ -842,6 +1106,7 @@ function delMobileCard(d, opts){
   const statusHtml = (viewMode === 'done' || !DelView.isNoRoute(d)) ? `<div class="job-card-status">${delStatusBadge(d)}</div>` : '';
   const foot = showSel
     ? `<div class="job-card-foot">
+        <button type="button" class="btn btn-sm" data-print-so="${esc(d.DeliveryID)}"><i data-lucide="printer"></i>ใบสั่งขาย</button>
         <button type="button" class="btn btn-sm" data-del-edit="${esc(d.DeliveryID)}"><i data-lucide="pencil"></i>แก้ไข</button>
         ${DelView.isNoRoute(d) ? `<button type="button" class="btn btn-sm btn-ghost" data-quick="${esc(d.DeliveryID)}">จัดทีละงาน</button>` : ''}
         <button type="button" class="btn btn-sm btn-danger" data-del-row-del="${esc(d.DeliveryID)}">ลบ</button>
@@ -857,6 +1122,7 @@ function delMobileCard(d, opts){
         </div>
         <div class="job-card-meta">
           ${zone ? `<span class="job-zone">${esc(zone)}</span>` : '<span class="job-zone muted">ไม่ระบุเขต</span>'}
+          <span class="job-zone">${esc(DelView.shipLabel(DelView.shipChannel(d)))}</span>
           ${DelView.isOverdue(d) ? '<span class="job-overdue">เลยกำหนด</span>' : ''}
           ${statusHtml}
         </div>

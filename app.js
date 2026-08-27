@@ -261,15 +261,44 @@ const Mock = (() => {
       d('DEL-004','คอม 7','The Mall Bangkapi','INV-2026-004',13.7658,100.6430,40,'NORMAL'),
       d('DEL-005','Power Buy','Terminal 21','INV-2026-005',13.7375,100.5605,30,'NORMAL'),
       d('DEL-006','Banana','Mega Bangna','INV-2026-006',13.6515,100.6295,60,'HIGH'),
+      d('DEL-007','ลูกค้าหน้าร้าน','ยานนาวา','INV-2026-007',13.6910,100.5260,8,'NORMAL', { Note:'116-WALK-IN · SO INV-2026-007 · 8 ชิ้น', Address:'คลัง แก็ดเจ็ต วิลล่า ยานนาวา กรุงเทพฯ', Amount:2800 }),
+      d('DEL-008','Advice','ออนไลน์ Kerry','INV-2026-008',13.6512,100.6302,12,'NORMAL', { Note:'Kerry Express · SO INV-2026-008 · 12 ชิ้น', Address:'Kerry Hub บางนา กรุงเทพฯ', Amount:4200 }),
     ],
     routes: [], routeStops: [], expenses: [], claims: [], gps: [], cartrackVehicles: [],
     activities: [ { LogID:'LOG-0', Action:'SEED', ReferenceID:'-', Description:'โหลดข้อมูลทดลอง', User:'system', Timestamp:now() } ],
-    seq: { DEL:6, CUS:6, V:3, EV:2, ROUTE:0, EXP:0, CLM:0 }, driverTokens: {}
+    seq: { DEL:8, CUS:6, V:3, EV:2, ROUTE:0, EXP:0, CLM:0 }, driverTokens: {}
   };
   function k(K,V,G,L){ return { Key:K, Value:V, Group:G, Label:L, UpdatedAt:now() }; }
   function c(id,name,br,addr,lat,lng,ph){ return { CustomerID:id, CustomerName:name, BranchName:br, Address:addr, Latitude:lat, Longitude:lng, Phone:ph, ContactPerson:'', Status:'Active' }; }
   function v(id,nm,pl,tp,cap,fr,drv,st,lat,lng,sp,odo){ return { VehicleID:id, VehicleName:nm, LicensePlate:pl, VehicleType:tp, CapacityBox:cap, FuelCostPerKm:fr, CurrentDriver:drv, VehicleStatus:st, CartrackVehicleID:'', CartrackRegistration:pl, CurrentLatitude:lat, CurrentLongitude:lng, CurrentSpeed:sp, CurrentHeading:0, CurrentOdometer:odo, LastPositionTime:now(), LastSyncAt:'' }; }
-  function d(id,cust,br,inv,lat,lng,box,pri){ return { DeliveryID:id, DeliveryDate:DATA_DATE, CustomerName:cust, BranchName:br, InvoiceNo:inv, Address:br, Latitude:lat, Longitude:lng, BoxQty:box, Priority:pri, Note:'', RouteID:'', Status:'Draft', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false }; }
+  function d(id,cust,br,inv,lat,lng,box,pri,extra){
+    const po = 'PO-'+String(id).slice(-3);
+    return Object.assign({
+      DeliveryID:id, DeliveryDate:DATA_DATE, DocumentDate:DATA_DATE, DueDate:DATA_DATE,
+      CustomerName:cust, BranchName:br, InvoiceNo:inv, PoNo:po, Address:br,
+      Latitude:lat, Longitude:lng, BoxQty:box, Amount:box*350, Priority:pri,
+      Note:'04-TENG · PO '+po+' · SO '+inv+' · TRC#'+String(id).replace(/\D/g,'')+' · '+box+' ชิ้น',
+      RouteID:'', Status:'Draft', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false
+    }, extra||{});
+  }
+  function mockSaleLines(d){
+    const catalog = [
+      ['HDMI-2M','สาย HDMI 2.0 2 เมตร'],['MOUSE-WL','เมาส์ไร้สาย'],['HUB-4P','USB Hub 4 port'],
+      ['CABLE-C','สายชาร์จ Type-C'],['SSD-512','SSD 512GB']
+    ];
+    const n = Math.max(1, Math.min(4, Math.round((Number(d.BoxQty)||8)/20) || 2));
+    const qtyEach = Math.max(1, Math.round((Number(d.BoxQty)||8)/n));
+    return catalog.slice(0, n).map(([sku,name], i) => {
+      const qty = i === n-1 ? Math.max(1, (Number(d.BoxQty)||8) - qtyEach*(n-1)) : qtyEach;
+      const price = 350 + i*80;
+      return { sku, name, qty, unit:'ชิ้น', price, total: qty*price };
+    });
+  }
+  function mockSaleOrderPrint(id){
+    const row = db.deliveries.find(x => String(x.DeliveryID)===String(id) && !x.IsDeleted);
+    if (!row) throw new Error('ไม่พบบิล '+id);
+    return { delivery:row, lines: mockSaleLines(row), salesman: /WALK-IN/i.test(row.Note||'') ? '116-WALK-IN' : '04-TENG', soId:'' };
+  }
   function nid(pre){ db.seq[pre]=(db.seq[pre]||0)+1; return pre+'-'+String(db.seq[pre]).padStart(3,'0'); }
   function log(a,ref,desc){ db.activities.unshift({ LogID:'LOG-'+Date.now(), Action:a, ReferenceID:ref, Description:desc, User:'ผู้จัดการระบบ', Timestamp:now() }); }
   // ---- driver auth (mock — ไม่ใช่ hash จริง แค่จำลองให้ทดสอบออฟไลน์ได้) ----
@@ -417,6 +446,11 @@ const Mock = (() => {
       case 'getRealtime': { const dd=dashboard(date); const rs=db.routes.filter(x=>x.DeliveryDate===date&&!x.IsDeleted);
         const ids=rs.map(r=>r.RouteID); return { serverTime:now(), date, kpi:dd.kpi, cost:dd.cost, fleet:dd.fleet, routes:rs,
         stops:db.routeStops.filter(s=>ids.includes(s.RouteID)), vehicles:liveVehicles(), cartrack:cartrackStatus(), activities:dd.activities }; }
+      case 'getSaleOrderPrint': return mockSaleOrderPrint(p.id || p.deliveryId);
+      case 'getSaleOrdersPrint': {
+        const ids = String(p.ids || '').split(/[,+\s]+/).filter(Boolean);
+        return ids.map(id => { try { return mockSaleOrderPrint(id); } catch(e){ return { delivery:{ DeliveryID:id }, lines:[], error:e.message }; } });
+      }
 
       /* ---- writes ---- */
       case 'createDelivery': { const id=nid('DEL'); const rec=Object.assign({ DeliveryID:id, DeliveryDate:date, Status:'Draft', RouteID:'', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false }, p.data); db.deliveries.push(rec); log('CREATE_DELIVERY',id,'สร้างงานส่ง '+(p.data.CustomerName||'')); return rec; }
