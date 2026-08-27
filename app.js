@@ -273,9 +273,16 @@ const Mock = (() => {
   function v(id,nm,pl,tp,cap,fr,drv,st,lat,lng,sp,odo){ return { VehicleID:id, VehicleName:nm, LicensePlate:pl, VehicleType:tp, CapacityBox:cap, FuelCostPerKm:fr, CurrentDriver:drv, VehicleStatus:st, CartrackVehicleID:'', CartrackRegistration:pl, CurrentLatitude:lat, CurrentLongitude:lng, CurrentSpeed:sp, CurrentHeading:0, CurrentOdometer:odo, LastPositionTime:now(), LastSyncAt:'' }; }
   function d(id,cust,br,inv,lat,lng,box,pri,extra){
     const po = 'PO-'+String(id).slice(-3);
+    const addrByBranch = {
+      'Mega Bangna':'เมกาบางนา ถ.บางนา-ตราด เขตบางนา กรุงเทพฯ',
+      'Central World':'เซ็นทรัลเวิลด์ ถ.ราชดำริ เขตปทุมวัน กรุงเทพฯ',
+      'Terminal 21':'เทอร์มินอล 21 ถ.สุขุมวิท เขตวัฒนา กรุงเทพฯ',
+      'The Mall Bangkapi':'เดอะมอลล์บางกะปิ เขตบางกะปิ กรุงเทพฯ'
+    };
     return Object.assign({
       DeliveryID:id, DeliveryDate:DATA_DATE, DocumentDate:DATA_DATE, DueDate:DATA_DATE,
-      CustomerName:cust, BranchName:br, InvoiceNo:inv, PoNo:po, Address:br,
+      CustomerName:cust, BranchName:br, InvoiceNo:inv, PoNo:po,
+      Address: addrByBranch[br] || (br+' กรุงเทพฯ'),
       Latitude:lat, Longitude:lng, BoxQty:box, Amount:box*350, Priority:pri,
       Note:'04-TENG · PO '+po+' · SO '+inv+' · TRC#'+String(id).replace(/\D/g,'')+' · '+box+' ชิ้น',
       RouteID:'', Status:'Draft', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false

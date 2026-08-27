@@ -392,7 +392,7 @@ ROUTES.dashboard = async function(view){
       finally { btn.disabled = false; if (view.isConnected) ROUTES.dashboard(view); }
     };
   };
-  $$('[data-act="printSo"]', view).forEach(btn => bindPrintSo(btn, () => billsForNaaAePrint(open, rows)));
+  $$('[data-act="printSo"]', view).forEach(btn => bindPrintSo(btn, () => todayGlanceModel(open).self));
   bindPrintSo(view.querySelector('[data-act="dselPrintSo"]'), () => (open || []).filter(d => dPick.sel.has(d.DeliveryID)));
   const printShopsBtn = view.querySelector('[data-act="printShops"]');
   if (printShopsBtn) printShopsBtn.onclick = () => printTodayShopList(todayGlanceModel(open).self);
