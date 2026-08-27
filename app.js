@@ -485,6 +485,17 @@ const Mock = (() => {
       case 'updateSetting': { const s=db.settings.find(x=>x.Key===p.key); if(s){s.Value=p.value;s.UpdatedAt=now();return s;} const rec={Key:p.key,Value:p.value,Group:p.group||'custom',Label:p.label||p.key,UpdatedAt:now()}; db.settings.push(rec); return rec; }
       case 'syncCartrack': { const en=String(setting('CARTRACK_ENABLED','false')).toLowerCase()==='true'; if(!en) return {ok:false,skipped:true,message:'โหมดทดลอง — Cartrack ปิดอยู่'}; return {ok:false,mock:true,message:'โหมดทดลองไม่เชื่อมต่อ Cartrack จริง'}; }
       case 'startRoute': { mockAssertOwnerIfToken(p); patch(db.routes,'RouteID',p.routeId,{Status:'In Progress'}); log('START_ROUTE',p.routeId,'เริ่มรอบส่ง'); return {ok:true}; }
+      case 'cancelRoute': {
+        const rid = p.routeId || p.id;
+        const r = db.routes.find(x => x.RouteID === rid);
+        if (!r) throw new Error('ไม่พบรอบส่ง');
+        patch(db.routes, 'RouteID', rid, { Status: 'Cancelled' });
+        db.deliveries.forEach(d => {
+          if (String(d.RouteID) === String(rid)) { d.Status = 'Draft'; d.RouteID = ''; }
+        });
+        log('CANCEL_ROUTE', rid, 'ยกเลิกจัดรถ คืนบิลเข้าคิววันนี้');
+        return { ok: true, routeId: rid };
+      }
       case 'checkIn': { mockAssertOwnerIfToken(p); const m=Number(p.distanceMeters)||9999; return { proximity: m<=100?'GREEN':(m<=500?'YELLOW':'RED') }; }
       case 'uploadPOD': return { ok:true, url:p.base64||'', viewUrl:p.base64||'', mock:true };
       case 'completeDelivery': { mockAssertOwnerIfToken(p); if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Completed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Completed';s.DeliveryCompletedTime=now();if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('COMPLETE_DELIVERY',p.deliveryId||p.routeId,'ส่งสินค้าเสร็จ'); return {ok:true}; }
@@ -948,7 +959,7 @@ function openDatePicker(e){
   });
   el('pkOk').onclick = async () => {
     Store.date = pk.value;
-    if (typeof dPick !== 'undefined') dPick.filter = 'dueToday';
+    if (typeof dPick !== 'undefined') dPick.filter = 'noRoute';
     closeDatePop();
     setDateLabel();
     await loadBootstrap();
@@ -1359,11 +1370,11 @@ const Planner = {
   },
   availableVehicles(){ return (Store.data.vehicles||[]).filter(v=>v.VehicleStatus==='Available'); },
   availableExternal(){ return (Store.data.externalVehicles||[]).filter(v=>v.Status==='Available'); },
-  /** รถว่างก่อน ถ้าไม่พอใช้รถบริษัททั้งหมด — ให้แบ่งเส้นได้แม้สถานะ Available มีคันเดียว */
+  /** ใช้รถบริษัททั้งหมดเป็นเพดานจำนวนคัน — ไม่หดเมื่อกด − แล้วอยากบวกกลับ */
   fleetVehicles(){
-    const avail = this.availableVehicles();
     const all = (Store.data.vehicles || []).filter(v => !v.IsDeleted);
-    const pool = avail.length >= 2 ? avail : (all.length ? all : avail);
+    const avail = this.availableVehicles();
+    const pool = all.length ? all : avail;
     return this.sortByWh(pool);
   },
   uniqueShops(seq){

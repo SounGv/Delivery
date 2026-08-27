@@ -313,7 +313,20 @@ input,select,textarea{font-family:inherit;}
   .plan-kpi-row{grid-template-columns:1fr !important;}
   .plan-driver-grid{grid-template-columns:1fr;}
 }
-.plan-3{grid-template-columns:300px 1fr 360px;gap:16px;align-items:start;}
+.plan-k-picker{
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#FAFBFC;margin-bottom:14px
+}
+.plan-k-btn{width:48px;height:48px;min-height:48px;font-size:22px;font-weight:800;padding:0;border-radius:12px}
+.plan-k-n{min-width:2em;text-align:center;font-size:22px;font-weight:800}
+.plan-round-list{display:flex;flex-direction:column;gap:12px}
+.plan-round-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.plan-round-acts .btn{min-height:48px;justify-content:center}
+@media(max-width:720px){
+  .plan-k-picker{position:sticky;top:0;z-index:4}
+  .del-sel-actions{flex-wrap:wrap}
+  .del-sel-actions .btn-primary{flex:1 1 100%}
+}
 
 @media(max-width:1200px){
   .kpi-row{grid-template-columns:repeat(3,1fr);}

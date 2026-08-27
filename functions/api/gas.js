@@ -78,7 +78,7 @@ const POST_ACTIONS = {
   createEmployee: writes.createEmployee, updateEmployee: writes.updateEmployee,
   bulkImportCustomers: writes.bulkImportCustomers, bulkImportEmployees: writes.bulkImportEmployees,
   createRoute: writes.createRoute, createExternalRoute: writes.createExternalRoute,
-  updateRoute: writes.updateRoute, updateRouteStop: writes.updateRouteStop, confirmRoute: writes.confirmRoute,
+  updateRoute: writes.updateRoute, updateRouteStop: writes.updateRouteStop, confirmRoute: writes.confirmRoute, cancelRoute: writes.cancelRoute,
   createVehicle: writes.createVehicle, updateVehicle: writes.updateVehicle,
   createExternalVehicle: writes.createExternalVehicle, updateExternalVehicle: writes.updateExternalVehicle,
   createExpense: writes.createExpense, updateExpense: writes.updateExpense,
