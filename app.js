@@ -158,7 +158,6 @@ const NAV = [
   ]},
   { group:'อื่นๆ', items:[
     { id:'reports',  label:'รายงาน', icon:'bar-chart-3' },
-    { id:'guide',    label:'คู่มือ / ติดตั้งแอป', icon:'smartphone', href:'user-guide.html', external:true },
   ]},
 ];
 
@@ -865,7 +864,7 @@ function buildNav(){
     g.items.forEach(it => { html += navLink(it); });
   });
   nav.innerHTML = html;
-  // mobile bottom nav — 4 งานหลัก (รายงาน/คู่มือ เปิดจากเมนูซ้าย)
+  // mobile bottom nav — งานหลัก (รายงานเปิดจากเมนูซ้าย)
   const m = el('mnav');
   const mItems = [
     {id:'dashboard',icon:'home',label:'วันนี้'},

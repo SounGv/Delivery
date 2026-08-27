@@ -720,7 +720,7 @@ function delMobPageHead(title, sub){
 function delMobQueueHint(){
   return `<details class="del-mob-tip m-only">
     <summary><i data-lucide="help-circle"></i> วิธีใช้วันนี้</summary>
-    <div class="del-mob-tip-body">ติดตั้งเมนูลัดหน้าจอครั้งเดียว แล้วเปิดแอปนี้ทุกเช้า → คีย์บิลแล้วร้านขึ้นทันทีด้านบน → <b>พิมพ์ให้น้าเอ๋</b> (ก่อนจัดรถ) → กดเขต → ติ๊กร้าน → <b>จัดรถอัตโนมัติ</b></div>
+    <div class="del-mob-tip-body">คีย์บิลแล้วร้านขึ้นทันทีด้านบน → <b>พิมพ์ให้น้าเอ๋</b> (ก่อนจัดรถ) → กดเขต → ติ๊กร้าน → <b>จัดรถอัตโนมัติ</b></div>
   </details>
   <div class="notice info mb14 desk-only"><i data-lucide="info"></i><div><b>รู้ร้านล่วงหน้า:</b> แอดมินคีย์ SO แล้วร้าน/ช่องทางขึ้นทันที ไม่ต้องรอจัดรถเสร็จ · กด <b>พิมพ์ให้น้าเอ๋</b> เพื่อใบสั่งขายขึ้นของ · จัดรถทีหลังได้</div></div>`;
 }
