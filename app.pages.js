@@ -885,7 +885,7 @@ function todayGlanceHtml(openList){
     </div>`;
   }).join('') || `<div class="small muted" style="padding:8px 2px">ยังไม่มีบิลส่งเองวันนี้ — คีย์ SO แล้วรีเฟรช ร้านจะโผล่ที่นี่ทันที</div>`;
   return `<div class="today-glance mb14" id="todayGlance">
-    <div class="glance-kpis">
+    <div class="glance-kpis desk-only">
       <div class="glance-kpi" style="--kpi:#4F7A0A">
         <div class="glance-kpi-l">ร้านที่รถต้องไป</div>
         <div class="glance-kpi-v tab">${int(g.nShops)} <span>ร้าน</span></div>
@@ -908,7 +908,7 @@ function todayGlanceHtml(openList){
       ${chBtn('walkin', 'WALK-IN', 'มารับเอง', g.nWalk, '#6B7383')}
       ${chOn ? `<button type="button" class="glance-ch-clear" data-ship-filter="">ล้างตัวกรองช่องทาง</button>` : ''}
     </div>
-    <div class="glance-shops">
+    <div class="glance-shops desk-only">
       <div class="glance-shops-h">
         <div>
           <div class="strong">วันนี้รถบริษัทต้องไปร้านเหล่านี้</div>
