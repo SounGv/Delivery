@@ -313,7 +313,24 @@ input,select,textarea{font-family:inherit;}
   .plan-kpi-row{grid-template-columns:1fr !important;}
   .plan-driver-grid{grid-template-columns:1fr;}
 }
-.plan-3{grid-template-columns:300px 1fr 360px;gap:16px;align-items:start;}
+.plan-k-picker{
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#FAFBFC;margin-bottom:14px
+}
+.plan-k-btn{width:48px;height:48px;min-height:48px;font-size:22px;font-weight:800;padding:0;border-radius:12px}
+.plan-k-n{min-width:2em;text-align:center;font-size:22px;font-weight:800}
+.plan-save-acts{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.plan-save-acts #confirmRouteReports{min-height:44px;font-size:13px}
+.plan-edit-more{margin-top:10px}
+.plan-edit-more summary{cursor:pointer;padding:8px 0}
+.plan-round-list{display:flex;flex-direction:column;gap:12px}
+.plan-round-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.plan-round-acts .btn{min-height:48px;justify-content:center}
+@media(max-width:720px){
+  .plan-k-picker{position:sticky;top:0;z-index:4}
+  .del-sel-actions{flex-wrap:wrap}
+  .del-sel-actions .btn-primary{flex:1 1 100%}
+}
 
 @media(max-width:1200px){
   .kpi-row{grid-template-columns:repeat(3,1fr);}
@@ -389,7 +406,8 @@ a.assign-mode-link:hover{border-color:var(--brand);background:var(--brand-soft);
   font-size:12px;font-weight:700;color:#fff;flex-shrink:0;background:#fff;}
 .onboard-step.done .onboard-check{background:#16A34A;border-color:#16A34A;}
 
-body.driver-mode .sidebar,body.driver-mode .topbar,body.driver-mode .hintbar,body.driver-mode .mnav{display:none !important;}
+body.driver-mode .sidebar,body.driver-mode .topbar,body.driver-mode .hintbar,body.driver-mode .mnav,
+body.driver-mode .install-banner,body.driver-mode #installTopBtn{display:none !important;}
 body.driver-mode .view{padding:16px 14px 90px;}
 .dnav{display:none;}
 body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;height:64px;background:#fff;
@@ -416,6 +434,54 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
 .del-kpi-val span{font-size:13px;font-weight:600;color:#9AA3B2;margin-left:2px}
 .del-kpi-total{margin:-2px 0 14px;font-size:14px;color:var(--muted)}
 .del-kpi-total b{color:var(--ink);font-size:16px}
+.so-printed{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;color:#4F7A0A;background:#F4FBDD;border-radius:999px;padding:1px 7px;vertical-align:middle}
+.today-glance{display:flex;flex-direction:column;gap:12px}
+.glance-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.glance-kpi{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px 12px;border-top:3px solid var(--kpi,#16A34A)}
+.glance-kpi-l{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.glance-kpi-v{font-size:28px;font-weight:800;line-height:1.1}
+.glance-kpi-v span{font-size:13px;font-weight:600;color:#9AA3B2;margin-left:2px}
+.glance-kpi-s{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
+.glance-split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.glance-ch{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;min-height:48px}
+.glance-ch.on{border-color:var(--ch,#4F7A0A);box-shadow:0 0 0 2px color-mix(in srgb, var(--ch,#4F7A0A) 18%, transparent)}
+.glance-ch-n{font-size:20px;font-weight:800;color:var(--ink)}
+.glance-ch-l{font-size:12px;font-weight:700;color:var(--muted)}
+.glance-ch-bar{display:block;width:100%;height:6px;background:#EEF1F5;border-radius:99px;overflow:hidden}
+.glance-ch-bar span{display:block;height:100%;border-radius:99px}
+.glance-ch-p{font-size:11px;color:#9AA3B2}
+.glance-ch-clear{grid-column:1/-1;background:transparent;border:none;color:var(--muted);font-size:12px;text-align:left;padding:4px 2px}
+.glance-shops{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.glance-shops-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+.glance-shop-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.glance-zone{border:1px solid var(--line);border-radius:12px;padding:8px;background:#FAFBFC}
+.glance-zone-h{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin:2px 6px 6px;color:var(--muted)}
+.glance-shop{display:flex;justify-content:space-between;gap:8px;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:6px;text-align:left;min-height:48px}
+.glance-shop:last-child{margin-bottom:0}
+.glance-shop-name{font-size:13px;font-weight:700;min-width:0}
+.glance-shop-meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.glance-ch-long{font-weight:600;color:var(--muted)}
+.glance-print-acts{align-items:center}
+
+.install-banner{
+  display:none;align-items:center;flex-wrap:wrap;gap:10px;
+  margin:8px 12px 0;padding:10px 12px;border:1px solid var(--brand-soft-2);
+  border-radius:14px;background:var(--brand-soft);flex-shrink:0;
+}
+.install-banner:not([hidden]){display:flex}
+.install-banner-icon{width:40px;height:40px;border-radius:10px;background:#fff;flex-shrink:0}
+.install-banner-text{flex:1;min-width:140px}
+.install-banner-text b{display:block;font-size:13px;line-height:1.25}
+.install-banner-text span{display:block;font-size:12px;color:var(--muted);line-height:1.35;margin-top:2px}
+.install-banner .btn{flex-shrink:0;min-height:40px}
+.install-banner-hide{width:36px;height:36px;font-size:22px;line-height:1;color:var(--muted);background:transparent;border:0}
+.install-ios-hint{
+  flex:1 1 100%;font-size:13px;line-height:1.45;color:var(--ink-2);
+  background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px
+}
+body.pwa-standalone .install-banner,
+body.pwa-standalone #installTopBtn{display:none !important}
+
 .dash-status-bar{padding:14px 16px}
 .dash-status-track{display:flex;height:10px;border-radius:999px;overflow:hidden;background:#EEF1F5;margin-bottom:10px}
 .dash-status-seg{height:100%;min-width:2px}
@@ -479,12 +545,31 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
   .del-kpi-row{grid-template-columns:1fr 1fr;gap:8px}
   .del-kpi-card{padding:12px}
   .del-kpi-val{font-size:22px}
+  .glance-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .glance-kpi{padding:8px 8px 7px;border-radius:12px}
+  .glance-kpi-l{font-size:10px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .glance-kpi-v{font-size:18px}
+  .glance-kpi-v span{font-size:11px}
+  .glance-kpi-s{display:none}
+  .today-glance .glance-kpis,
+  .today-glance .glance-shops{display:none}
+  .today-glance{padding:0 0 4px;gap:8px}
+  .glance-split{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .glance-ch{
+    flex:1;min-width:0;padding:8px 8px;flex-direction:row;flex-wrap:wrap;
+    align-items:center;gap:2px 8px;min-height:44px
+  }
+  .glance-ch-n{font-size:16px}
+  .glance-ch-l{font-size:11px}
+  .glance-ch-long,.glance-ch-bar{display:none}
+  .glance-ch-p{margin-left:auto;font-size:10px}
+  .glance-ch-clear{flex:1 0 100%}
   .del-sel-bar{bottom:calc(62px + env(safe-area-inset-bottom,0px));padding-bottom:12px}
   .del-list-card.has-sel{margin-bottom:88px}
   .job-card-cta{min-height:var(--ctrl-h)}
   .del-tbl-sticky{max-height:none;overflow:visible}
 
-  /* ---- Mobile app shell (หน้าวันนี้) ---- */
+  /* ---- Mobile app shell ---- */
   body.del-app-page .topbar{
     height:calc(44px + env(safe-area-inset-top,0px));
     padding:env(safe-area-inset-top,0) 8px 0;
@@ -494,6 +579,11 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
   body.del-app-page .topbar #driverModeBtn{display:none}
   body.del-app-page .date-btn .dtext{display:none}
   body.del-app-page .view{padding:0 0 calc(76px + env(safe-area-inset-bottom,0px));background:var(--bg)}
+  body.del-app-page .del-page{padding:0 12px}
+  body.pwa-standalone.del-app-page .topbar{
+    height:calc(48px + env(safe-area-inset-top,0px));
+  }
+  body.has-install-banner .install-banner{margin:8px 12px 4px}
 
   .del-page{margin:0}
   .del-mob-shell{
@@ -611,8 +701,10 @@ body.driver-mode .dnav{display:flex;position:fixed;bottom:0;left:0;right:0;heigh
     width:40px;height:40px;margin:-4px 0 -4px -4px;padding:0
   }
   .job-check input{width:22px;height:22px;margin:0;accent-color:var(--brand-ink)}
-  .job-card-foot{margin-top:8px}
-  .job-card-foot .btn{width:100%;min-height:40px;font-size:13px;border-radius:10px}
+  .job-card-foot{
+    display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px
+  }
+  .job-card-foot .btn{width:100%;min-height:44px;font-size:13px;border-radius:10px}
 
   .del-sel-bar{
     flex-direction:column;align-items:stretch;gap:10px;

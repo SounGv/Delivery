@@ -261,15 +261,51 @@ const Mock = (() => {
       d('DEL-004','คอม 7','The Mall Bangkapi','INV-2026-004',13.7658,100.6430,40,'NORMAL'),
       d('DEL-005','Power Buy','Terminal 21','INV-2026-005',13.7375,100.5605,30,'NORMAL'),
       d('DEL-006','Banana','Mega Bangna','INV-2026-006',13.6515,100.6295,60,'HIGH'),
+      d('DEL-007','ลูกค้าหน้าร้าน','ยานนาวา','INV-2026-007',13.6910,100.5260,8,'NORMAL', { Note:'116-WALK-IN · SO INV-2026-007 · 8 ชิ้น', Address:'คลัง แก็ดเจ็ต วิลล่า ยานนาวา กรุงเทพฯ', Amount:2800 }),
+      d('DEL-008','Advice','ออนไลน์ Kerry','INV-2026-008',13.6512,100.6302,12,'NORMAL', { Note:'Kerry Express · SO INV-2026-008 · 12 ชิ้น', Address:'Kerry Hub บางนา กรุงเทพฯ', Amount:4200 }),
     ],
     routes: [], routeStops: [], expenses: [], claims: [], gps: [], cartrackVehicles: [],
     activities: [ { LogID:'LOG-0', Action:'SEED', ReferenceID:'-', Description:'โหลดข้อมูลทดลอง', User:'system', Timestamp:now() } ],
-    seq: { DEL:6, CUS:6, V:3, EV:2, ROUTE:0, EXP:0, CLM:0 }, driverTokens: {}
+    seq: { DEL:8, CUS:6, V:3, EV:2, ROUTE:0, EXP:0, CLM:0 }, driverTokens: {}
   };
   function k(K,V,G,L){ return { Key:K, Value:V, Group:G, Label:L, UpdatedAt:now() }; }
   function c(id,name,br,addr,lat,lng,ph){ return { CustomerID:id, CustomerName:name, BranchName:br, Address:addr, Latitude:lat, Longitude:lng, Phone:ph, ContactPerson:'', Status:'Active' }; }
   function v(id,nm,pl,tp,cap,fr,drv,st,lat,lng,sp,odo){ return { VehicleID:id, VehicleName:nm, LicensePlate:pl, VehicleType:tp, CapacityBox:cap, FuelCostPerKm:fr, CurrentDriver:drv, VehicleStatus:st, CartrackVehicleID:'', CartrackRegistration:pl, CurrentLatitude:lat, CurrentLongitude:lng, CurrentSpeed:sp, CurrentHeading:0, CurrentOdometer:odo, LastPositionTime:now(), LastSyncAt:'' }; }
-  function d(id,cust,br,inv,lat,lng,box,pri){ return { DeliveryID:id, DeliveryDate:DATA_DATE, CustomerName:cust, BranchName:br, InvoiceNo:inv, Address:br, Latitude:lat, Longitude:lng, BoxQty:box, Priority:pri, Note:'', RouteID:'', Status:'Draft', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false }; }
+  function d(id,cust,br,inv,lat,lng,box,pri,extra){
+    const po = 'PO-'+String(id).slice(-3);
+    const addrByBranch = {
+      'Mega Bangna':'เมกาบางนา ถ.บางนา-ตราด เขตบางนา กรุงเทพฯ',
+      'Central World':'เซ็นทรัลเวิลด์ ถ.ราชดำริ เขตปทุมวัน กรุงเทพฯ',
+      'Terminal 21':'เทอร์มินอล 21 ถ.สุขุมวิท เขตวัฒนา กรุงเทพฯ',
+      'The Mall Bangkapi':'เดอะมอลล์บางกะปิ เขตบางกะปิ กรุงเทพฯ'
+    };
+    return Object.assign({
+      DeliveryID:id, DeliveryDate:DATA_DATE, DocumentDate:DATA_DATE, DueDate:DATA_DATE,
+      CustomerName:cust, BranchName:br, InvoiceNo:inv, PoNo:po,
+      Address: addrByBranch[br] || (br+' กรุงเทพฯ'),
+      Latitude:lat, Longitude:lng, BoxQty:box, Amount:box*350, Priority:pri,
+      Note:'04-TENG · PO '+po+' · SO '+inv+' · TRC#'+String(id).replace(/\D/g,'')+' · '+box+' ชิ้น',
+      RouteID:'', Status:'Draft', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false
+    }, extra||{});
+  }
+  function mockSaleLines(d){
+    const catalog = [
+      ['HDMI-2M','สาย HDMI 2.0 2 เมตร'],['MOUSE-WL','เมาส์ไร้สาย'],['HUB-4P','USB Hub 4 port'],
+      ['CABLE-C','สายชาร์จ Type-C'],['SSD-512','SSD 512GB']
+    ];
+    const n = Math.max(1, Math.min(4, Math.round((Number(d.BoxQty)||8)/20) || 2));
+    const qtyEach = Math.max(1, Math.round((Number(d.BoxQty)||8)/n));
+    return catalog.slice(0, n).map(([sku,name], i) => {
+      const qty = i === n-1 ? Math.max(1, (Number(d.BoxQty)||8) - qtyEach*(n-1)) : qtyEach;
+      const price = 350 + i*80;
+      return { sku, name, qty, unit:'ชิ้น', price, total: qty*price };
+    });
+  }
+  function mockSaleOrderPrint(id){
+    const row = db.deliveries.find(x => String(x.DeliveryID)===String(id) && !x.IsDeleted);
+    if (!row) throw new Error('ไม่พบบิล '+id);
+    return { delivery:row, lines: mockSaleLines(row), salesman: /WALK-IN/i.test(row.Note||'') ? '116-WALK-IN' : '04-TENG', soId:'' };
+  }
   function nid(pre){ db.seq[pre]=(db.seq[pre]||0)+1; return pre+'-'+String(db.seq[pre]).padStart(3,'0'); }
   function log(a,ref,desc){ db.activities.unshift({ LogID:'LOG-'+Date.now(), Action:a, ReferenceID:ref, Description:desc, User:'ผู้จัดการระบบ', Timestamp:now() }); }
   // ---- driver auth (mock — ไม่ใช่ hash จริง แค่จำลองให้ทดสอบออฟไลน์ได้) ----
@@ -417,6 +453,11 @@ const Mock = (() => {
       case 'getRealtime': { const dd=dashboard(date); const rs=db.routes.filter(x=>x.DeliveryDate===date&&!x.IsDeleted);
         const ids=rs.map(r=>r.RouteID); return { serverTime:now(), date, kpi:dd.kpi, cost:dd.cost, fleet:dd.fleet, routes:rs,
         stops:db.routeStops.filter(s=>ids.includes(s.RouteID)), vehicles:liveVehicles(), cartrack:cartrackStatus(), activities:dd.activities }; }
+      case 'getSaleOrderPrint': return mockSaleOrderPrint(p.id || p.deliveryId);
+      case 'getSaleOrdersPrint': {
+        const ids = String(p.ids || '').split(/[,+\s]+/).filter(Boolean);
+        return ids.map(id => { try { return mockSaleOrderPrint(id); } catch(e){ return { delivery:{ DeliveryID:id }, lines:[], error:e.message }; } });
+      }
 
       /* ---- writes ---- */
       case 'createDelivery': { const id=nid('DEL'); const rec=Object.assign({ DeliveryID:id, DeliveryDate:date, Status:'Draft', RouteID:'', CreatedAt:now(), UpdatedAt:now(), Version:1, IsDeleted:false }, p.data); db.deliveries.push(rec); log('CREATE_DELIVERY',id,'สร้างงานส่ง '+(p.data.CustomerName||'')); return rec; }
@@ -444,6 +485,17 @@ const Mock = (() => {
       case 'updateSetting': { const s=db.settings.find(x=>x.Key===p.key); if(s){s.Value=p.value;s.UpdatedAt=now();return s;} const rec={Key:p.key,Value:p.value,Group:p.group||'custom',Label:p.label||p.key,UpdatedAt:now()}; db.settings.push(rec); return rec; }
       case 'syncCartrack': { const en=String(setting('CARTRACK_ENABLED','false')).toLowerCase()==='true'; if(!en) return {ok:false,skipped:true,message:'โหมดทดลอง — Cartrack ปิดอยู่'}; return {ok:false,mock:true,message:'โหมดทดลองไม่เชื่อมต่อ Cartrack จริง'}; }
       case 'startRoute': { mockAssertOwnerIfToken(p); patch(db.routes,'RouteID',p.routeId,{Status:'In Progress'}); log('START_ROUTE',p.routeId,'เริ่มรอบส่ง'); return {ok:true}; }
+      case 'cancelRoute': {
+        const rid = p.routeId || p.id;
+        const r = db.routes.find(x => x.RouteID === rid);
+        if (!r) throw new Error('ไม่พบรอบส่ง');
+        patch(db.routes, 'RouteID', rid, { Status: 'Cancelled' });
+        db.deliveries.forEach(d => {
+          if (String(d.RouteID) === String(rid)) { d.Status = 'Draft'; d.RouteID = ''; }
+        });
+        log('CANCEL_ROUTE', rid, 'ยกเลิกจัดรถ คืนบิลเข้าคิววันนี้');
+        return { ok: true, routeId: rid };
+      }
       case 'checkIn': { mockAssertOwnerIfToken(p); const m=Number(p.distanceMeters)||9999; return { proximity: m<=100?'GREEN':(m<=500?'YELLOW':'RED') }; }
       case 'uploadPOD': return { ok:true, url:p.base64||'', viewUrl:p.base64||'', mock:true };
       case 'completeDelivery': { mockAssertOwnerIfToken(p); if(p.deliveryId)patch(db.deliveries,'DeliveryID',p.deliveryId,{Status:'Completed'}); const s=db.routeStops.find(x=>x.RouteID===p.routeId&&x.StopOrder==p.stopOrder); if(s){s.Status='Completed';s.DeliveryCompletedTime=now();if(p.photoUrl)s.PhotoURL=p.photoUrl;} log('COMPLETE_DELIVERY',p.deliveryId||p.routeId,'ส่งสินค้าเสร็จ'); return {ok:true}; }
@@ -823,7 +875,7 @@ function buildNav(){
     g.items.forEach(it => { html += navLink(it); });
   });
   nav.innerHTML = html;
-  // mobile bottom nav — 4 งานหลัก (รายงาน/คู่มือ เปิดจากเมนูซ้าย)
+  // mobile bottom nav — งานหลัก (รายงานเปิดจากเมนูซ้าย)
   const m = el('mnav');
   const mItems = [
     {id:'dashboard',icon:'home',label:'วันนี้'},
@@ -907,7 +959,7 @@ function openDatePicker(e){
   });
   el('pkOk').onclick = async () => {
     Store.date = pk.value;
-    if (typeof dPick !== 'undefined') dPick.filter = 'dueToday';
+    if (typeof dPick !== 'undefined') dPick.filter = 'noRoute';
     closeDatePop();
     setDateLabel();
     await loadBootstrap();
@@ -1020,13 +1072,21 @@ function currentRoute(){
   const h = location.hash.replace(/^#\//,'') || 'dashboard';
   return h === 'deliveries' ? 'dashboard' : h;
 }
+function applyAppShell(){
+  const page = currentRoute();
+  const mobile = window.innerWidth <= 720;
+  document.body.classList.toggle('driver-mode', page==='driver');
+  document.body.classList.toggle('app-mobile', mobile && page!=='driver');
+  document.body.classList.toggle('del-app-page', mobile && page==='dashboard');
+  document.body.classList.toggle('pwa-standalone', isStandaloneApp());
+  refreshInstallUi();
+}
 async function render(){
   const page = currentRoute();
   Store.page = page;
   buildNav(); setDateLabel(); updateSync();
   const view = el('view');
-  document.body.classList.toggle('driver-mode', page==='driver');
-  document.body.classList.toggle('del-app-page', page==='dashboard' && window.innerWidth <= 720);
+  applyAppShell();
   if(page==='driver'){ view.classList.add('driver'); } else { view.classList.remove('driver'); el('dnav').innerHTML=''; }
   const fn = ROUTES[page] || ROUTES.dashboard;
   view.innerHTML = loadingState();
@@ -1040,9 +1100,7 @@ async function render(){
 }
 window.render = render;
 window.addEventListener('hashchange', render);
-window.addEventListener('resize', () => {
-  document.body.classList.toggle('del-app-page', currentRoute() === 'dashboard' && window.innerWidth <= 720);
-});
+window.addEventListener('resize', applyAppShell);
 
 /* ================================================================
    PLANNER — route optimization + options + cost
@@ -1312,11 +1370,11 @@ const Planner = {
   },
   availableVehicles(){ return (Store.data.vehicles||[]).filter(v=>v.VehicleStatus==='Available'); },
   availableExternal(){ return (Store.data.externalVehicles||[]).filter(v=>v.Status==='Available'); },
-  /** รถว่างก่อน ถ้าไม่พอใช้รถบริษัททั้งหมด — ให้แบ่งเส้นได้แม้สถานะ Available มีคันเดียว */
+  /** ใช้รถบริษัททั้งหมดเป็นเพดานจำนวนคัน — ไม่หดเมื่อกด − แล้วอยากบวกกลับ */
   fleetVehicles(){
-    const avail = this.availableVehicles();
     const all = (Store.data.vehicles || []).filter(v => !v.IsDeleted);
-    const pool = avail.length >= 2 ? avail : (all.length ? all : avail);
+    const avail = this.availableVehicles();
+    const pool = all.length ? all : avail;
     return this.sortByWh(pool);
   },
   uniqueShops(seq){
@@ -1663,6 +1721,7 @@ function bindShell(){
   el('dateBtn').onclick = openDatePicker;
   const drvBtn = el('driverModeBtn');
   if(drvBtn) drvBtn.onclick = ()=> openDriverAccessModal();
+  bindInstallPrompt();
   let _searchT;
   el('globalSearch').addEventListener('input', e=>{
     const v = e.target.value.trim().toLowerCase();
@@ -1763,4 +1822,121 @@ async function silentTrcloudSync(){
   }catch(e){}
   finally{ Store._trcloudSyncing = false; }
 }
+/* ================================================================
+   PWA — ติดตั้งเมนูลัดหน้าจอ
+   ================================================================ */
+const LS_INSTALL_HIDE = 'ddc_install_hide';
+let _deferredInstall = null;
+
+function isStandaloneApp(){
+  try{
+    return !!(window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches
+      || window.navigator.standalone === true);
+  }catch(e){ return false; }
+}
+function isIosDevice(){
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function isNarrowPhone(){ return window.innerWidth <= 720; }
+function installHintHtml(){
+  if (isIosDevice()) {
+    return 'บน iPhone / iPad: กดปุ่ม <b>แชร์</b> (สี่เหลี่ยมมีลูกศรขึ้น) ด้านล่าง → เลื่อนหา <b>เพิ่มไปยังหน้าจอโฮม</b>';
+  }
+  return 'บน Android: กดเมนู <b>⋮</b> มุมบนขวา → เลือก <b>ติดตั้งแอป</b> หรือ <b>เพิ่มไปยังหน้าจอหลัก</b>';
+}
+function shouldOfferInstall(){
+  if (isStandaloneApp()) return false;
+  try { if (localStorage.getItem(LS_INSTALL_HIDE) === '1') return false; } catch(e){}
+  if (_deferredInstall) return true;
+  if (isIosDevice()) return true;
+  return isNarrowPhone();
+}
+function hideInstallBanner(){
+  const b = el('installBanner');
+  if (b) b.hidden = true;
+  document.body.classList.remove('has-install-banner');
+  const top = el('installTopBtn');
+  if (top) top.hidden = isStandaloneApp();
+}
+function refreshInstallUi(){
+  const offer = shouldOfferInstall();
+  const banner = el('installBanner');
+  const top = el('installTopBtn');
+  const btn = el('installBtn');
+  if (isStandaloneApp()) {
+    hideInstallBanner();
+    if (top) top.hidden = true;
+    document.body.classList.add('pwa-standalone');
+    return;
+  }
+  document.body.classList.remove('pwa-standalone');
+  if (top) top.hidden = !offer && !_deferredInstall;
+  if (!banner) return;
+  if (!offer) { hideInstallBanner(); return; }
+  banner.hidden = false;
+  document.body.classList.add('has-install-banner');
+  if (btn) btn.textContent = _deferredInstall ? 'ติดตั้ง' : 'วิธีติดตั้ง';
+}
+function runInstallFlow(){
+  const hint = el('installIosHint');
+  if (_deferredInstall) {
+    const promptEvt = _deferredInstall;
+    _deferredInstall = null;
+    promptEvt.prompt();
+    Promise.resolve(promptEvt.userChoice).then(r => {
+      if (r && r.outcome === 'accepted') {
+        try { localStorage.setItem(LS_INSTALL_HIDE, '1'); } catch(e){}
+        hideInstallBanner();
+      } else {
+        refreshInstallUi();
+      }
+    }).catch(() => refreshInstallUi());
+    return;
+  }
+  if (hint) {
+    hint.innerHTML = installHintHtml();
+    hint.hidden = !hint.hidden;
+    return;
+  }
+  toast(isIosDevice()
+    ? 'กดแชร์ แล้วเลือก เพิ่มไปยังหน้าจอโฮม'
+    : 'เปิดเมนูเบราว์เซอร์ แล้วเลือก ติดตั้งแอป / เพิ่มไปยังหน้าจอหลัก', 'info');
+}
+function bindInstallPrompt(){
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredInstall = e;
+    refreshInstallUi();
+  });
+  window.addEventListener('appinstalled', () => {
+    _deferredInstall = null;
+    try { localStorage.setItem(LS_INSTALL_HIDE, '1'); } catch(e){}
+    hideInstallBanner();
+    toast('ติดตั้งเมนูลัดหน้าจอแล้ว — เปิดจากไอคอน GV ส่งของ ได้เลย', 'ok');
+  });
+  const hideBtn = el('installHide');
+  if (hideBtn) hideBtn.onclick = () => {
+    try { localStorage.setItem(LS_INSTALL_HIDE, '1'); } catch(e){}
+    hideInstallBanner();
+    const top = el('installTopBtn');
+    if (top) top.hidden = false;
+  };
+  const btn = el('installBtn');
+  if (btn) btn.onclick = runInstallFlow;
+  const top = el('installTopBtn');
+  if (top) top.onclick = () => {
+    try { localStorage.removeItem(LS_INSTALL_HIDE); } catch(e){}
+    refreshInstallUi();
+    runInstallFlow();
+  };
+  try {
+    const mq = window.matchMedia('(display-mode: standalone)');
+    if (mq.addEventListener) mq.addEventListener('change', applyAppShell);
+    else if (mq.addListener) mq.addListener(applyAppShell);
+  } catch(e){}
+  refreshInstallUi();
+}
+
 document.addEventListener('DOMContentLoaded', init);
