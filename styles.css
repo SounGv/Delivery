@@ -319,6 +319,10 @@ input,select,textarea{font-family:inherit;}
 }
 .plan-k-btn{width:48px;height:48px;min-height:48px;font-size:22px;font-weight:800;padding:0;border-radius:12px}
 .plan-k-n{min-width:2em;text-align:center;font-size:22px;font-weight:800}
+.plan-save-acts{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.plan-save-acts #confirmRouteReports{min-height:44px;font-size:13px}
+.plan-edit-more{margin-top:10px}
+.plan-edit-more summary{cursor:pointer;padding:8px 0}
 .plan-round-list{display:flex;flex-direction:column;gap:12px}
 .plan-round-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .plan-round-acts .btn{min-height:48px;justify-content:center}
@@ -547,6 +551,9 @@ body.pwa-standalone #installTopBtn{display:none !important}
   .glance-kpi-v{font-size:18px}
   .glance-kpi-v span{font-size:11px}
   .glance-kpi-s{display:none}
+  .today-glance .glance-kpis,
+  .today-glance .glance-shops{display:none}
+  .today-glance{padding:0 0 4px;gap:8px}
   .glance-split{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .glance-ch{
     flex:1;min-width:0;padding:8px 8px;flex-direction:row;flex-wrap:wrap;
@@ -557,12 +564,6 @@ body.pwa-standalone #installTopBtn{display:none !important}
   .glance-ch-long,.glance-ch-bar{display:none}
   .glance-ch-p{margin-left:auto;font-size:10px}
   .glance-ch-clear{flex:1 0 100%}
-  .glance-shops{padding:12px}
-  .glance-shop-list{grid-template-columns:1fr}
-  .today-glance{padding:0 12px}
-  .glance-shops-h{flex-direction:column;align-items:stretch;gap:8px}
-  .glance-print-acts{width:100%}
-  .glance-print-acts .btn{flex:1;min-height:48px;justify-content:center;font-size:14px}
   .del-sel-bar{bottom:calc(62px + env(safe-area-inset-bottom,0px));padding-bottom:12px}
   .del-list-card.has-sel{margin-bottom:88px}
   .job-card-cta{min-height:var(--ctrl-h)}

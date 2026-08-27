@@ -154,12 +154,11 @@ ROUTES.dashboard = async function(view){
   const statsBase = viewMode === 'done' ? done : queued;
   const zoneNamed = districtCounts(statsBase).filter(([n]) => n !== 'ไม่ระบุเขต').length;
   const kpi = DelView.kpi(statsBase);
-  const dueTodayN = queued.filter(d => DelView.sendOnIso(d) === Store.date).length;
   const overdueN = queued.filter(d => DelView.isOverdue(d)).length;
   const plannedN = plannedOpen.length;
   const headSub = viewMode === 'done'
     ? `${thDate(Store.date)} · ส่งแล้ว ${int(done.length)} ร้าน`
-    : `${thDate(Store.date)} · รอจัดรถ ${int(dueTodayN)} บิล${overdueN ? ` · ค้าง ${int(overdueN)}` : ''}${plannedN ? ` · จัดแล้ว ${int(plannedN)}` : ''}`;
+    : `${thDate(Store.date)} · รอจัดรถ ${int(queued.length)} บิล${overdueN ? ` · ค้าง ${int(overdueN)}` : ''}${plannedN ? ` · จัดแล้ว ${int(plannedN)}` : ''}`;
 
   page(view, `
     <div class="del-page">
@@ -530,10 +529,10 @@ function applyDeliveryFilter(rows){
   const f = dPick.filter || 'noRoute';
   const doneView = dPick.viewMode === 'done';
   if (!doneView) {
-    if (f === 'noRoute' || f === 'dueToday' || f === 'all') out = out.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date);
+    if (f === 'noRoute' || f === 'workAll') out = out.filter(d => DelView.isNoRoute(d));
+    else if (f === 'dueToday' || f === 'all') out = out.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date);
     else if (f === 'overdue') out = out.filter(d => DelView.isOverdue(d) && DelView.isNoRoute(d));
     else if (f === 'planned') out = out.filter(d => !DelView.isNoRoute(d) && DelView.isOpen(d));
-    else if (f === 'workAll') out = out.filter(d => DelView.isNoRoute(d));
   } else {
     if (f === 'syncArchive') out = out.filter(d => DelView.isSyncArchive(d));
     if (f === 'noRoute') out = out.filter(d => DelView.isNoRoute(d));
@@ -600,7 +599,7 @@ function deliveryFilterCounts(allRows){
   return {
     dueToday: list.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date).length,
     overdue: list.filter(d => DelView.isOverdue(d) && DelView.isNoRoute(d)).length,
-    noRoute: list.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date).length,
+    noRoute: list.filter(d => DelView.isNoRoute(d)).length,
     planned: list.filter(d => !DelView.isNoRoute(d) && DelView.isOpen(d)).length,
     workAll: list.filter(d => DelView.isNoRoute(d)).length,
     all: list.filter(d => DelView.isNoRoute(d) && DelView.sendOnIso(d) === Store.date).length,
@@ -1585,15 +1584,15 @@ async function runAutoPlan(){
   const road=await Planner.roadMetrics(seq);   // OSRM ถนนจริง (null ถ้าล่ม → ใช้เส้นตรง)
   const out=Planner.options(seq, road);
   const fleet = Planner.fleetVehicles();
-  const cap = Math.min(fleet.length, seq.length) || 1;
-  if (Plan.kMax == null || Plan.kMax < cap) Plan.kMax = cap;
+  const cap = planTruckCap(seq.length);
+  Plan.kMax = Math.max(Plan.kMax || 0, cap);
   const maxK = Plan.kMax;
   const autoK = Planner.splitK(seq, out.metrics, maxK);
   if (Plan.kWanted == null) Plan.kWanted = autoK;
   Plan.kWanted = Math.max(1, Math.min(maxK, Number(Plan.kWanted) || autoK));
   const k = Plan.kWanted;
   const split = k >= 2 ? Planner.autoSplit(seq, fleet.slice(0, k)) : [];
-  Plan.result={seq, split, ...out, maxK};
+  Plan.result = Object.assign({ seq, maxK }, out, { split });
   Plan.chosen = split.length >= 2 ? 'C' : 'A';
   Plan.splitSel = split.map(g => splitSelFor(g));
   const rec = Planner.recommendVehicle() || Planner.availableVehicles()[0] || (Store.data.vehicles||[])[0];
@@ -1676,10 +1675,8 @@ function planRouteTimelineHtml(tl, color){
   return `<div class="plan-route-tl">
     <div class="plan-route-stats">
       <span><b>${int((tl.events || []).filter(e => e.kind === 'stop').length)}</b> จุด</span>
-      <span>แผนที่ ~${num1(tl.totalKm)} กม.</span>
-      <span class="muted">เวลาจริงจาก GPS หลังวิ่ง</span>
+      <span>~${num1(tl.totalKm)} กม.</span>
     </div>
-    <div class="small muted">ถึง · จอด · ออก ดูจาก GPS หลังวิ่ง</div>
     ${tl.hasBadGeo ? `<div class="small" style="color:#B45309;margin-bottom:8px">มีจุดพิกัดผิด — ข้ามกม.นั้น</div>` : ''}
     <div class="plan-route-steps scrolly">${rows}</div>
   </div>`;
@@ -1734,25 +1731,33 @@ function mountPlanRouteMaps(){
     } catch (e) { console.warn('plan map', e); }
   });
 }
+function planTruckCap(seqLen){
+  const nVeh = (Planner.fleetVehicles() || []).length
+    || (Store.data.vehicles || []).filter(v => !v.IsDeleted).length
+    || 1;
+  return Math.max(1, Math.min(nVeh, Math.max(1, Number(seqLen) || 1)));
+}
+function planTruckMax(seqLen){
+  const cap = planTruckCap(seqLen);
+  Plan.kMax = Math.max(Plan.kMax || 0, cap);
+  return Plan.kMax;
+}
 function renderDecision(){
   const dec = el('decision');
   if (!dec || !Plan.result) return;
-  const { seq, metrics: m, split, maxK } = Plan.result;
+  const { seq, metrics: m, split } = Plan.result;
   const splitReady = Array.isArray(split) && split.length >= 2;
   const kNow = Math.max(1, Plan.kWanted || (splitReady ? split.length : 1));
-  const kMax = Math.max(1, Plan.kMax || maxK || kNow);
+  const kMax = planTruckMax((seq || []).length);
   const kPicker = kMax >= 2 ? `<div class="plan-k-picker">
       <span class="small strong">ใช้กี่คัน</span>
       <button class="btn plan-k-btn" data-kwant="-1" type="button" ${kNow<=1?'disabled':''} aria-label="ลดจำนวนรถ">−</button>
       <span class="plan-k-n tab">${int(kNow)}</span>
       <button class="btn plan-k-btn" data-kwant="1" type="button" ${kNow>=kMax?'disabled':''} aria-label="เพิ่มจำนวนรถ">+</button>
-      <span class="small muted">ได้ถึง ${int(kMax)} คัน · กด −/+ ได้ตลอดก่อนบันทึก</span>
+      <span class="small muted">มีรถ ${int(kMax)} คัน · กด − แล้วกด + กลับได้</span>
     </div>` : '';
   const timeWarn = !splitReady && m.durationMin > Planner.workDayMin()
     ? `<div class="notice warn mb14"><i data-lucide="clock"></i><div>ใช้เวลาประมาณ ${Planner.fmtDur(m.durationMin)} — บันทึกคันนี้ก่อน แล้วจัดรอบถัดไป</div></div>` : '';
-  const splitNote = splitReady
-    ? `<div class="notice info mb14"><i data-lucide="git-branch"></i><div>แยก <b>${int(split.length)} คัน</b> ตามเขตใกล้กัน — กด −/+ ด้านบนถ้าอยากเปลี่ยนจำนวน</div></div>`
-    : '';
   const routePreviews = splitReady
     ? split.map((g, i) => planTruckPreviewHtml(i, g, SPLIT_COLORS[i % SPLIT_COLORS.length])).join('')
     : planTruckPreviewHtml(0, { seq, v: (Plan.sel && Plan.sel.vehId) ? (Store.data.vehicles||[]).find(v=>v.VehicleID===Plan.sel.vehId) : null, districts: [] }, SPLIT_COLORS[0]);
@@ -1764,16 +1769,16 @@ function renderDecision(){
     </div>
     ${timeWarn}
     ${kPicker}
-    ${splitNote}
     <div class="plan-driver-step">
       <div class="plan-driver-step-head"><i data-lucide="truck"></i><span>${splitReady ? 'รถ + คนขับที่จัดให้ (แก้ทะเบียน/คนขับได้)' : 'เลือกรถ + คนขับ'}</span></div>
       <div class="plan-driver-box" id="driverFormBox">${splitReady ? splitFormAll(Plan.result) : selForm()}</div>
     </div>
     ${splitReady ? `<div id="costBox" style="margin-top:12px">${splitCostBoxAll(Plan.result)}</div>` : ''}
     <div class="plan-route-previews mt16">${routePreviews}</div>
-    <div class="flex gap8 mt16">
+    <div class="plan-save-acts">
       <button class="btn btn-primary btn-block btn-lg" id="confirmRoute" type="button"><i data-lucide="save"></i>${confirmBtnLabel()}</button>
-      <button class="btn btn-block btn-lg" id="confirmRouteReports" type="button"><i data-lucide="bar-chart-3"></i>บันทึกแล้วไปรายงาน</button>
+      <button class="btn btn-block" id="confirmRouteReports" type="button">บันทึกแล้วไปรายงาน</button>
+      <div class="small muted" style="text-align:center">บันทึกแล้วแก้ได้ที่แท็บ รอบวันนี้</div>
     </div>
   `;
   icons();
@@ -1962,8 +1967,9 @@ function splitSelFor(g){ const driver=(g.v&&g.v.CurrentDriver)||''; return { veh
 function bindDecisionEvents(){
   const rp=el('replan'); if(rp) rp.onclick=()=>{ Plan.result=null; runAutoPlan(); };
   $$('[data-kwant]').forEach(b => b.onclick = () => {
-    const maxK = Math.max(1, Plan.kMax || (Plan.result && Plan.result.maxK) || 1);
-    const cur = Math.max(1, Plan.kWanted || ((Plan.result.split||[]).length) || 1);
+    const seqLen = (Plan.result && Plan.result.seq && Plan.result.seq.length) || Plan.selected.size || 1;
+    const maxK = planTruckMax(seqLen);
+    const cur = Math.max(1, Plan.kWanted || ((Plan.result && Plan.result.split) || []).length || 1);
     Plan.kWanted = Math.max(1, Math.min(maxK, cur + Number(b.dataset.kwant)));
     Plan.result = null;
     runAutoPlan();
@@ -2142,7 +2148,7 @@ async function renderRoundsTab(view){
     ${head('จัดรถ', `${thDate(Store.date)} · ${int(routes.length)} รอบ`,
       `<a class="btn btn-sm" href="#/dashboard"><i data-lucide="home"></i>ไปหน้าวันนี้</a>`)}
     ${planPageTabs('rounds')}
-    ${routes.length? `<div class="notice ok mb14"><i data-lucide="pencil"></i><div>บันทึกแล้วแก้ได้ — กด <b>แก้ไข</b> ถ้าคนขับ/รถผิด หรือ <b>ยกเลิกจัดรถ</b> เพื่อคืนบิลเข้าคิววันนี้</div></div>
+    ${routes.length? `<div class="notice ok mb14"><i data-lucide="pencil"></i><div>บันทึกแล้วแก้ได้ — <b>แก้ไข</b> คนขับ/รถ หรือ <b>จัดใหม่</b> ถ้าเลือกบิลผิด</div></div>
       <div class="plan-round-list">${routes.map(routeCard).join('')}</div>`
       : emptyState('ยังไม่มีรอบส่งวันนี้','กลับไปหน้าวันนี้ → เลือกเขต → จัดรถ','<a class="btn btn-primary" href="#/dashboard"><i data-lucide="home"></i>ไปหน้าวันนี้</a>')}
   `);
@@ -2152,6 +2158,7 @@ async function renderRoundsTab(view){
   $$('[data-print-route]',view).forEach(b=>b.onclick=()=>printRouteNote((Store.data.routes||[]).find(x=>x.RouteID===b.dataset.printRoute)));
   $$('[data-start]',view).forEach(b=>b.onclick=()=>{ updateLocal('routes','startRoute',b.dataset.start,{Status:'In Progress'},{routeId:b.dataset.start}).then(()=>toast('เริ่มรอบส่งแล้ว','ok')).catch(()=>{}); });
   $$('[data-undo-route]',view).forEach(b=>b.onclick=()=>undoSavedRoute(b.dataset.undoRoute));
+  $$('[data-replan-route]',view).forEach(b=>b.onclick=()=>replanSavedRoute(b.dataset.replanRoute));
 }
 function routeFuelExpense(route, expenses){
   return (expenses||[]).filter(e => e.RouteID === route.RouteID && e.ExpenseType === 'FUEL')
@@ -2213,24 +2220,29 @@ function routeEditForm(r){
   if(!r) return;
   const emps=Store.data.employees||[], veh=Store.data.vehicles||[], ext=Store.data.externalVehicles||[];
   const isExt=r.RouteType==='EXTERNAL_VEHICLE';
-  const m=modal({ title:'แก้ไขรอบส่ง '+r.RouteID, body:`
+  const canReplan = r.Status === 'Planned' || r.Status === 'Assigned';
+  const m=modal({ title:'แก้ไขรอบส่ง', body:`
+    <div class="field"><label class="label">คนขับ</label><input class="input" id="edDriver" list="edEmpList" value="${esc(r.DriverName||'')}">
+      <datalist id="edEmpList">${emps.map(e=>`<option value="${esc(e.EmployeeName)}">`).join('')}</datalist></div>
+    <div class="field row2"><div><label class="label">ชื่อรถ / ผู้ให้บริการ</label><input class="input" id="edVeh" list="edVehList" value="${esc(r.VehicleName||r.ProviderName||'')}">
+      <datalist id="edVehList">${veh.map(v=>`<option value="${esc(v.VehicleName)}">`).join('')}${ext.map(v=>`<option value="${esc(v.ProviderName)}">`).join('')}</datalist></div>
+      <div><label class="label">ทะเบียน</label><input class="input" id="edPlate" value="${esc(r.LicensePlate||'')}"></div></div>
     <div class="field row2"><div><label class="label">ประเภทรถ</label><select class="select" id="edType">
         <option value="COMPANY_VEHICLE" ${!isExt?'selected':''}>รถบริษัท</option>
         <option value="EXTERNAL_VEHICLE" ${isExt?'selected':''}>รถภายนอก</option></select></div>
       <div><label class="label">สถานะ</label><select class="select" id="edStatus">${['Planned','Assigned','In Progress','Completed','Failed','Cancelled'].map(s=>`<option value="${s}" ${r.Status===s?'selected':''}>${(DSTATUS[s]||{}).label||s}</option>`).join('')}</select></div></div>
-    <div class="field row2"><div><label class="label">ชื่อรถ / ผู้ให้บริการ</label><input class="input" id="edVeh" list="edVehList" value="${esc(r.VehicleName||r.ProviderName||'')}">
-      <datalist id="edVehList">${veh.map(v=>`<option value="${esc(v.VehicleName)}">`).join('')}${ext.map(v=>`<option value="${esc(v.ProviderName)}">`).join('')}</datalist></div>
-      <div><label class="label">ทะเบียน</label><input class="input" id="edPlate" value="${esc(r.LicensePlate||'')}"></div></div>
-    <div class="field"><label class="label">คนขับ</label><input class="input" id="edDriver" list="edEmpList" value="${esc(r.DriverName||'')}">
-      <datalist id="edEmpList">${emps.map(e=>`<option value="${esc(e.EmployeeName)}">`).join('')}</datalist></div>
-    <div class="sec-title" style="font-weight:600;margin:6px 0 8px">ค่าใช้จ่าย (แก้แล้วระบบคำนวณรวมใหม่ให้)</div>
+    <details class="plan-edit-more"><summary class="small muted">ค่าใช้จ่าย (ถ้าต้องการแก้)</summary>
     <div class="field row2"><div><label class="label">ค่าน้ำมัน</label><input class="input" type="number" id="edFuel" value="${esc(r.EstimatedFuelCost||0)}"></div>
       <div><label class="label">ค่าทางด่วน</label><input class="input" type="number" id="edToll" value="${esc(r.EstimatedTollCost||0)}"></div></div>
     <div class="field row2"><div><label class="label">ค่าจอดรถ</label><input class="input" type="number" id="edPark" value="${esc(r.EstimatedParkingCost||0)}"></div>
       <div><label class="label">ค่ารถภายนอก</label><input class="input" type="number" id="edExt" value="${esc(r.EstimatedExternalCost||0)}"></div></div>
     <div class="field"><label class="label">ค่าใช้จ่ายอื่น</label><input class="input" type="number" id="edOther" value="${esc(r.EstimatedOtherCost||0)}"></div>
-  `, foot:`<button class="btn" id="edCancel">ยกเลิก</button><button class="btn btn-primary" id="edSave"><i data-lucide="check"></i>บันทึก</button>` });
+    </details>
+    ${canReplan ? `<button class="btn btn-block mt16" type="button" id="edReplan">เลือกบิลผิด — จัดใหม่</button>` : ''}
+  `, foot:`<button class="btn" id="edCancel">ปิด</button><button class="btn btn-primary" id="edSave"><i data-lucide="check"></i>บันทึก</button>` });
   el('edCancel').onclick=m.close;
+  const replanBtn = el('edReplan');
+  if (replanBtn) replanBtn.onclick = () => { m.close(); replanSavedRoute(r.RouteID); };
   el('edSave').onclick=async()=>{
     const data={ RouteType:el('edType').value, Status:el('edStatus').value,
       VehicleName: el('edType').value==='EXTERNAL_VEHICLE'?'':el('edVeh').value.trim(),
@@ -2249,38 +2261,67 @@ function routeCard(r){
     <div class="flex between aic wrap gap8" style="margin-bottom:12px">
       <div>
         <div class="strong">${esc(r.DriverName || 'ไม่ระบุคนขับ')} · ${esc(tripVehicleLabel(r))}</div>
-        <div class="small muted">${esc(r.RouteID)} · ${int(r.TotalStops)} จุด${dstatusBadge(r.Status)}</div>
+        <div class="small muted">${int(r.TotalStops)} จุด${dstatusBadge(r.Status)}</div>
       </div>
     </div>
     <div class="plan-round-acts">
       <button class="btn btn-sm btn-primary" data-edit-route="${esc(r.RouteID)}"><i data-lucide="pencil"></i>แก้ไข</button>
-      ${canUndo ? `<button class="btn btn-sm" data-undo-route="${esc(r.RouteID)}">ยกเลิกจัดรถ</button>` : ''}
+      ${canUndo ? `<button class="btn btn-sm" data-replan-route="${esc(r.RouteID)}">จัดใหม่</button>` : ''}
       <button class="btn btn-sm" data-print-route="${esc(r.RouteID)}"><i data-lucide="printer"></i>พิมพ์ใบงาน</button>
-      ${r.Status==='Planned'?`<button class="btn btn-sm" data-start="${esc(r.RouteID)}"><i data-lucide="play"></i>เริ่มรอบ</button>`:''}
-      <button class="btn btn-sm" data-route="${esc(r.RouteID)}"><i data-lucide="map"></i>รายละเอียด</button>
+      <button class="btn btn-sm" data-route="${esc(r.RouteID)}"><i data-lucide="map"></i>ดูเส้นทาง</button>
     </div>
   </div>`;
 }
-function undoSavedRoute(routeId){
+function undoSavedRoute(routeId, opts){
   const r = (Store.data.routes || []).find(x => x.RouteID === routeId);
-  if (!r) return;
-  confirmDialog('ยกเลิกจัดรถรอบนี้ แล้วคืนบิลเข้าคิวหน้าวันนี้?', async () => {
-    const dels = (Store.data.deliveries || []).filter(d => String(d.RouteID) === String(routeId));
-    const prevSt = r.Status;
-    const prevDels = dels.map(d => ({ d, st: d.Status, rid: d.RouteID }));
-    try {
-      r.Status = 'Cancelled';
-      dels.forEach(d => { d.Status = 'Draft'; d.RouteID = ''; });
-      await API.post('cancelRoute', { routeId });
+  if (!r) return Promise.resolve(false);
+  const goReplan = !!(opts && opts.replan);
+  const ask = goReplan
+    ? 'ยกเลิกจัดรถรอบนี้ แล้วเปิดหน้าจัดใหม่?'
+    : 'ยกเลิกจัดรถรอบนี้ แล้วคืนบิลเข้าคิวหน้าวันนี้?';
+  return new Promise(resolve => {
+    confirmDialog(ask, async () => {
+      const ok = await cancelSavedRouteNow(routeId);
+      resolve(ok);
+      if (!ok) return;
+      if (goReplan) return;
       toast('คืนบิลเข้าคิววันนี้แล้ว — จัดใหม่ได้', 'ok');
       if (typeof dPick !== 'undefined') dPick.filter = 'noRoute';
       render();
-    } catch (e) {
-      r.Status = prevSt;
-      prevDels.forEach(x => { x.d.Status = x.st; x.d.RouteID = x.rid; });
-      toast(e.message || 'ยกเลิกไม่สำเร็จ', 'err');
-    }
-  }, { danger: true, yes: 'ยกเลิกจัดรถ' });
+    }, { danger: true, yes: goReplan ? 'จัดใหม่' : 'ยกเลิกจัดรถ' });
+  });
+}
+async function cancelSavedRouteNow(routeId){
+  const r = (Store.data.routes || []).find(x => x.RouteID === routeId);
+  if (!r) return false;
+  const dels = (Store.data.deliveries || []).filter(d => String(d.RouteID) === String(routeId));
+  const prevSt = r.Status;
+  const prevDels = dels.map(d => ({ d, st: d.Status, rid: d.RouteID }));
+  try {
+    r.Status = 'Cancelled';
+    dels.forEach(d => { d.Status = 'Draft'; d.RouteID = ''; });
+    await API.post('cancelRoute', { routeId });
+    return true;
+  } catch (e) {
+    r.Status = prevSt;
+    prevDels.forEach(x => { x.d.Status = x.st; x.d.RouteID = x.rid; });
+    toast(e.message || 'ยกเลิกไม่สำเร็จ', 'err');
+    return false;
+  }
+}
+function replanSavedRoute(routeId){
+  const r = (Store.data.routes || []).find(x => x.RouteID === routeId);
+  if (!r) return;
+  const ids = (Store.data.deliveries || []).filter(d => String(d.RouteID) === String(routeId)).map(d => d.DeliveryID);
+  confirmDialog('ยกเลิกจัดรถรอบนี้ แล้วเปิดหน้าจัดใหม่?', async () => {
+    const ok = await cancelSavedRouteNow(routeId);
+    if (!ok) return;
+    handoffSelectionToPlan(ids);
+    Plan.tab = 'plan';
+    toast('เปิดจัดใหม่แล้ว — แก้จำนวนรถหรือบิลได้', 'ok');
+    if ((location.hash || '') === '#/planning') render();
+    else location.hash = '#/planning';
+  }, { danger: true, yes: 'จัดใหม่' });
 }
 function rItem(l,v){ return `<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px"><div class="small muted">${l}</div><div class="strong" style="font-size:13.5px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</div></div>`; }
 function fmtClock(ms){
