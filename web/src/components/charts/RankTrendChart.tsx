@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import type { EChartsOption } from "echarts"
-import { EChart } from "@/components/charts/EChart"
-import { ChartCard } from "@/components/charts/ChartCard"
+import { EChart } from "./EChart"
+import { ChartCard } from "./ChartCard"
 import type { Employee } from "@/api/types"
 import { getEmployeeRankHistory, type ReportPeriod } from "@/lib/dashboard-selectors"
 import { formatDateLabel, formatMonthLabel, formatYearLabel } from "@/lib/format"
@@ -14,13 +14,21 @@ function labelFor(key: string, period: ReportPeriod): string {
   return formatYearLabel(key)
 }
 
-interface RankingTrendChartProps {
+interface RankTrendChartProps {
   employees: Employee[]
-  selectedName: string
   period: ReportPeriod
+  /** Highlights one employee's line against everyone else, muted. Omit for a
+   * team-wide overview where every line renders at equal weight. */
+  highlightName?: string
+  title?: string
+  subtitle?: string
+  height?: number
 }
 
-export function RankingTrendChart({ employees, selectedName, period }: RankingTrendChartProps) {
+/** Rank-over-time line chart with an INVERTED y-axis (rank #1 at the top) —
+ * a line trending upward (rank number getting smaller) means that person's
+ * standing is improving, not declining. */
+export function RankTrendChart({ employees, period, highlightName, title, subtitle, height = 320 }: RankTrendChartProps) {
   const { theme } = useTheme()
 
   const option = useMemo<EChartsOption>(() => {
@@ -33,17 +41,18 @@ export function RankingTrendChart({ employees, selectedName, period }: RankingTr
     const maxRank = employees.length
 
     const series = employees.map((e) => {
-      const isSelected = e.name === selectedName
+      const isHighlighted = highlightName ? e.name === highlightName : false
+      const isDimmed = highlightName ? !isHighlighted : false
       const byKey = new Map(history[e.name]?.map((p) => [p.key, p.rank]))
       return {
         name: e.name,
         type: "line" as const,
         data: keys.map((k) => byKey.get(k) ?? null),
         connectNulls: false,
-        symbolSize: isSelected ? 7 : 4,
-        lineStyle: { width: isSelected ? 3 : 1, color: isSelected ? t.brand : t.muted, opacity: isSelected ? 1 : 0.25 },
-        itemStyle: { color: isSelected ? t.brand : t.muted, opacity: isSelected ? 1 : 0.25 },
-        z: isSelected ? 10 : 1,
+        symbolSize: isHighlighted ? 7 : 4,
+        lineStyle: { width: isHighlighted ? 3 : 1, color: isHighlighted ? t.brand : t.muted, opacity: isDimmed ? 0.25 : isHighlighted ? 1 : 0.6 },
+        itemStyle: { color: isHighlighted ? t.brand : t.muted, opacity: isDimmed ? 0.25 : isHighlighted ? 1 : 0.6 },
+        z: isHighlighted ? 10 : 1,
         emphasis: { focus: "series" as const },
       }
     })
@@ -70,11 +79,17 @@ export function RankingTrendChart({ employees, selectedName, period }: RankingTr
       },
       series,
     }
-  }, [employees, selectedName, period, theme])
+  }, [employees, highlightName, period, theme])
+
+  const resolvedSubtitle =
+    subtitle ??
+    (highlightName
+      ? `อันดับของ ${highlightName} เทียบเพื่อนร่วมทีมตามช่วงเวลา (อันดับ 1 = ดีที่สุด) — เส้นขึ้น (เลขอันดับน้อยลง) หมายถึงผลงานดีขึ้น`
+      : "อันดับพนักงานทุกคนตามช่วงเวลา (อันดับ 1 = ดีที่สุด) — เส้นขึ้น (เลขอันดับน้อยลง) หมายถึงผลงานดีขึ้น")
 
   return (
-    <ChartCard title="Ranking Trend" subtitle={`อันดับของ ${selectedName} เทียบเพื่อนร่วมทีมตามช่วงเวลา (อันดับ 1 = ดีที่สุด)`}>
-      <EChart option={option} height={320} />
+    <ChartCard title={title ?? "อันดับผลงานตามวัน"} subtitle={resolvedSubtitle}>
+      <EChart option={option} height={height} />
     </ChartCard>
   )
 }

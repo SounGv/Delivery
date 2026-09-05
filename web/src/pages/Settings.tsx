@@ -28,6 +28,8 @@ export function Settings() {
   const {
     targetOverride,
     setTargetOverride,
+    offlineOrderTarget,
+    setOfflineOrderTarget,
     logoDataUrl,
     setLogoDataUrl,
     workStartHour,
@@ -52,6 +54,9 @@ export function Settings() {
   const [urlInput, setUrlInput] = useState(() => getApiUrlOverride() ?? import.meta.env.VITE_APPS_SCRIPT_URL ?? "")
   const [refreshMs, setRefreshMsState] = useState(() => getRefreshIntervalMs())
   const [targetInput, setTargetInput] = useState(() => (targetOverride ? String(targetOverride) : ""))
+  const [offlineOrderTargetInput, setOfflineOrderTargetInput] = useState(() =>
+    offlineOrderTarget ? String(offlineOrderTarget) : ""
+  )
   const [saved, setSaved] = useState(false)
 
   const handleSaveUrl = () => {
@@ -82,6 +87,11 @@ export function Settings() {
   const handleSaveTarget = () => {
     const n = Number(targetInput)
     setTargetOverride(Number.isFinite(n) && n > 0 ? n : null)
+  }
+
+  const handleSaveOfflineOrderTarget = () => {
+    const n = Number(offlineOrderTargetInput)
+    setOfflineOrderTarget(Number.isFinite(n) && n > 0 ? n : null)
   }
 
   return (
@@ -173,6 +183,32 @@ export function Settings() {
             }}
           >
             ใช้ค่าจากชีท
+          </Button>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Target ออเดอร์ (ฝ่ายออฟไลน์)"
+        description="ฝ่ายออฟไลน์เป็นขายส่ง วัดผลด้วยจำนวนออเดอร์ต่อคนต่อวัน แยกจากเป้าพัสดุของฝ่ายออนไลน์ — ใช้คำนวณจำนวนคนที่ควรใช้ในหน้าผลงานของฝ่ายออฟไลน์เท่านั้น"
+      >
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={offlineOrderTargetInput}
+            onChange={(e) => setOfflineOrderTargetInput(e.target.value)}
+            placeholder="เช่น 40"
+            className="w-32 rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+          />
+          <Button size="sm" onClick={handleSaveOfflineOrderTarget}>บันทึก</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setOfflineOrderTargetInput("")
+              setOfflineOrderTarget(null)
+            }}
+          >
+            ล้างค่า
           </Button>
         </div>
       </SettingsSection>

@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import type { EChartsOption } from "echarts"
 import { EChart } from "@/components/charts/EChart"
 import { ChartCard } from "@/components/charts/ChartCard"
+import { BarLineChart } from "@/components/charts/BarLineChart"
 import { readChartTheme } from "@/lib/chart-theme"
 import { useTheme } from "@/lib/theme"
 import { formatDateLabel } from "@/lib/format"
@@ -28,43 +29,6 @@ export function WorkloadAnalyticsCharts({ series }: { series: DailyWorkforceStat
   const { theme } = useTheme()
   const categories = useMemo(() => series.map((s) => formatDateLabel(s.date)), [series])
 
-  const workloadOption = useMemo<EChartsOption>(() => {
-    const t = readChartTheme()
-    return {
-      textStyle: { color: t.muted },
-      tooltip: { trigger: "axis" },
-      legend: { data: ["พัสดุ", "สินค้า"], textStyle: { color: t.muted }, top: 0 },
-      ...baseAxes(t, categories),
-      series: [
-        { name: "พัสดุ", type: "bar", data: series.map((s) => s.totalParcels), itemStyle: { color: t.brand, borderRadius: [4, 4, 0, 0] } },
-        { name: "สินค้า", type: "bar", data: series.map((s) => s.totalItems), itemStyle: { color: t.emerald, borderRadius: [4, 4, 0, 0] } },
-      ],
-    }
-  }, [series, categories, theme])
-
-  const productivityOption = useMemo<EChartsOption>(() => {
-    const t = readChartTheme()
-    const target = series[0]?.target
-    return {
-      textStyle: { color: t.muted },
-      tooltip: { trigger: "axis" },
-      ...baseAxes(t, categories),
-      series: [
-        {
-          name: "Productivity",
-          type: "line",
-          smooth: true,
-          data: series.map((s) => Math.round(s.actualProductivity)),
-          itemStyle: { color: t.amber },
-          areaStyle: { color: t.amber, opacity: 0.12 },
-          markLine: target
-            ? { symbol: "none", label: { formatter: `เป้า ${target}`, color: t.muted }, lineStyle: { color: t.rose, type: "dashed" }, data: [{ yAxis: target }] }
-            : undefined,
-        },
-      ],
-    }
-  }, [series, categories, theme])
-
   const headcountOption = useMemo<EChartsOption>(() => {
     const t = readChartTheme()
     return {
@@ -84,14 +48,19 @@ export function WorkloadAnalyticsCharts({ series }: { series: DailyWorkforceStat
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <ChartCard title="Daily Workload" subtitle="พัสดุ / สินค้า รายวัน">
-        <EChart option={workloadOption} height={260} />
-      </ChartCard>
-      <ChartCard title="Productivity Trend" subtitle="พัสดุ/คน รายวัน เทียบเป้า">
-        <EChart option={productivityOption} height={260} />
+      <ChartCard title="ผลงานรวมเทียบ Productivity" subtitle="พัสดุ / สินค้า รายวัน เทียบ productivity ต่อคน" className="lg:col-span-2">
+        <BarLineChart
+          categories={categories}
+          bars={[
+            { name: "พัสดุ", data: series.map((s) => s.totalParcels) },
+            { name: "สินค้า", data: series.map((s) => s.totalItems) },
+          ]}
+          line={{ name: "Productivity (พัสดุ/คน)", data: series.map((s) => Math.round(s.actualProductivity)) }}
+          height={280}
+        />
       </ChartCard>
       <ChartCard title="Employees Working Per Day" subtitle="จำนวนคนทำงานจริงรายวัน">
-        <EChart option={headcountOption} height={260} />
+        <EChart option={headcountOption} height={280} />
       </ChartCard>
     </div>
   )

@@ -3,7 +3,8 @@ import { Avatar3D } from "./Avatar3D"
 import { cn } from "@/lib/utils"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
-function emotionFor(pctTarget: number) {
+function emotionFor(pctTarget: number | null) {
+  if (pctTarget === null) return "calm" as const
   if (pctTarget >= 100) return "great" as const
   if (pctTarget >= 80) return "good" as const
   return "calm" as const
@@ -34,10 +35,12 @@ export function RankingList({
   entries,
   rankDeltas,
   metricFormatter,
+  showTarget = true,
 }: {
   entries: RankedEmployeeMetric[]
   rankDeltas: Map<string, number>
   metricFormatter: (m: RankedEmployeeMetric) => string
+  showTarget?: boolean
 }) {
   return (
     <div className="space-y-1.5">
@@ -49,18 +52,20 @@ export function RankingList({
             <p className="truncate text-sm font-semibold text-foreground">{m.name}</p>
             <p className="text-xs text-muted-foreground">{metricFormatter(m)}</p>
           </div>
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-              m.pctTarget >= 100
-                ? "bg-emerald-glow/15 text-emerald-glow"
-                : m.pctTarget >= 80
-                  ? "bg-amber-500/15 text-amber-500"
-                  : "bg-brand-500/15 text-brand-400"
-            )}
-          >
-            {m.pctTarget.toFixed(0)}%
-          </span>
+          {showTarget && m.pctTarget !== null && (
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                m.pctTarget >= 100
+                  ? "bg-emerald-glow/15 text-emerald-glow"
+                  : m.pctTarget >= 80
+                    ? "bg-amber-500/15 text-amber-500"
+                    : "bg-brand-500/15 text-brand-400"
+              )}
+            >
+              {m.pctTarget.toFixed(0)}%
+            </span>
+          )}
           <div className="w-10 shrink-0">
             <RankChange delta={rankDeltas.get(m.name)} />
           </div>

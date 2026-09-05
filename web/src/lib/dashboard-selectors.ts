@@ -1,5 +1,7 @@
 import type { Category, DashboardResponse, Employee, EmployeeDailyEntry, TeamId } from "@/api/types"
 import { dateFromIso, isoDateOf } from "./format"
+import { hasNoPrimaryParcelTarget } from "./employeeRoles"
+import { classifyKpiStatus, type KpiStatus } from "./status"
 
 /** A person's crew, defaulting to "online" for back-compat with payloads from
  * before the parser split teams (offline employees simply weren't distinguished). */
@@ -612,4 +614,104 @@ export function incidentsByMonthAndCategory(incidents: Incident[]): MonthlyCateg
   }
 
   return { months, categories, seriesByCategory }
+}
+
+export interface FollowUpRow {
+  name: string
+  team?: TeamId
+  status: KpiStatus
+  todayOutput: number | null
+  target: number | null
+  pctTarget: number | null
+  yesterday: number | null
+  monthTotal: number
+  lastMonthTotal: number
+  consecutiveDaysBelow: number
+  reason?: string
+}
+
+function prevMonthKey(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number)
+  const d = new Date(y!, m! - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
+const FOLLOW_UP_RISK_ORDER: Record<KpiStatus, number> = {
+  "below-target": 0,
+  watch: 1,
+  "no-data": 2,
+  "no-target": 3,
+  "on-target": 4,
+}
+
+/**
+ * The Dashboard's "ต้องติดตามวันนี้" list — every employee with today/yesterday/
+ * month/last-month output, % vs target, and a consecutive-days-below-target
+ * streak, sorted with the highest-risk people on top (not by rank #1).
+ *
+ * A day with no record at all (not on shift / on leave / sheet gap) breaks the
+ * "consecutive days below target" streak instead of counting as a below-target
+ * day — no-data must never be conflated with poor performance.
+ */
+export function buildFollowUpRows(data: DashboardResponse, targetPerPerson: number | null): FollowUpRow[] {
+  const sortedDates = [...data.dates].sort()
+  const todayIdx = sortedDates.indexOf(data.todayDate)
+  const prevDate = todayIdx > 0 ? sortedDates[todayIdx - 1] : null
+  const monthKey = monthKeyOf(data.todayDate)
+  const lastMonthKey = prevMonthKey(monthKey)
+  const monthDates = datesInMonth(data.dates, monthKey)
+  const lastMonthDates = datesInMonth(data.dates, lastMonthKey)
+
+  const sumParcels = (e: Employee, dates: string[]) => dates.reduce((s, d) => s + (e.byDate[d]?.parcels ?? 0), 0)
+
+  const hasRecord = (entry: EmployeeDailyEntry | undefined) => !!entry && (entry.parcels !== null || entry.items !== null)
+
+  const rows = data.employees.map((e): FollowUpRow => {
+    const todayEntry = e.byDate[data.todayDate]
+    const hasToday = hasRecord(todayEntry)
+    const todayOutput = hasToday ? todayEntry!.parcels ?? 0 : null
+    const yesterday = prevDate ? e.byDate[prevDate]?.parcels ?? null : null
+    // Parcel work isn't this person's KPI (see hasNoPrimaryParcelTarget) — they still
+    // show real output above, just never scored/flagged against the parcel target.
+    const excludedFromTarget = hasNoPrimaryParcelTarget(e.name)
+    const pctTarget = !excludedFromTarget && targetPerPerson && hasToday ? ((todayOutput ?? 0) / targetPerPerson) * 100 : null
+    const status = excludedFromTarget ? classifyKpiStatus(null, hasToday) : classifyKpiStatus(pctTarget, hasToday)
+
+    let consecutiveDaysBelow = 0
+    if (targetPerPerson && !excludedFromTarget) {
+      for (let i = todayIdx; i >= 0; i--) {
+        const entry = e.byDate[sortedDates[i]!]
+        if (!hasRecord(entry)) break
+        const pct = ((entry!.parcels ?? 0) / targetPerPerson) * 100
+        if (pct >= 100) break
+        consecutiveDaysBelow++
+      }
+    }
+
+    let reason: string | undefined
+    if (!hasToday) reason = "ไม่มีข้อมูลวันนี้ — อาจไม่ได้เข้าเวร/ไม่มีงาน/ข้อมูลยังไม่เข้า"
+    else if (status === "below-target") {
+      reason = consecutiveDaysBelow > 1 ? `ต่ำกว่าเป้าต่อเนื่อง ${consecutiveDaysBelow} วัน` : "ต่ำกว่าเป้าวันนี้"
+    } else if (status === "watch") reason = "ใกล้เป้า — เฝ้าดูวันถัดไป"
+
+    return {
+      name: e.name,
+      team: e.team,
+      status,
+      todayOutput,
+      target: targetPerPerson,
+      pctTarget,
+      yesterday,
+      monthTotal: sumParcels(e, monthDates),
+      lastMonthTotal: sumParcels(e, lastMonthDates),
+      consecutiveDaysBelow,
+      reason,
+    }
+  })
+
+  return rows.sort((a, b) => {
+    const riskDiff = FOLLOW_UP_RISK_ORDER[a.status] - FOLLOW_UP_RISK_ORDER[b.status]
+    if (riskDiff !== 0) return riskDiff
+    return b.consecutiveDaysBelow - a.consecutiveDaysBelow
+  })
 }

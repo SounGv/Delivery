@@ -22,12 +22,12 @@ import { otRecordKey, setOtDecision, setOtDecisionMany, useOtApprovals } from "@
 import { useOtConfig } from "@/lib/settingsContext"
 import { formatMonthLabel } from "@/lib/format"
 
-export function OtManagement() {
+export function OtManagement({ defaultDepartment }: { defaultDepartment?: string } = {}) {
   const { data, isLoading, isError, error } = useDashboardQuery()
   const otConfig = useOtConfig()
   const approvals = useOtApprovals()
   const [selectedMonth, setSelectedMonth] = useState("")
-  const [department, setDepartment] = useState(ALL_DEPARTMENTS)
+  const [department, setDepartment] = useState(defaultDepartment ?? ALL_DEPARTMENTS)
   const [employee, setEmployee] = useState("all")
   const [slip, setSlip] = useState<OtRecord | null>(null)
 

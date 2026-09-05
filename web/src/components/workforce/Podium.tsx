@@ -4,7 +4,8 @@ import { Avatar3D, type AvatarEmotion } from "./Avatar3D"
 import { cn } from "@/lib/utils"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
-function emotionFor(pctTarget: number): AvatarEmotion {
+function emotionFor(pctTarget: number | null): AvatarEmotion {
+  if (pctTarget === null) return "calm"
   if (pctTarget >= 100) return "great"
   if (pctTarget >= 80) return "good"
   return "calm"
@@ -26,9 +27,11 @@ const SLOT: Record<1 | 2 | 3, PodiumSlotConfig> = {
 function PodiumSlot({
   entry,
   metricValueLabel,
+  showTarget,
 }: {
   entry: RankedEmployeeMetric
   metricValueLabel: string
+  showTarget: boolean
 }) {
   const slot = SLOT[entry.rank as 1 | 2 | 3]
   const emotion = emotionFor(entry.pctTarget)
@@ -52,14 +55,16 @@ function PodiumSlot({
       <Avatar3D name={entry.name} emotion={emotion} size={slot.avatarSize} />
       <p className="mt-1 max-w-[6.5rem] truncate text-center text-sm font-semibold text-foreground">{entry.name}</p>
       <p className="text-center text-xs text-muted-foreground">{metricValueLabel}</p>
-      <p
-        className={cn(
-          "text-[11px] font-semibold",
-          entry.pctTarget >= 100 ? "text-emerald-glow" : entry.pctTarget >= 80 ? "text-amber-500" : "text-brand-400"
-        )}
-      >
-        {entry.pctTarget.toFixed(0)}% Target
-      </p>
+      {showTarget && entry.pctTarget !== null && (
+        <p
+          className={cn(
+            "text-[11px] font-semibold",
+            entry.pctTarget >= 100 ? "text-emerald-glow" : entry.pctTarget >= 80 ? "text-amber-500" : "text-brand-400"
+          )}
+        >
+          {entry.pctTarget.toFixed(0)}% Target
+        </p>
+      )}
       <div
         className={cn(
           "mt-2 flex w-20 items-start justify-center rounded-t-lg bg-gradient-to-b pt-1 text-lg shadow-inner",
@@ -73,7 +78,15 @@ function PodiumSlot({
   )
 }
 
-export function Podium({ top3, metricFormatter }: { top3: RankedEmployeeMetric[]; metricFormatter: (m: RankedEmployeeMetric) => string }) {
+export function Podium({
+  top3,
+  metricFormatter,
+  showTarget = true,
+}: {
+  top3: RankedEmployeeMetric[]
+  metricFormatter: (m: RankedEmployeeMetric) => string
+  showTarget?: boolean
+}) {
   const byRank = new Map(top3.map((m) => [m.rank, m]))
   const first = byRank.get(1)
   const second = byRank.get(2)
@@ -81,9 +94,9 @@ export function Podium({ top3, metricFormatter }: { top3: RankedEmployeeMetric[]
 
   return (
     <div className="flex items-end justify-center gap-4 sm:gap-8">
-      {second && <PodiumSlot entry={second} metricValueLabel={metricFormatter(second)} />}
-      {first && <PodiumSlot entry={first} metricValueLabel={metricFormatter(first)} />}
-      {third && <PodiumSlot entry={third} metricValueLabel={metricFormatter(third)} />}
+      {second && <PodiumSlot entry={second} metricValueLabel={metricFormatter(second)} showTarget={showTarget} />}
+      {first && <PodiumSlot entry={first} metricValueLabel={metricFormatter(first)} showTarget={showTarget} />}
+      {third && <PodiumSlot entry={third} metricValueLabel={metricFormatter(third)} showTarget={showTarget} />}
     </div>
   )
 }

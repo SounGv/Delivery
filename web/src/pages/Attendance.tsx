@@ -21,11 +21,14 @@ import { downloadReportExcel } from "@/lib/exportReportExcel"
 import { useOtConfig } from "@/lib/settingsContext"
 import { formatMonthLabel } from "@/lib/format"
 
-export function Attendance() {
+/** `defaultDepartment` pre-selects the department filter (used when this page
+ * is embedded as a tab inside a team's department page) — omit for the
+ * standalone "Work & Attendance" nav entry, which still defaults to "ทุกฝ่าย". */
+export function Attendance({ defaultDepartment }: { defaultDepartment?: string } = {}) {
   const { data, isLoading, isError, error } = useDashboardQuery()
   const otConfig = useOtConfig()
   const [selectedMonth, setSelectedMonth] = useState("")
-  const [department, setDepartment] = useState(ALL_DEPARTMENTS)
+  const [department, setDepartment] = useState(defaultDepartment ?? ALL_DEPARTMENTS)
   const [employee, setEmployee] = useState("all")
 
   const availableMonths = useMemo(

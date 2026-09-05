@@ -66,17 +66,6 @@ export const LeaveReportPage = () => (
   />
 )
 
-export const PayrollPage = () => (
-  <DataPendingPage
-    title="Payroll / Income"
-    purpose="สรุปรายได้รวม = ฐานเงินเดือน + ค่า OT (ค่า OT คำนวณได้แล้วจากเวลาเข้า-ออก) เพื่อออกสลิป/สรุปยอดจ่าย"
-    needs={[
-      "ฐานเงินเดือน/ค่าแรงต่อคน (ยังไม่มีในชีท)",
-      "หักลา/ขาด/มาสาย ถ้าต้องการให้ครบ (อ้างอิงจาก Attendance + Leave)",
-    ]}
-  />
-)
-
 export const AttendanceReportPage = () => (
   <DataPendingPage
     title="Attendance Report"

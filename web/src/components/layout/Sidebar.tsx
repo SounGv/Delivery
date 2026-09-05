@@ -2,21 +2,15 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import {
   LayoutDashboard,
-  Package,
-  Users,
-  BarChart3,
-  LineChart,
+  Landmark,
+  Monitor,
+  Home,
   Settings,
   ChevronsLeft,
   ChevronsRight,
   Warehouse,
-  Trophy,
-  UserCheck,
-  Timer,
-  Wallet,
-  PackageOpen,
-  ShoppingCart,
-  Wrench,
+  BarChart3,
+  ClipboardCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSettings } from "@/lib/settingsContext"
@@ -34,44 +28,26 @@ export interface NavGroup {
   items: NavItem[]
 }
 
-// Exact mandated structure — 11 items in 5 groups. Merged pages (KPI & Ranking,
-// Productivity, OT & HR, Work & Attendance) each compose previously-separate
-// pages via tabs, so there are no duplicate menu entries.
+// Menu organized by DEPARTMENT rather than by function — each department item
+// (ฝ่ายออนไลน์/ฝ่ายออฟไลน์) is a single page gathering that crew's overview,
+// people, attendance, performance, and OT under tabs (see TeamDepartmentPage.tsx),
+// reusing the exact same pages/logic the old function-based menu pointed at.
+// ฝ่ายคลัง+รับเข้า, ยอดขาย, and งานที่ต้องเช็ค already had one dedicated
+// cross-team page each, so they're unchanged, just relabeled/regrouped here.
 export const NAV_GROUPS: NavGroup[] = [
   {
-    section: "OVERVIEW",
+    section: "เมนูหลัก",
     items: [
-      { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, enabled: true },
-      { key: "live", label: "Live Warehouse", icon: Package, enabled: true },
+      { key: "dashboard", label: "ภาพรวม", icon: LayoutDashboard, enabled: true },
+      { key: "receiving-warehouse", label: "ฝ่ายคลัง+รับเข้า", icon: Landmark, enabled: true },
+      { key: "team-online", label: "ฝ่ายออนไลน์", icon: Monitor, enabled: true },
+      { key: "team-offline", label: "ฝ่ายออฟไลน์", icon: Home, enabled: true },
+      { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },
+      { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
     ],
   },
   {
-    section: "PEOPLE",
-    items: [
-      { key: "employees", label: "Employees", icon: Users, enabled: true },
-      { key: "work-attendance", label: "Work & Attendance", icon: UserCheck, enabled: true },
-      { key: "receiving-warehouse", label: "รับเข้า / คลัง", icon: PackageOpen, enabled: true },
-      { key: "work-issues", label: "ปัญหาหน้างาน", icon: Wrench, enabled: true },
-    ],
-  },
-  {
-    section: "PERFORMANCE",
-    items: [
-      { key: "kpi-ranking", label: "KPI & Ranking", icon: Trophy, enabled: true },
-      { key: "analytics", label: "Analytics", icon: BarChart3, enabled: true },
-    ],
-  },
-  {
-    section: "REPORTS",
-    items: [
-      { key: "productivity", label: "Productivity", icon: LineChart, enabled: true },
-      { key: "sales-summary", label: "สรุปยอดขาย", icon: ShoppingCart, enabled: true },
-      { key: "ot-hr", label: "OT & HR", icon: Timer, enabled: true },
-      { key: "payroll", label: "Payroll Summary", icon: Wallet, enabled: true },
-    ],
-  },
-  {
-    section: "SYSTEM",
+    section: "ระบบ",
     items: [{ key: "settings", label: "Settings", icon: Settings, enabled: true }],
   },
 ]

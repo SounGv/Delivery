@@ -137,9 +137,14 @@ export interface ReceivingWarehouse {
   departments: RwDepartment[]
 }
 
-/** One day's row from the standalone "รายงานคำสั่งซื้อ" sheet (BigSeller order-report export). */
+/** Which sales-channel tab a BigSeller order-report row came from. */
+export type OrderReportChannel = "online" | "offline"
+
+/** One day's row from the standalone "รายงานคำสั่งซื้อ" sheets (BigSeller order-report
+ * export) — one tab per sales channel, so the same date appears once per channel. */
 export interface OrderReportDay {
   date: string
+  channel: OrderReportChannel
   effSales: number
   effOrders: number
   totalOrders: number
@@ -162,6 +167,23 @@ export interface OrderReportDay {
 
 export interface OrderReport {
   days: OrderReportDay[]
+}
+
+/** One (date, shop) aggregate row from the offline manual-sales log ("รายงาน
+ * คำสั่งซื้อ ออฟไลน์" — per-SKU-per-order entries grouped by day and shop). This is
+ * the only source of cost data (for gross profit) in the whole sales-summary feature. */
+export interface OfflineShopDay {
+  date: string
+  shop: string
+  sales: number
+  cost: number
+  orderCount: number
+  itemQty: number
+  /** Sum of the sheet's "ยอดคืนเงิน" column (added 2026-09-04) — 0 for any
+   * row logged before that date, since the column didn't exist yet. */
+  refund: number
+  /** Distinct orders (shop + order-time) with at least one refunded line. */
+  refundOrderCount: number
 }
 
 export interface DashboardResponse {
@@ -190,6 +212,10 @@ export interface DashboardResponse {
   /** Workplace obstacles/issues log ("ปัญหารอแก้"). Optional: absent until the
    * parser that reads that tab is redeployed. */
   workIssues?: WorkIssue[]
+  /** Per-(date, shop) offline manual-sales aggregates — the source of the
+   * "offline" channel in orderReport, plus the only place with cost/gross-profit
+   * data and a per-shop breakdown. Optional: absent until the parser is redeployed. */
+  offlineShopSales?: OfflineShopDay[]
 }
 
 export interface ApiErrorResponse {

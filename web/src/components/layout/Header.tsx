@@ -11,47 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
-import { useDashboardQuery } from "@/api/queries"
-import { useSettings } from "@/lib/settingsContext"
-import { TEAM_LABELS, hasOfflineTeam } from "@/lib/dashboard-selectors"
-import type { TeamId } from "@/api/types"
-
-const TEAM_ORDER: TeamId[] = ["online", "offline"]
-
-/** Segmented online/offline switcher. Hidden until the payload actually carries an
- * offline crew, so nothing changes on older payloads where everyone is online. */
-function TeamSwitcher() {
-  const { data } = useDashboardQuery()
-  const { selectedTeam, setSelectedTeam } = useSettings()
-
-  if (!data || !hasOfflineTeam(data.employees)) return null
-
-  return (
-    <div
-      role="group"
-      aria-label="เลือกทีม"
-      className="hidden items-center rounded-full border border-border bg-muted/40 p-0.5 sm:inline-flex"
-    >
-      {TEAM_ORDER.map((team) => {
-        const active = selectedTeam === team
-        return (
-          <button
-            key={team}
-            type="button"
-            onClick={() => setSelectedTeam(team)}
-            aria-pressed={active}
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {TEAM_LABELS[team]}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 interface HeaderProps {
   isConnected: boolean
@@ -91,7 +50,6 @@ export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: Head
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <TeamSwitcher />
         <Button variant="ghost" size="icon-sm" onClick={onRefresh} aria-label="Refresh">
           <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
         </Button>

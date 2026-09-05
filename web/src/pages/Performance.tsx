@@ -1,16 +1,18 @@
-import { Gauge, Trophy } from "lucide-react"
+import { Gauge, LineChart, Trophy } from "lucide-react"
 import { Tabs } from "@/components/ui/Tabs"
 import { WorkforcePlanning } from "./WorkforcePlanning"
 import { KpiEvaluation } from "./KpiEvaluation"
+import { Analytics } from "./Analytics"
 
-/** Merged "KPI & Ranking" page — composes the existing 3D ranking (Workforce
- * Planning) and KPI evaluation under one menu, so neither is duplicated. */
-export function KpiRanking() {
+/** Merged "Performance" page — Ranking, KPI Evaluation, and Analytics/Trends
+ * under one menu item so none of them get a duplicate sidebar entry. */
+export function Performance() {
   return (
     <Tabs
       items={[
         { key: "ranking", label: "Ranking", icon: Trophy, render: () => <WorkforcePlanning /> },
         { key: "kpi", label: "KPI Evaluation", icon: Gauge, render: () => <KpiEvaluation /> },
+        { key: "analytics", label: "Analytics", icon: LineChart, render: () => <Analytics /> },
       ]}
     />
   )

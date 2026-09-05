@@ -1,17 +1,92 @@
-import type { OrderReportDay } from "@/api/types"
+import type { OfflineShopDay, OrderReportChannel, OrderReportDay } from "@/api/types"
 import { dateFromIso } from "./format"
 
 export function sortedOrderReportDays(days: OrderReportDay[]): OrderReportDay[] {
   return [...days].sort((a, b) => a.date.localeCompare(b.date))
 }
 
+/** UI-level channel selection — "all" combines both channels into one row per date. */
+export type ChannelFilter = OrderReportChannel | "all"
+
+export const CHANNEL_FILTER_LABELS: Record<ChannelFilter, string> = {
+  all: "ออนไลน์ + ออฟไลน์",
+  online: "ออนไลน์",
+  offline: "ออฟไลน์",
+}
+
+const SUM_FIELDS = [
+  "effSales", "effOrders", "totalOrders", "parcels", "totalRevenue", "sellerSubsidy",
+  "productSales", "origPrice", "sales", "refundAmount", "refundOrders", "refundCustomers",
+  "cancelledAmount", "cancelledOrders", "discountCode",
+] as const
+
+/** Combines same-date rows from every channel into one row per date. AOV and
+ * refundRate are RECOMPUTED from the combined totals (sales/totalOrders and
+ * refundOrders/totalOrders*100, respectively — confirmed against the sheet's own
+ * per-row math) rather than averaged, since averaging two already-derived ratios
+ * would not equal the true combined ratio. */
+export function combineChannels(days: OrderReportDay[]): OrderReportDay[] {
+  const byDate = new Map<string, OrderReportDay[]>()
+  for (const d of days) {
+    const arr = byDate.get(d.date)
+    if (arr) arr.push(d)
+    else byDate.set(d.date, [d])
+  }
+
+  const out: OrderReportDay[] = []
+  for (const [date, rows] of byDate) {
+    const only = rows[0]
+    if (rows.length === 1 && only) {
+      out.push(only)
+      continue
+    }
+    const sums = Object.fromEntries(
+      SUM_FIELDS.map((key) => [key, rows.reduce((s, r) => s + r[key], 0)])
+    ) as Record<(typeof SUM_FIELDS)[number], number>
+
+    out.push({
+      date,
+      channel: "online", // synthetic combined row; channel is not meaningful here
+      ...sums,
+      refundRate: sums.totalOrders > 0 ? (sums.refundOrders / sums.totalOrders) * 100 : 0,
+      aov: sums.totalOrders > 0 ? sums.sales / sums.totalOrders : 0,
+    })
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Applies the channel filter: a single channel's rows as-is, or every channel
+ * combined into one row per date when "all" is selected. */
+export function applyChannelFilter(days: OrderReportDay[], channel: ChannelFilter): OrderReportDay[] {
+  if (channel === "all") return combineChannels(days)
+  return days.filter((d) => d.channel === channel)
+}
+
 export interface OrderReportTotals {
   totalEffSales: number
   totalEffOrders: number
   totalOrders: number
+  /** "จำนวนพัสดุ". */
+  totalParcels: number
   totalCancelledOrders: number
   totalCancelledAmount: number
   totalDiscountCode: number
+  /** "ยอดขาย" — a distinct column from effSales, used (weighted) for AOV. */
+  totalSales: number
+  /** "รายได้รวม". */
+  totalRevenue: number
+  /** "เงินอุดหนุนจากผู้ขาย". */
+  totalSellerSubsidy: number
+  /** "ยอดขายสินค้า". */
+  totalProductSales: number
+  /** "ราคาสินค้าเดิม" — before any discount. */
+  totalOrigPrice: number
+  /** "จำนวนคำสั่งซื้อที่คืนเงิน" — despite the name, this is a money amount, not a count. */
+  totalRefundAmount: number
+  /** "คำสั่งซื้อที่คืนเงิน". */
+  totalRefundOrders: number
+  /** "ลูกค้าที่คืนเงิน". */
+  totalRefundCustomers: number
   /** Cancelled orders / total orders, as a percent. */
   cancelRate: number
   /** Mean of each day's refund-rate percent (matches what the sheet already computes per day). */
@@ -25,20 +100,36 @@ export function computeOrderReportTotals(days: OrderReportDay[]): OrderReportTot
   let totalEffSales = 0
   let totalEffOrders = 0
   let totalOrders = 0
+  let totalParcels = 0
   let totalCancelledOrders = 0
   let totalCancelledAmount = 0
   let totalDiscountCode = 0
   let totalSales = 0
+  let totalRevenue = 0
+  let totalSellerSubsidy = 0
+  let totalProductSales = 0
+  let totalOrigPrice = 0
+  let totalRefundAmount = 0
+  let totalRefundOrders = 0
+  let totalRefundCustomers = 0
   let refundRateSum = 0
 
   for (const d of days) {
     totalEffSales += d.effSales
     totalEffOrders += d.effOrders
     totalOrders += d.totalOrders
+    totalParcels += d.parcels
     totalCancelledOrders += d.cancelledOrders
     totalCancelledAmount += d.cancelledAmount
     totalDiscountCode += d.discountCode
     totalSales += d.sales
+    totalRevenue += d.totalRevenue
+    totalSellerSubsidy += d.sellerSubsidy
+    totalProductSales += d.productSales
+    totalOrigPrice += d.origPrice
+    totalRefundAmount += d.refundAmount
+    totalRefundOrders += d.refundOrders
+    totalRefundCustomers += d.refundCustomers
     refundRateSum += d.refundRate
   }
 
@@ -47,14 +138,85 @@ export function computeOrderReportTotals(days: OrderReportDay[]): OrderReportTot
     totalEffSales,
     totalEffOrders,
     totalOrders,
+    totalParcels,
     totalCancelledOrders,
     totalCancelledAmount,
     totalDiscountCode,
+    totalSales,
+    totalRevenue,
+    totalSellerSubsidy,
+    totalProductSales,
+    totalOrigPrice,
+    totalRefundAmount,
+    totalRefundOrders,
+    totalRefundCustomers,
     cancelRate: totalOrders > 0 ? (totalCancelledOrders / totalOrders) * 100 : 0,
     avgRefundRate: nDays > 0 ? refundRateSum / nDays : 0,
     weightedAov: totalOrders > 0 ? totalSales / totalOrders : 0,
     nDays,
   }
+}
+
+export interface ChannelComparisonTotals {
+  online: OrderReportTotals
+  offline: OrderReportTotals
+}
+
+/** Online vs offline totals for the same date range, independent of whatever
+ * single-channel filter the rest of the page is using — lets a "compare
+ * channels" panel show both sides together. Offline's refund fields only
+ * cover the sheet's "ยอดคืนเงิน" column added 2026-09-04 (see
+ * offlineShopSalesToOrderDays_'s doc) — 0 for anything before that date, not
+ * a claim those days truly had zero returns. */
+export function computeChannelComparison(days: OrderReportDay[]): ChannelComparisonTotals {
+  return {
+    online: computeOrderReportTotals(days.filter((d) => d.channel === "online")),
+    offline: computeOrderReportTotals(days.filter((d) => d.channel === "offline")),
+  }
+}
+
+export interface MonthlyChannelRow {
+  monthKey: string
+  onlineSales: number
+  onlineRefund: number
+  onlineNet: number
+  onlineOrders: number
+  offlineSales: number
+  offlineRefund: number
+  offlineNet: number
+  offlineOrders: number
+}
+
+/** Same online-vs-offline split as computeChannelComparison, bucketed by
+ * calendar month. */
+export function monthlyChannelComparison(days: OrderReportDay[]): MonthlyChannelRow[] {
+  const byMonth = new Map<
+    string,
+    { onlineSales: number; onlineRefund: number; onlineOrders: number; offlineSales: number; offlineRefund: number; offlineOrders: number }
+  >()
+  for (const d of days) {
+    const key = d.date.slice(0, 7)
+    const acc =
+      byMonth.get(key) ?? { onlineSales: 0, onlineRefund: 0, onlineOrders: 0, offlineSales: 0, offlineRefund: 0, offlineOrders: 0 }
+    if (d.channel === "online") {
+      acc.onlineSales += d.effSales
+      acc.onlineRefund += d.refundAmount
+      acc.onlineOrders += d.effOrders
+    } else {
+      acc.offlineSales += d.effSales
+      acc.offlineRefund += d.refundAmount
+      acc.offlineOrders += d.effOrders
+    }
+    byMonth.set(key, acc)
+  }
+  return [...byMonth.entries()]
+    .map(([monthKey, v]) => ({
+      monthKey,
+      onlineNet: v.onlineSales - v.onlineRefund,
+      offlineNet: v.offlineSales - v.offlineRefund,
+      ...v,
+    }))
+    .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
 }
 
 export interface WeekBucket {
@@ -121,4 +283,97 @@ export function peakDay(sortedDays: OrderReportDay[]): OrderReportDay | null {
   const first = sortedDays[0]
   if (!first) return null
   return sortedDays.reduce((best, d) => (d.effSales > best.effSales ? d : best), first)
+}
+
+/** Converts filtered offline shop-day rows into one OrderReportDay per date
+ * (summed across whichever shops are included) — lets the shop filter feed the
+ * exact same KPI/chart/table pipeline the channel filter already uses. Mirrors
+ * the Apps Script side's offlineShopSalesToOrderDays_ exactly: refundAmount/
+ * refundOrders come from the sheet's "ยอดคืนเงิน" column (added 2026-09-04 —
+ * rows logged before that have no value for it, so they sum to 0, same as any
+ * other blank numeric cell); cancellations/discount codes still aren't
+ * tracked offline at all, so those stay zero. */
+export function offlineShopDaysToOrderDays(shopSales: OfflineShopDay[]): OrderReportDay[] {
+  const byDate = new Map<string, { sales: number; orderCount: number; itemQty: number; refund: number; refundOrderCount: number }>()
+  for (const s of shopSales) {
+    const acc = byDate.get(s.date) ?? { sales: 0, orderCount: 0, itemQty: 0, refund: 0, refundOrderCount: 0 }
+    acc.sales += s.sales
+    acc.orderCount += s.orderCount
+    acc.itemQty += s.itemQty
+    acc.refund += s.refund ?? 0
+    acc.refundOrderCount += s.refundOrderCount ?? 0
+    byDate.set(s.date, acc)
+  }
+  return [...byDate.entries()]
+    .map(([date, d]) => ({
+      date,
+      channel: "offline" as const,
+      effSales: d.sales,
+      effOrders: d.orderCount,
+      totalOrders: d.orderCount,
+      parcels: d.itemQty,
+      totalRevenue: d.sales,
+      sellerSubsidy: 0,
+      productSales: d.sales,
+      origPrice: 0,
+      sales: d.sales,
+      refundAmount: d.refund,
+      refundOrders: d.refundOrderCount,
+      refundCustomers: 0,
+      refundRate: d.orderCount > 0 ? (d.refundOrderCount / d.orderCount) * 100 : 0,
+      cancelledAmount: 0,
+      cancelledOrders: 0,
+      aov: d.orderCount > 0 ? d.sales / d.orderCount : 0,
+      discountCode: 0,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+export interface ShopSummary {
+  shop: string
+  sales: number
+  cost: number
+  grossProfit: number
+  /** Gross profit / sales, as a percent. */
+  marginPct: number
+  orderCount: number
+  itemQty: number
+}
+
+/** Totals per shop across whatever offline shop-day rows are passed in (already
+ * date-range-filtered by the caller) — sorted by sales, highest first. */
+export function summarizeByShop(shopSales: OfflineShopDay[]): ShopSummary[] {
+  const byShop = new Map<string, { sales: number; cost: number; orderCount: number; itemQty: number }>()
+  for (const s of shopSales) {
+    const acc = byShop.get(s.shop) ?? { sales: 0, cost: 0, orderCount: 0, itemQty: 0 }
+    acc.sales += s.sales
+    acc.cost += s.cost
+    acc.orderCount += s.orderCount
+    acc.itemQty += s.itemQty
+    byShop.set(s.shop, acc)
+  }
+  return [...byShop.entries()]
+    .map(([shop, d]) => ({
+      shop,
+      sales: d.sales,
+      cost: d.cost,
+      grossProfit: d.sales - d.cost,
+      marginPct: d.sales > 0 ? ((d.sales - d.cost) / d.sales) * 100 : 0,
+      orderCount: d.orderCount,
+      itemQty: d.itemQty,
+    }))
+    .sort((a, b) => b.sales - a.sales)
+}
+
+export interface OfflineTotals {
+  sales: number
+  cost: number
+  grossProfit: number
+  marginPct: number
+}
+
+export function computeOfflineTotals(shopSales: OfflineShopDay[]): OfflineTotals {
+  const sales = shopSales.reduce((s, d) => s + d.sales, 0)
+  const cost = shopSales.reduce((s, d) => s + d.cost, 0)
+  return { sales, cost, grossProfit: sales - cost, marginPct: sales > 0 ? ((sales - cost) / sales) * 100 : 0 }
 }

@@ -10,6 +10,25 @@
  */
 
 /**
+ * Safely reads a numeric cell (จำนวนพัสดุ/จำนวนสินค้า/ค่าที่ 1/ค่าที่ 2). Plain
+ * `Number(raw)` is NOT safe here: a misaligned column sometimes puts a time-of-day
+ * Date object or a leave marker ("ลา") into a numeric slot, and `Number(dateObj)`
+ * silently returns its epoch milliseconds (a huge non-NaN number) instead of NaN —
+ * that's what produced values like -2,209,153,624,000 downstream. Reject anything
+ * that isn't a plain finite number or a numeric-looking string.
+ */
+function numberOrNull_(raw) {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  if (Object.prototype.toString.call(raw) === '[object Date]') return null;
+  if (typeof raw === 'boolean') return null;
+  if (typeof raw === 'number') return isFinite(raw) ? raw : null;
+  var s = String(raw).trim();
+  if (!s || !/^-?\d+(\.\d+)?$/.test(s)) return null;
+  var n = Number(s);
+  return isFinite(n) ? n : null;
+}
+
+/**
  * The sheet's date headers were typed with a 2-digit year intended as Thai
  * Buddhist Era (e.g. "16/01/69" meaning B.E. 2569 = A.D. 2026). Google
  * Sheets' own 2-digit-year rule (>=30 -> 19xx, <30 -> 20xx) stores that as
@@ -146,14 +165,12 @@ function parseSheetTab_(sheet, tz) {
           var name = (nameRaw === '' || nameRaw === null || nameRaw === undefined) ? '' : String(nameRaw).trim();
 
           if (name && name.length <= 20 && !isProblemRow) {
-            var pRaw = row[b.col + parcelsIdx];
-            var iRaw = row[b.col + itemsIdx];
-            var parcels = (pRaw === '' || pRaw === null || pRaw === undefined) ? null : Number(pRaw);
-            var items = (iRaw === '' || iRaw === null || iRaw === undefined) ? null : Number(iRaw);
+            var parcels = numberOrNull_(row[b.col + parcelsIdx]);
+            var items = numberOrNull_(row[b.col + itemsIdx]);
             var checkIn = inIdx !== -1 ? timeFromCell_(row[b.col + inIdx], displayRow[b.col + inIdx]) : null;
             var checkOut = outIdx !== -1 ? timeFromCell_(row[b.col + outIdx], displayRow[b.col + outIdx]) : null;
 
-            var entry = { parcels: isNaN(parcels) ? null : parcels, items: isNaN(items) ? null : items };
+            var entry = { parcels: parcels, items: items };
             if (checkIn) entry.checkIn = checkIn;
             if (checkOut) entry.checkOut = checkOut;
 
@@ -223,16 +240,30 @@ function parseSheetTab_(sheet, tz) {
       continue;
     }
 
-    var isSectionHeaderRow = /^\d+\./.test(colA);
+    // Matches "7.ยอดผลิต" (digit + dot + title) AND a bare "8" (digit only, title
+    // in column B instead) — a category header doesn't always get a dot+title in
+    // column A. Missing the bare-digit case here previously left `currentCategory`
+    // pointing at the PREVIOUS category (e.g. "8" continuing to be read as if it
+    // were still inside "7.ยอดผลิต"), which silently merged that category's rows
+    // into the wrong team/section.
+    var isSectionHeaderRow = /^\d+(\.|$)/.test(colA);
     if (isSectionHeaderRow) {
-      currentCategory = { id: colA.split('.')[0], title: colA.replace(/^\d+\./, '').trim(), rows: [] };
+      currentCategory = { id: colA.split('.')[0], title: colA.replace(/^\d+\.?\s*/, '').trim(), rows: [] };
       categories.push(currentCategory);
       currentSubLabel = '';
+      // A bare-digit header (no dot+title in column A) puts its real name in
+      // column B instead — currently only "8" / "CN", a per-employee workload
+      // tracker (target "ไม่เกิน 2 วัน" = a turnaround-time goal). It's named
+      // "CN (รายคน)" rather than plain "CN" so it stays a SEPARATE category
+      // from "3.CN" (an incident count that should be zero) instead of merging
+      // rows into it — the two have opposite "higher is worse/better" meanings.
+      if (!currentCategory.title && colB) currentCategory.title = colB + ' (รายคน)';
     }
     if (colB) currentSubLabel = colB;
     if (!currentCategory) continue;
 
     var isProductionSection = currentCategory.title.indexOf('ยอดผลิต') !== -1;
+    var isPerEmployeeNoteSection = currentCategory.title.indexOf('(รายคน)') !== -1;
 
     if (isProductionSection) {
       if (colC) currentCategory.target = colC;
@@ -252,10 +283,8 @@ function parseSheetTab_(sheet, tz) {
 
           var parcelsIdx = b.fieldKeys.indexOf('จำนวนพัสดุ'); if (parcelsIdx === -1) parcelsIdx = 1;
           var itemsIdx = b.fieldKeys.indexOf('จำนวนสินค้า'); if (itemsIdx === -1) itemsIdx = 2;
-          var parcelsRaw = row[b.col + parcelsIdx];
-          var itemsRaw = row[b.col + itemsIdx];
-          var parcels = (parcelsRaw === '' || parcelsRaw === null || parcelsRaw === undefined) ? null : Number(parcelsRaw);
-          var items = (itemsRaw === '' || itemsRaw === null || itemsRaw === undefined) ? null : Number(itemsRaw);
+          var parcels = numberOrNull_(row[b.col + parcelsIdx]);
+          var items = numberOrNull_(row[b.col + itemsIdx]);
 
           // Check-in / check-out are OPTIONAL extra sub-columns present only in
           // some (newer) date-blocks. Match by substring so trailing text or
@@ -276,7 +305,7 @@ function parseSheetTab_(sheet, tz) {
           if (workIdx !== -1) { var wRaw = row[b.col + workIdx]; if (wRaw !== '' && wRaw !== null && wRaw !== undefined) work = String(wRaw).trim(); }
           if (noteIdx !== -1) { var nRaw = row[b.col + noteIdx]; if (nRaw !== '' && nRaw !== null && nRaw !== undefined) note = String(nRaw).trim(); }
 
-          var empKey = name + ' ' + team;
+          var empKey = name + ' ' + team;
           if (!employeesMap[empKey]) {
             employeesMap[empKey] = { name: name, team: team, byDate: {}, totalParcels: 0, totalItems: 0 };
           }
@@ -290,6 +319,40 @@ function parseSheetTab_(sheet, tz) {
           if (typeof items === 'number' && !isNaN(items)) employeesMap[empKey].totalItems += items;
         });
       })(row, displayValues[r], team);
+    } else if (isPerEmployeeNoteSection) {
+      // Same date-block layout as a production section (ชื่อ/จำนวนพัสดุ/จำนวนสินค้า
+      // [+ optional check-in/out]), but rows go into `categories` (by employee
+      // name) instead of `employeesMap` — this is workload/incident tracking,
+      // not productivity, so it must never count toward production totals or
+      // per-person targets.
+      (function (row, displayRow) {
+        blocks.forEach(function (b) {
+          var nameIdx = b.fieldKeys.indexOf('ชื่อ'); if (nameIdx === -1) nameIdx = 0;
+          var nameRaw = row[b.col + nameIdx];
+          if (!nameRaw || typeof nameRaw !== 'string' || !nameRaw.trim()) return;
+          var name = nameRaw.trim();
+
+          var parcelsIdx = b.fieldKeys.indexOf('จำนวนพัสดุ'); if (parcelsIdx === -1) parcelsIdx = 1;
+          var itemsIdx = b.fieldKeys.indexOf('จำนวนสินค้า'); if (itemsIdx === -1) itemsIdx = 2;
+          var parcels = numberOrNull_(row[b.col + parcelsIdx]);
+          var items = numberOrNull_(row[b.col + itemsIdx]);
+          if (parcels === null && items === null) return;
+
+          var parts = [];
+          if (parcels !== null) parts.push(parcels + ' พัสดุ');
+          if (items !== null) parts.push(items + ' ชิ้น');
+
+          var rowEntry = null;
+          for (var ri = 0; ri < currentCategory.rows.length; ri++) {
+            if (currentCategory.rows[ri].label === name) { rowEntry = currentCategory.rows[ri]; break; }
+          }
+          if (!rowEntry) {
+            rowEntry = { label: name, note: colC || undefined, byDate: {} };
+            currentCategory.rows.push(rowEntry);
+          }
+          rowEntry.byDate[b.dateKey] = parts.join(' / ');
+        });
+      })(row, displayValues[r]);
     } else {
       var label = colB || currentSubLabel || currentCategory.title;
       var rowEntry = { label: label, note: colC || undefined, byDate: {} };
@@ -458,9 +521,12 @@ function numFromCell_(v) {
  * FLAT table, one row per day. Columns are matched by header keyword (most-specific
  * pattern checked first, since several headers share substrings like "คำสั่งซื้อ"),
  * so reordered/renamed columns degrade gracefully instead of misreading data.
- * Read-only. Returns [] for a non-matching sheet so it never breaks the payload.
+ * `channel` ("online"/"offline") tags every row so the app can filter or
+ * recombine the two sales channels — the sheet has one standalone tab per
+ * channel with an otherwise-identical schema. Read-only. Returns [] for a
+ * non-matching sheet so it never breaks the payload.
  */
-function parseOrderReportSheet_(sheet, tz) {
+function parseOrderReportSheet_(sheet, tz, channel) {
   var range = sheet.getDataRange();
   var values = range.getValues();
   if (values.length < 2) return [];
@@ -508,6 +574,7 @@ function parseOrderReportSheet_(sheet, tz) {
 
     out.push({
       date: Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd'),
+      channel: channel,
       effSales: numFromCell_(row[col.effSales]) || 0,
       effOrders: numFromCell_(row[col.effOrders]) || 0,
       totalOrders: numFromCell_(row[col.totalOrders]) || 0,
@@ -530,13 +597,208 @@ function parseOrderReportSheet_(sheet, tz) {
   return out;
 }
 
-/** Merges order-report day rows from more than one matching tab, by date (later tab
- * wins on overlap) — mirrors mergeReceivingWarehouse_'s union-by-key approach. */
+/** Merges order-report day rows from more than one matching tab, keyed by
+ * date+channel (later tab wins only on a genuine date+channel collision) so
+ * the online and offline tabs' rows for the same date coexist instead of one
+ * overwriting the other — mirrors mergeReceivingWarehouse_'s union-by-key approach. */
 function mergeOrderReportDays_(a, b) {
+  var byKey = {};
+  (a || []).forEach(function (d) { byKey[d.date + '|' + d.channel] = d; });
+  (b || []).forEach(function (d) { byKey[d.date + '|' + d.channel] = d; });
+  return Object.keys(byKey).sort().map(function (k) { return byKey[k]; });
+}
+
+/** Splits a "30 พ.ค. 2026 9:13" cell into its date part (for Utilities.formatDate)
+ * and the raw trailing time text (used only as an order-grouping key, never
+ * parsed as a real time — the sheet's own display text is authoritative). */
+function parseThaiDateTimeCell_(raw, display) {
+  if (Object.prototype.toString.call(raw) === '[object Date]') {
+    return { dateObj: normalizeHeaderDate_(raw), timeText: String(display || '').trim() };
+  }
+  var s = String(display != null ? display : (raw != null ? raw : '')).trim();
+  var m = s.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})\s*(.*)$/);
+  if (!m) return null;
+  var day = parseInt(m[1], 10);
+  var mon = THAI_MONTH_MAP_[m[2]];
+  var year = parseInt(m[3], 10);
+  if (mon === undefined || isNaN(day) || isNaN(year)) return null;
+  return { dateObj: new Date(year, mon, day), timeText: m[4] };
+}
+
+/**
+ * Reads the "รายงานคำสั่งซื้อ ออฟไลน์" sheet's CURRENT schema — a flat, one-row-
+ * per-SKU-per-order manual-sales log (แพลตฟอร์ม | ร้านค้า | SKU | จำนวน |
+ * รวมค่าสินค้า | ราคาสินค้าเดิม | ต้นทุนสินค้า | เวลาสั่งซื้อ | ยอดคืนเงิน), not
+ * the daily BigSeller-style aggregate the online tab uses. Detected by CONTENT
+ * (needs "ร้านค้า" + "SKU" + "เวลาสั่งซื้อ" in the header) so it never collides
+ * with the online order-report or any other tab. Rows are grouped into one row
+ * per (date, shop): sales/cost/item-qty/refund summed, and orders (and
+ * refunded orders) counted by DISTINCT (shop + exact order-time text) — the
+ * sheet has no order-ID column, so two rows for the same shop at the exact
+ * same timestamp are treated as one order (multiple SKUs on one receipt).
+ * "ยอดคืนเงิน" was added 2026-09-04 — rows before that date were never given a
+ * value for it, so their refund is 0 by the same blank-cell-means-0 convention
+ * every other numeric column here already uses (not a claim those days truly
+ * had zero returns). Read-only. Returns [] for a non-matching sheet. */
+function parseOfflineManualSalesSheet_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return [];
+  var displayValues = range.getDisplayValues();
+
+  var headerRowIdx = -1;
+  var col = {};
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('ร้านค้า') === -1 || joined.indexOf('SKU') === -1 || joined.indexOf('เวลาสั่งซื้อ') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h.indexOf('ร้านค้า') !== -1) col.shop = c;
+      else if (h.indexOf('จำนวน') !== -1) col.qty = c;
+      else if (h.indexOf('รวมค่าสินค้า') !== -1) col.total = c;
+      else if (h.indexOf('ต้นทุนสินค้า') !== -1) col.cost = c;
+      else if (h.indexOf('เวลาสั่งซื้อ') !== -1) col.orderTime = c;
+      else if (h.indexOf('คืนเงิน') !== -1) col.refund = c;
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || col.shop === undefined || col.orderTime === undefined) return [];
+
+  var byKey = {}; // `${dateKey}|${shop}` -> { date, shop, sales, cost, itemQty, refund, orderKeys: {}, refundOrderKeys: {} }
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var displayRow = displayValues[i];
+    var parsed = parseThaiDateTimeCell_(row[col.orderTime], displayRow[col.orderTime]);
+    if (!parsed) continue;
+    var shop = String(row[col.shop] == null ? '' : row[col.shop]).trim();
+    if (!shop) continue;
+    var dateKey = Utilities.formatDate(parsed.dateObj, tz, 'yyyy-MM-dd');
+    var key = dateKey + '|' + shop;
+    if (!byKey[key]) byKey[key] = { date: dateKey, shop: shop, sales: 0, cost: 0, itemQty: 0, refund: 0, orderKeys: {}, refundOrderKeys: {} };
+    var bucket = byKey[key];
+    var orderKey = shop + '|' + parsed.timeText;
+    var refundAmt = col.refund === undefined ? 0 : (numFromCell_(row[col.refund]) || 0);
+    bucket.sales += numFromCell_(row[col.total]) || 0;
+    bucket.cost += numFromCell_(row[col.cost]) || 0;
+    bucket.itemQty += numFromCell_(row[col.qty]) || 0;
+    bucket.refund += refundAmt;
+    bucket.orderKeys[orderKey] = true;
+    if (refundAmt > 0) bucket.refundOrderKeys[orderKey] = true;
+  }
+
+  return Object.keys(byKey).sort().map(function (k) {
+    var b = byKey[k];
+    return {
+      date: b.date,
+      shop: b.shop,
+      sales: b.sales,
+      cost: b.cost,
+      itemQty: b.itemQty,
+      orderCount: Object.keys(b.orderKeys).length,
+      refund: b.refund,
+      refundOrderCount: Object.keys(b.refundOrderKeys).length,
+    };
+  });
+}
+
+/** Converts per-(date, shop) offline aggregates into one OrderReportDay per date
+ * (channel: "offline"), summed across every shop — this is what feeds the
+ * "ออฟไลน์" channel in the สรุปยอดขาย KPI cards/charts/tables, alongside the
+ * online BigSeller channel. refundAmount/refundOrders come from the sheet's
+ * "ยอดคืนเงิน" column (added 2026-09-04 — see parseOfflineManualSalesSheet_'s
+ * doc); cancellations/discount codes still aren't tracked offline at all, so
+ * those stay zero. */
+function offlineShopSalesToOrderDays_(shopSales) {
   var byDate = {};
-  (a || []).forEach(function (d) { byDate[d.date] = d; });
-  (b || []).forEach(function (d) { byDate[d.date] = d; });
-  return Object.keys(byDate).sort().map(function (d) { return byDate[d]; });
+  (shopSales || []).forEach(function (s) {
+    if (!byDate[s.date]) byDate[s.date] = { sales: 0, orderCount: 0, itemQty: 0, refund: 0, refundOrderCount: 0 };
+    byDate[s.date].sales += s.sales;
+    byDate[s.date].orderCount += s.orderCount;
+    byDate[s.date].itemQty += s.itemQty;
+    byDate[s.date].refund += s.refund || 0;
+    byDate[s.date].refundOrderCount += s.refundOrderCount || 0;
+  });
+  return Object.keys(byDate).sort().map(function (date) {
+    var d = byDate[date];
+    return {
+      date: date,
+      channel: 'offline',
+      effSales: d.sales,
+      effOrders: d.orderCount,
+      totalOrders: d.orderCount,
+      parcels: d.itemQty,
+      totalRevenue: d.sales,
+      sellerSubsidy: 0,
+      productSales: d.sales,
+      origPrice: 0,
+      sales: d.sales,
+      refundAmount: d.refund,
+      refundOrders: d.refundOrderCount,
+      refundCustomers: 0,
+      refundRate: d.orderCount > 0 ? (d.refundOrderCount / d.orderCount) * 100 : 0,
+      cancelledAmount: 0,
+      cancelledOrders: 0,
+      aov: d.orderCount > 0 ? d.sales / d.orderCount : 0,
+      discountCode: 0
+    };
+  });
+}
+
+/** Reads the offline-refund monthly catch-up sheet (added 2026-09-04, columns
+ * เดือน [yyyy-MM] | ยอดคืนเงินออฟไลน์ (จาก BigSeller) | จำนวนสินค้าที่คืนเงิน |
+ * หมายเหตุ) — a manual snapshot someone pulls from BigSeller's own SKU-Merchant
+ * report per month, until the per-order refund column on the manual-sales log
+ * is actually kept up to date day-to-day. One row per month; a month can be
+ * re-pasted to correct it (last row for that key wins). Returns {} for a
+ * non-matching sheet. */
+function parseOfflineRefundMonthlySheet_(sheet) {
+  var values = sheet.getDataRange().getValues();
+  if (values.length < 2) return {};
+  var hdr = values[0];
+  var col = { month: 0, refund: 1, qty: 2 };
+  for (var c = 0; c < hdr.length; c++) {
+    var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+    if (h.normalize) h = h.normalize('NFC');
+    if (h.indexOf('เดือน') !== -1) col.month = c;
+    else if (h.indexOf('ยอดคืนเงิน') !== -1) col.refund = c;
+    else if (h.indexOf('จำนวนสินค้าที่คืนเงิน') !== -1) col.qty = c;
+  }
+  var tz = sheet.getParent().getSpreadsheetTimeZone();
+  var result = {};
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var raw = row[col.month];
+    // Sheets silently auto-converts a typed "2026-08" into a real Date cell,
+    // so a plain string() + regex check on it always misses — format Date
+    // values back to yyyy-MM first, in the sheet's own timezone.
+    var month = raw instanceof Date ? Utilities.formatDate(raw, tz, 'yyyy-MM') : String(raw == null ? '' : raw).trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) continue;
+    result[month] = { refund: numFromCell_(row[col.refund]) || 0, qty: numFromCell_(row[col.qty]) || 0 };
+  }
+  return result;
+}
+
+/** Folds each month's offline-refund catch-up total (see
+ * parseOfflineRefundMonthlySheet_) into the LAST existing offline day-row of
+ * that month in `days` — added to that row's refundAmount, never replacing
+ * the row (which would wipe out its real sales for that day). This makes that
+ * one day's refund figure a lump total for the whole month, not a real daily
+ * amount — harmless today since no UI shows a per-day offline refund trend,
+ * only whole-range/monthly totals, but flag this if that ever changes. Months
+ * with no matching offline day-row (no sales data reached that far yet) are
+ * silently skipped — nothing to attach the total to. */
+function applyOfflineRefundMonthly_(days, refundMonthly) {
+  Object.keys(refundMonthly).forEach(function (monthKey) {
+    var info = refundMonthly[monthKey];
+    var candidates = days.filter(function (d) { return d.channel === 'offline' && d.date.indexOf(monthKey) === 0; });
+    if (!candidates.length) return;
+    candidates.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    var last = candidates[candidates.length - 1];
+    last.refundAmount += info.refund;
+  });
 }
 
 /** Parses a "d/m/yy" (or "d/m/yyyy") date typed with a Thai Buddhist-Era short
@@ -768,14 +1030,12 @@ function parseReceivingWarehouseTab_(sheet, tz) {
           var nameRaw = b.fields.name != null ? row[b.fields.name] : null;
           if (!nameRaw || !String(nameRaw).trim()) return;
           var name = String(nameRaw).trim();
-          var v1raw = b.fields.v1 != null ? row[b.fields.v1] : null;
-          var v2raw = b.fields.v2 != null ? row[b.fields.v2] : null;
-          var v1 = (v1raw === '' || v1raw == null) ? null : Number(v1raw);
-          var v2 = (v2raw === '' || v2raw == null) ? null : Number(v2raw);
+          var v1 = b.fields.v1 != null ? numberOrNull_(row[b.fields.v1]) : null;
+          var v2 = b.fields.v2 != null ? numberOrNull_(row[b.fields.v2]) : null;
           var checkIn = b.fields.checkIn != null ? timeFromCell_(row[b.fields.checkIn], displayRow[b.fields.checkIn]) : null;
           var checkOut = b.fields.checkOut != null ? timeFromCell_(row[b.fields.checkOut], displayRow[b.fields.checkOut]) : null;
           if (!cat.employeesMap[name]) cat.employeesMap[name] = { name: name, byDate: {} };
-          var entry = { value1: isNaN(v1) ? null : v1, value2: isNaN(v2) ? null : v2 };
+          var entry = { value1: v1, value2: v2 };
           if (checkIn) entry.checkIn = checkIn;
           if (checkOut) entry.checkOut = checkOut;
           cat.employeesMap[name].byDate[b.dateKey] = entry;
@@ -807,11 +1067,9 @@ function parseReceivingWarehouseTab_(sheet, tz) {
           var checkIn = b.fields.checkIn != null ? timeFromCell_(row[b.fields.checkIn], displayRow[b.fields.checkIn]) : null;
           var checkOut = b.fields.checkOut != null ? timeFromCell_(row[b.fields.checkOut], displayRow[b.fields.checkOut]) : null;
           if (nameStr && nameStr.length <= 20 && catTitle.indexOf('ปัญหา') === -1) {
-            var v1raw = b.fields.v1 != null ? row[b.fields.v1] : null;
-            var v2raw = b.fields.v2 != null ? row[b.fields.v2] : null;
-            var v1 = (v1raw === '' || v1raw == null) ? null : Number(v1raw);
-            var v2 = (v2raw === '' || v2raw == null) ? null : Number(v2raw);
-            addStaff(d, nameStr, b.dateKey, isNaN(v1) ? null : v1, isNaN(v2) ? null : v2, checkIn, checkOut);
+            var v1 = b.fields.v1 != null ? numberOrNull_(row[b.fields.v1]) : null;
+            var v2 = b.fields.v2 != null ? numberOrNull_(row[b.fields.v2]) : null;
+            addStaff(d, nameStr, b.dateKey, v1, v2, checkIn, checkOut);
           }
         });
       }
@@ -914,6 +1172,49 @@ function mergeReceivingWarehouse_(a, b) {
   return { dates: Object.keys(dateSet).sort(), departments: departments };
 }
 
+/**
+ * Cheap peek at a sheet's shape/header — NEVER touches the full data range. Used to
+ * route to exactly one parser instead of the old "try each parser's full read until
+ * one matches" approach, which cost the big standalone tabs (order-report, offline
+ * sales log — tens of thousands of rows) up to 4-6 full-range reads apiece. Each of
+ * getValues()/getNumberFormats()/getDisplayValues() over a large range is itself one
+ * of the slowest Sheets operations, so eliminating the redundant ones is the single
+ * biggest lever on doGet's execution time as the sheet grows.
+ */
+function peekSheet_(sheet) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow === 0 || lastCol === 0) return { hasDateHeader: false, headerSample: [] };
+  var row1 = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var hasDateHeader = false;
+  for (var c = 0; c < row1.length; c++) {
+    if (Object.prototype.toString.call(row1[c]) === '[object Date]') { hasDateHeader = true; break; }
+  }
+  // Same 5-row header window every aux parser already searches for its own keywords —
+  // sampling it once here (instead of once per candidate parser) is what turns N
+  // full-sheet reads into a single cheap one.
+  var sampleRows = Math.min(5, lastRow);
+  var headerSample = sampleRows > 0 ? sheet.getRange(1, 1, sampleRows, lastCol).getValues() : [];
+  return { hasDateHeader: hasDateHeader, headerSample: headerSample };
+}
+
+/** True if any of the sampled header rows contains every one of `keywords` (each
+ * NFC-normalized so pasted text in a different Unicode form still matches). */
+function headerSampleHas_(headerSample, keywords) {
+  for (var r = 0; r < headerSample.length; r++) {
+    var joined = headerSample[r].map(function (v) {
+      var s = String(v == null ? '' : v);
+      return s.normalize ? s.normalize('NFC') : s;
+    }).join('|');
+    var matchesAll = true;
+    for (var k = 0; k < keywords.length; k++) {
+      if (joined.indexOf(keywords[k]) === -1) { matchesAll = false; break; }
+    }
+    if (matchesAll) return true;
+  }
+  return false;
+}
+
 function buildDashboardPayload_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = ss.getSpreadsheetTimeZone();
@@ -929,22 +1230,43 @@ function buildDashboardPayload_() {
   var receivingWarehouse = null;
   var orderReportDays = [];
   var workIssues = [];
+  var offlineShopSales = [];
+  var offlineRefundMonthly = {}; // `${yyyy-MM}` -> { refund, qty } — see parseOfflineRefundMonthlySheet_
 
   sheets.forEach(function (sheet) {
-    var parsed;
+    // Normalized so a tab name whose Thai combining marks were typed/pasted in a
+    // different Unicode form (NFD vs NFC — common when copy-pasting between apps)
+    // still matches these literal substrings, which are themselves NFC.
+    var nm = sheet.getName();
+    if (nm && nm.normalize) nm = nm.normalize('NFC');
+
+    // Sheet-duplicate backup tabs (Google Sheets appends " (1)", " (2)", ... when a
+    // tab is duplicated) — these are stale snapshots the app never reads by design;
+    // skip them before any read at all.
+    if (/\s\(\d+\)$/.test(nm)) return;
+
+    var peek;
     try {
-      parsed = parseSheetTab_(sheet, tz);
-    } catch (err) {
-      parsed = null; // one malformed tab shouldn't break the whole dashboard
+      peek = peekSheet_(sheet);
+    } catch (peekErr) {
+      return; // an unreadable sheet (e.g. mid-edit) is skipped, not fatal
     }
+
+    var parsed = null;
+    if (peek.hasDateHeader) {
+      // Only a genuine date-block monthly tab pays for the full read
+      // (getValues + getNumberFormats + getDisplayValues) that parseSheetTab_ needs.
+      try {
+        parsed = parseSheetTab_(sheet, tz);
+      } catch (err) {
+        parsed = null; // one malformed tab shouldn't break the whole dashboard
+      }
+    }
+
     if (!parsed) {
-      // Normalized so a tab name whose Thai combining marks were typed/pasted in a
-      // different Unicode form (NFD vs NFC — common when copy-pasting between apps)
-      // still matches these literal substrings, which are themselves NFC.
-      var nm = sheet.getName();
-      if (nm && nm.normalize) nm = nm.normalize('NFC');
       // The daily "รับเข้า + คลัง" work sheet has its own schema (not a monthly
-      // production tab). The monthly summary variant is skipped for now.
+      // production tab). The monthly summary variant is skipped for now. Name-gated
+      // (no read needed to decide).
       if (nm.indexOf('ตารางงาน') !== -1 && nm.indexOf('รับเข้า') !== -1 && nm.indexOf('รายเดือน') === -1) {
         try {
           var rw = parseReceivingWarehouseTab_(sheet, tz);
@@ -953,29 +1275,59 @@ function buildDashboardPayload_() {
         } catch (e3) { /* ignore malformed รับเข้า+คลัง sheet */ }
         return;
       }
-      // The standalone BigSeller order-report export ("รายงานคำสั่งซื้อ", possibly
-      // suffixed e.g. "... ออนไลน์") — a flat one-row-per-day sales sheet, unrelated
-      // to the monthly production tabs. Detected by CONTENT (header keywords), not
-      // by tab name, so a rename never silently drops this data again; the parser
-      // itself returns [] fast for any sheet whose header doesn't match.
-      try {
-        var orderDays = parseOrderReportSheet_(sheet, tz);
-        if (orderDays.length) {
-          orderReportDays = mergeOrderReportDays_(orderReportDays, orderDays);
-          return;
-        }
-      } catch (e4) { /* ignore malformed order-report sheet */ }
+
+      // From here on, every candidate is detected by CONTENT (header keywords) so a
+      // rename never silently drops data — but decided from the cheap `peek` sample
+      // taken above, so only the ONE matching parser ever pays for a full-range read.
+
+      // The standalone BigSeller order-report export — TWO separate tabs, one per
+      // sales channel ("รายงานคำสั่งซื้อ ออนไลน์" / "... ออฟไลน์"), each a flat
+      // one-row-per-day sheet. The channel is read from the name (defaulting to
+      // "online" if neither word appears) so the two tabs' same-dated rows are kept
+      // side by side instead of one silently overwriting the other.
+      if (headerSampleHas_(peek.headerSample, ['วันที่', 'คำสั่งซื้อ'])) {
+        try {
+          var orderChannel = nm.indexOf('ออฟไลน์') !== -1 ? 'offline' : 'online';
+          var orderDays = parseOrderReportSheet_(sheet, tz, orderChannel);
+          if (orderDays.length) orderReportDays = mergeOrderReportDays_(orderReportDays, orderDays);
+        } catch (e4) { /* ignore malformed order-report sheet */ }
+        return;
+      }
+
+      // The offline sheet's CURRENT schema: a per-SKU-per-order manual-sales log
+      // (ร้านค้า/SKU/เวลาสั่งซื้อ), not the daily BigSeller aggregate above.
+      if (headerSampleHas_(peek.headerSample, ['ร้านค้า', 'SKU', 'เวลาสั่งซื้อ'])) {
+        try {
+          var shopSales = parseOfflineManualSalesSheet_(sheet, tz);
+          if (shopSales.length) offlineShopSales = offlineShopSales.concat(shopSales);
+        } catch (e7) { /* ignore malformed offline manual-sales sheet */ }
+        return;
+      }
+
+      // A monthly catch-up total for offline refunds, pulled by hand from BigSeller's
+      // own "รายงานสินค้า > สรุปตาม SKU Merchant" report (group=OFFLINE) — added
+      // 2026-09-04 because the per-order "ยอดคืนเงิน" column on the manual-sales log
+      // isn't realistically getting filled in day-to-day. See
+      // parseOfflineRefundMonthlySheet_'s doc for how this gets folded into
+      // orderReportDays. Detected by header content, not name/tab-order.
+      if (headerSampleHas_(peek.headerSample, ['เดือน', 'ยอดคืนเงินออฟไลน์'])) {
+        try {
+          var refundMonthly = parseOfflineRefundMonthlySheet_(sheet);
+          Object.keys(refundMonthly).forEach(function (m) { offlineRefundMonthly[m] = refundMonthly[m]; });
+        } catch (e9) { /* ignore malformed offline-refund sheet */ }
+        return;
+      }
+
       // The "ปัญหารอแก้" workplace-obstacles log (unstable internet, printer/ink,
-      // PC crashes, ...) — a flat one-row-per-issue sheet. Detected by CONTENT
-      // (header keywords), not tab name, for the same rename-proofing reason as
-      // the order-report sheet above.
-      try {
-        var issues = parseWorkIssuesSheet_(sheet, tz);
-        if (issues.length) {
-          workIssues = workIssues.concat(issues);
-          return;
-        }
-      } catch (e5) { /* ignore malformed work-issues sheet */ }
+      // PC crashes, ...) — a flat one-row-per-issue sheet.
+      if (headerSampleHas_(peek.headerSample, ['รายละเอียดปัญหา', 'ผู้แจ้ง'])) {
+        try {
+          var issues = parseWorkIssuesSheet_(sheet, tz);
+          if (issues.length) workIssues = workIssues.concat(issues);
+        } catch (e5) { /* ignore malformed work-issues sheet */ }
+        return;
+      }
+
       // Otherwise, if its name marks it as the error sheet, read it flat.
       if (nm.indexOf('ผิด') !== -1) {
         try {
@@ -1099,6 +1451,23 @@ function buildDashboardPayload_() {
     return { shop: shop.shop, criteria: Object.keys(shop.criteriaMap).map(function (l) { return shop.criteriaMap[l]; }) };
   });
 
+  // The manual per-SKU offline log has no daily-aggregate rows of its own — derive
+  // them (summed across every shop) and merge into orderReportDays as a fallback
+  // ONLY for dates the native "รายงานคำสั่งซื้อ ออฟไลน์ (BigSeller)" aggregate tab
+  // doesn't cover. Args are ordered so the native tab (already in orderReportDays)
+  // wins on a same-date collision: it carries real subsidy/cancel/discount-code
+  // data the manual log never tracked (see parseOrderReportSheet_).
+  if (offlineShopSales.length) {
+    orderReportDays = mergeOrderReportDays_(offlineShopSalesToOrderDays_(offlineShopSales), orderReportDays);
+  }
+
+  // NOTE: no longer calling applyOfflineRefundMonthly_ here — the native
+  // "รายงานคำสั่งซื้อ ออฟไลน์ (BigSeller)" tab above now supplies a real
+  // per-day refund figure for any month it covers, so re-applying the old
+  // manual monthly lump (from "ชีต1", e.g. August 2026) would double-count
+  // that refund on top of the correct daily one. Keep this note if "ชีต1"
+  // is ever repopulated for a month the native tab doesn't reach yet.
+
   return {
     generatedAt: new Date().toISOString(),
     todayDate: todayDate,
@@ -1113,7 +1482,8 @@ function buildDashboardPayload_() {
     shipErrors: shipErrors,
     receivingWarehouse: receivingWarehouse,
     orderReport: orderReportDays.length ? { days: orderReportDays } : null,
-    workIssues: workIssues
+    workIssues: workIssues,
+    offlineShopSales: offlineShopSales
   };
 }
 

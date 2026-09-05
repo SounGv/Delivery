@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react"
+import { lazy, Suspense, useMemo } from "react"
 import { motion } from "framer-motion"
 import {
   AlertTriangle,
@@ -16,20 +16,29 @@ import {
   Users,
 } from "lucide-react"
 import { useTeamDashboard } from "@/api/queries"
+import type { Employee } from "@/api/types"
+import { useEmployeeDetail } from "@/lib/employeeDetailStore"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { CategoryStatusPanel } from "@/components/charts/CategoryStatusPanel"
+import { EmployeeWorkloadPanel } from "@/components/charts/EmployeeWorkloadPanel"
 import { RecentActivityPanel } from "@/components/dashboard/RecentActivityPanel"
+import { AlertBar } from "@/components/dashboard/AlertBar"
+import { ChartCard } from "@/components/charts/ChartCard"
+import { ReportSection } from "@/components/common/ReportSection"
+import { EmployeeTable } from "@/components/employees/EmployeeTable"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { useSettings, useOtConfig } from "@/lib/settingsContext"
 import { datasetHasTimeData, summaryForDate, summaryForMonth } from "@/lib/ot"
 import { useAnimatedNumber } from "@/lib/useAnimatedNumber"
-import { formatFullDateLabel } from "@/lib/format"
+import { formatDateLabel, formatFullDateLabel } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import {
+  buildFollowUpRows,
   countCategoryEntries,
   datesInMonth,
+  filterEmployeeByDateRange,
   findCategory,
   getTargetAchievementPercent,
   getTeamTotalForDate,
@@ -39,11 +48,11 @@ import {
 
 // ECharts pulls in a large canvas-rendering library; split it into its own
 // chunk so the KPI hero paints immediately while charts stream in behind it.
-const OutputTrendChart = lazy(() =>
-  import("@/components/charts/OutputTrendChart").then((m) => ({ default: m.OutputTrendChart }))
+const BarLineChart = lazy(() =>
+  import("@/components/charts/BarLineChart").then((m) => ({ default: m.BarLineChart }))
 )
-const EmployeeRankingChart = lazy(() =>
-  import("@/components/charts/EmployeeRankingChart").then((m) => ({ default: m.EmployeeRankingChart }))
+const RankTrendChart = lazy(() =>
+  import("@/components/charts/RankTrendChart").then((m) => ({ default: m.RankTrendChart }))
 )
 const ProductivityHeatmap = lazy(() =>
   import("@/components/charts/ProductivityHeatmap").then((m) => ({ default: m.ProductivityHeatmap }))
@@ -167,6 +176,21 @@ export function Dashboard() {
   const { data, isLoading, isError, error } = useTeamDashboard()
   const { targetOverride } = useSettings()
   const otConfig = useOtConfig()
+  const { openEmployeeDetail } = useEmployeeDetail()
+
+  // Hooks must run unconditionally — compute derived data after the null-guards
+  // below only via plain values (no more hooks past this point).
+  const targetPerPerson = targetOverride ?? data?.target?.value ?? null
+  const followUpRows = useMemo(() => (data ? buildFollowUpRows(data, targetPerPerson) : []), [data, targetPerPerson])
+
+  const recentWindow = useMemo(() => {
+    if (!data) return { dates: [] as string[], employees: [] as Employee[] }
+    const sorted = [...data.dates].sort()
+    const dates = sorted.slice(-14)
+    if (dates.length === 0) return { dates, employees: [] as Employee[] }
+    const employees = data.employees.map((e) => filterEmployeeByDateRange(e, dates[0]!, dates[dates.length - 1]!))
+    return { dates, employees }
+  }, [data])
 
   if (isLoading) {
     return <LoadingSkeletonGrid count={8} />
@@ -197,17 +221,21 @@ export function Dashboard() {
   const otToday = summaryForDate(data, data.todayDate, otConfig)
   const otMonth = summaryForMonth(data, monthKey, otConfig)
 
+  const belowTargetCount = followUpRows.filter((r) => r.status === "below-target").length
+
   return (
     <div className="space-y-4">
+      {/* Alert bar — surfaces what needs attention before any number or chart. */}
+      <AlertBar followUpRows={followUpRows} workIssues={data.workIssues} />
+
       {/* Hero: today's output as the focal point + target ring */}
       <div className="grid grid-cols-12 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="glass-panel relative col-span-12 overflow-hidden rounded-2xl p-5 shadow-xl shadow-black/10 lg:col-span-8"
+          className="glass-panel relative col-span-12 overflow-hidden rounded-2xl p-5 lg:col-span-8"
         >
-          <div className="absolute -right-10 -top-10 size-48 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 opacity-20 blur-3xl" />
           <div className="relative">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -222,7 +250,7 @@ export function Dashboard() {
               <span className="pb-1"><TrendBadge value={parcelTrend} /></span>
             </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-4 border-t border-white/10 pt-4">
+            <div className="mt-5 grid grid-cols-3 gap-4 border-t border-border pt-4">
               <HeroStat label="ชิ้นงานวันนี้" value={today.items} suffix="ชิ้น" />
               <div>
                 <p className="text-xs text-muted-foreground">เทรนด์ชิ้นงาน</p>
@@ -237,7 +265,7 @@ export function Dashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.05 }}
-          className="glass-panel col-span-12 flex flex-col items-center justify-center rounded-2xl p-5 shadow-xl shadow-black/10 lg:col-span-4"
+          className="glass-panel col-span-12 flex flex-col items-center justify-center rounded-2xl p-5 lg:col-span-4"
         >
           <div className="mb-3 flex items-center gap-1.5 self-start text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Target className="size-3.5" /> อัตราถึงเป้า
@@ -246,10 +274,11 @@ export function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Monthly summary + quality metrics */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* Monthly summary + quality metrics + below-target headcount */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <KpiCard title="พัสดุเดือนนี้" value={data.monthlyTotals.parcels} icon={CalendarRange} gradient="bg-gradient-to-br from-brand-600 to-brand-700" suffix="พัสดุ" />
         <KpiCard title="ชิ้นงานเดือนนี้" value={data.monthlyTotals.items} icon={PackagePlus} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="ชิ้น" />
+        <KpiCard title="พนักงานต่ำกว่าเป้า" value={belowTargetCount} icon={AlertTriangle} gradient="bg-gradient-to-br from-amber-500 to-destructive" suffix="คน" />
         <KpiCard title="ข้อผิดพลาด (เดือนนี้)" value={errorsThisMonth} icon={AlertTriangle} gradient="bg-gradient-to-br from-rose-500 to-destructive" suffix="รายการ" />
         <KpiCard title="ตีกลับ / CN (เดือนนี้)" value={returnsThisMonth} icon={RotateCcw} gradient="bg-gradient-to-br from-amber-500 to-amber-600" suffix="รายการ" />
       </div>
@@ -268,16 +297,37 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Charts */}
+      {/* Who needs follow-up TODAY — before any ranking, sorted by risk not rank. */}
+      <ReportSection title="ต้องติดตามวันนี้" subtitle="เรียงจากความเสี่ยงสูงไปต่ำ — ไม่ใช่อันดับ #1 ก่อน">
+        <EmployeeTable rows={followUpRows} onRowClick={openEmployeeDetail} searchable emptyMessage="ไม่มีพนักงานในทีมที่เลือก" />
+      </ReportSection>
+
+      {/* Actual vs target + rank trend — the two required Performance-style charts, on page 1. */}
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 lg:col-span-7">
-          <Suspense fallback={<ChartFallback height={300} />}>
-            <OutputTrendChart data={data} />
-          </Suspense>
+          <ChartCard title="ผลงานจริงเทียบเป้า" subtitle="พัสดุ / สินค้า รายวัน เทียบเป้าทีม (ปรับตามจำนวนคนที่ทำงานจริงวันนั้น)">
+            <Suspense fallback={<ChartFallback height={300} />}>
+              <BarLineChart
+                categories={recentWindow.dates.map((d) => formatDateLabel(d))}
+                bars={[
+                  { name: "พัสดุ", data: recentWindow.dates.map((d) => data.teamTotalsByDate[d]?.parcels ?? 0) },
+                  { name: "สินค้า", data: recentWindow.dates.map((d) => data.teamTotalsByDate[d]?.items ?? 0) },
+                ]}
+                line={{
+                  name: "เป้าทีม",
+                  data: recentWindow.dates.map((d) => {
+                    const active = data.teamTotalsByDate[d]?.activeEmployees ?? 0
+                    return targetPerPerson && active > 0 ? targetPerPerson * active : null
+                  }),
+                }}
+                height={300}
+              />
+            </Suspense>
+          </ChartCard>
         </div>
         <div className="col-span-12 lg:col-span-5">
-          <Suspense fallback={<ChartFallback height={320} />}>
-            <EmployeeRankingChart data={data} />
+          <Suspense fallback={<ChartFallback height={300} />}>
+            <RankTrendChart employees={recentWindow.employees} period="day" height={300} />
           </Suspense>
         </div>
 
@@ -292,6 +342,10 @@ export function Dashboard() {
         </div>
         <div className="col-span-12 lg:col-span-5">
           <RecentActivityPanel data={data} />
+        </div>
+
+        <div className="col-span-12">
+          <EmployeeWorkloadPanel data={data} />
         </div>
 
         <div className="col-span-12">

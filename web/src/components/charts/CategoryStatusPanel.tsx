@@ -23,7 +23,12 @@ export function CategoryStatusPanel({ data }: { data: DashboardResponse }) {
       </div>
 
       <div className="space-y-4">
-        {data.categories.map((category) => (
+        {/* "(รายคน)" categories are per-person WORKLOAD counts (e.g. CN cases handled),
+            not a should-be-zero incident tally — a high number there is neutral/good,
+            so they don't belong in this red/green compliance grid. */}
+        {data.categories
+          .filter((category) => !category.title.includes("(รายคน)"))
+          .map((category) => (
           <div key={category.id}>
             <p className="mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               {category.id}. {category.title}

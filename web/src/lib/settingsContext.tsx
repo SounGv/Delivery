@@ -5,6 +5,10 @@ interface SettingsState {
   /** Which crew the production/ranking views focus on. */
   selectedTeam: TeamId
   targetOverride: number | null
+  /** Orders/person/day target for the offline crew — offline is measured by order
+   * count (it's wholesale, not per-parcel like online), so it needs its own target
+   * distinct from targetOverride's parcel unit. */
+  offlineOrderTarget: number | null
   logoDataUrl: string | null
   /** Normal shift start hour (24h) — arrivals before this are not OT. */
   workStartHour: number
@@ -27,6 +31,7 @@ interface SettingsState {
 interface SettingsContextValue extends SettingsState {
   setSelectedTeam: (v: TeamId) => void
   setTargetOverride: (v: number | null) => void
+  setOfflineOrderTarget: (v: number | null) => void
   setLogoDataUrl: (v: string | null) => void
   setWorkStartHour: (v: number) => void
   setWorkEndHour: (v: number) => void
@@ -43,6 +48,7 @@ const STORAGE_KEY = "settings:app"
 const DEFAULTS: SettingsState = {
   selectedTeam: "online",
   targetOverride: null,
+  offlineOrderTarget: null,
   logoDataUrl: null,
   workStartHour: 9,
   workEndHour: 18,
@@ -86,6 +92,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setSelectedTeam = (v: TeamId) => setState((s) => ({ ...s, selectedTeam: v }))
   const setTargetOverride = (v: number | null) => setState((s) => ({ ...s, targetOverride: v }))
+  const setOfflineOrderTarget = (v: number | null) => setState((s) => ({ ...s, offlineOrderTarget: v }))
   const setLogoDataUrl = (v: string | null) => setState((s) => ({ ...s, logoDataUrl: v }))
   const setWorkStartHour = (v: number) => setState((s) => ({ ...s, workStartHour: v }))
   const setWorkEndHour = (v: number) => setState((s) => ({ ...s, workEndHour: v }))
@@ -102,6 +109,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         ...state,
         setSelectedTeam,
         setTargetOverride,
+        setOfflineOrderTarget,
         setLogoDataUrl,
         setWorkStartHour,
         setWorkEndHour,

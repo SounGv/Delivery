@@ -1,15 +1,22 @@
-import { useMemo, useState } from "react"
+import { lazy, Suspense, useMemo, useState } from "react"
 import { AlertTriangle, Boxes, CalendarCheck2, CheckCircle2, Download, PackageCheck, Printer, Target, Trophy, Users } from "lucide-react"
 import { useTeamDashboard } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Button } from "@/components/ui/button"
 import { KpiCard } from "@/components/kpi/KpiCard"
+import { ChartCard } from "@/components/charts/ChartCard"
+import { Skeleton } from "@/components/ui/skeleton"
 import { DateRangePicker } from "@/components/reports/DateRangePicker"
+import { DataSourceStrip } from "@/components/reports/DataSourceStrip"
 import { addDays, filterEmployeeByDateRange, percentChange, rankEmployeesByTotal } from "@/lib/dashboard-selectors"
 import { dateFromIso, formatFullDateLabel, formatMonthLabel, formatNumber } from "@/lib/format"
-import { downloadReportExcel } from "@/lib/exportReportExcel"
+import { downloadReportExcel, type RankingRow } from "@/lib/exportReportExcel"
 import { cn } from "@/lib/utils"
+
+const BarLineChart = lazy(() =>
+  import("@/components/charts/BarLineChart").then((m) => ({ default: m.BarLineChart }))
+)
 
 interface ReportRow {
   date: string
@@ -51,7 +58,7 @@ function summarizeWindow(dates: string[], employees: { name: string; byDate: Rec
 }
 
 export function Reports() {
-  const { data, isLoading, isError, error } = useTeamDashboard()
+  const { data, isLoading, isError, error, isFetching, refetch } = useTeamDashboard()
   const sortedDates = useMemo(() => (data ? [...data.dates].sort() : []), [data])
 
   const [startDate, setStartDate] = useState<string>("")
@@ -80,6 +87,16 @@ export function Reports() {
 
   const totalParcels = rows.reduce((sum, r) => sum + (r.parcels ?? 0), 0)
   const totalItems = rows.reduce((sum, r) => sum + (r.items ?? 0), 0)
+
+  // Daily parcels/items for the BigSeller-style bar+line chart — same `rows`,
+  // just grouped by date instead of by (date, employee).
+  const dailyTotals = new Map<string, { parcels: number; items: number }>()
+  for (const r of rows) {
+    const bucket = dailyTotals.get(r.date) ?? { parcels: 0, items: 0 }
+    bucket.parcels += r.parcels ?? 0
+    bucket.items += r.items ?? 0
+    dailyTotals.set(r.date, bucket)
+  }
   const uniqueDays = new Set(rows.map((r) => r.date)).size
   // Distinct headcount across the WHOLE selected range (people who worked at least once) —
   // over a multi-month range this is much bigger than how many actually show up on any given day.
@@ -115,9 +132,13 @@ export function Reports() {
 
   // Progress-vs-target — the team daily target is derived from the single per-person
   // daily target (set once in Settings) × the REAL average daily headcount, so there
-  // is no separate per-page target to keep in sync.
-  const effectiveTarget = Math.max(50, Math.round(((data.target?.value ?? 350) * (avgActiveEmployeesPerDay || 1)) / 50) * 50)
-  const progressPct = effectiveTarget > 0 ? Math.min(100, Math.max(0, (avgParcelsPerDay / effectiveTarget) * 100)) : 0
+  // is no separate per-page target to keep in sync. No `?? 350` fallback: that number
+  // is the ONLINE team's target — a team without its own numeric target in the sheet
+  // (e.g. offline before one is set) must show "no target", not get silently scored
+  // against the online number.
+  const hasTarget = data.target?.value != null
+  const effectiveTarget = hasTarget ? Math.max(50, Math.round((data.target!.value! * (avgActiveEmployeesPerDay || 1)) / 50) * 50) : null
+  const progressPct = effectiveTarget && effectiveTarget > 0 ? Math.min(100, Math.max(0, (avgParcelsPerDay / effectiveTarget) * 100)) : null
 
   // Top employee is always ranked across the whole team for the selected range, independent of the employee filter above.
   const teamInRange = data.employees.map((e) => filterEmployeeByDateRange(e, effectiveStart, effectiveEnd))
@@ -132,11 +153,11 @@ export function Reports() {
 
   // Staffing check: how many people the current workload actually needs at the per-person daily
   // target, vs. how many actually work on a typical day (not the cumulative roster count) —
-  // so a manager can tell "orders are outgrowing headcount".
-  const targetPerPerson = data.target?.value ?? 350
-  const requiredHeadcount = targetPerPerson > 0 ? Math.ceil((avgParcelsPerDay + avgItemsPerDay) / targetPerPerson) : 0
+  // so a manager can tell "orders are outgrowing headcount". Same no-fallback rule as above.
+  const targetPerPerson = data.target?.value ?? null
+  const requiredHeadcount = targetPerPerson && targetPerPerson > 0 ? Math.ceil((avgParcelsPerDay + avgItemsPerDay) / targetPerPerson) : null
   const currentHeadcount = Math.round(avgActiveEmployeesPerDay)
-  const headcountGap = requiredHeadcount - currentHeadcount
+  const headcountGap = requiredHeadcount !== null ? requiredHeadcount - currentHeadcount : null
 
   const monthlyMap = new Map<string, { parcels: number; items: number; days: Set<string>; employees: Set<string> }>()
   for (const r of rows) {
@@ -165,27 +186,38 @@ export function Reports() {
       { label: "สินค้าเฉลี่ย/วัน", value: Math.round(avgItemsPerDay) },
       { label: "พัสดุเฉลี่ย/คน/วัน", value: Math.round(avgParcelsPerPersonPerDay) },
       { label: "สินค้าเฉลี่ย/คน/วัน", value: Math.round(avgItemsPerPersonPerDay) },
-      { label: "เป้าพัสดุ/วัน", value: effectiveTarget },
-      { label: "Progress เทียบเป้า (%)", value: Number(progressPct.toFixed(1)) },
+      { label: "เป้าพัสดุ/วัน", value: effectiveTarget ?? "ไม่มีเป้าต่อคนสำหรับฝ่ายนี้ในชีท" },
+      { label: "Progress เทียบเป้า (%)", value: progressPct !== null ? Number(progressPct.toFixed(1)) : "-" },
       { label: "พนักงานยอดเยี่ยม", value: topEmployee?.name ?? "-" },
       { label: "พนักงานยอดเยี่ยม - พัสดุ", value: topEmployee?.totalParcels ?? 0 },
       { label: "พนักงานยอดเยี่ยม - สินค้า", value: topEmployee?.totalItems ?? 0 },
       { label: "พนักงานยอดเยี่ยม - สัดส่วนของทีม (%)", value: Number(topSharePct.toFixed(1)) },
-      { label: "พนักงานที่ต้องการตามเป้า (คน)", value: requiredHeadcount },
+      { label: "พนักงานที่ต้องการตามเป้า (คน)", value: requiredHeadcount ?? "ไม่มีเป้าต่อคนสำหรับฝ่ายนี้ในชีท" },
       { label: "พนักงานที่ทำงานจริงเฉลี่ย/วัน (ปัดเศษ)", value: currentHeadcount },
-      { label: "ส่วนต่างกำลังคน (บวก = ขาด, ลบ = เกิน)", value: headcountGap },
+      { label: "ส่วนต่างกำลังคน (บวก = ขาด, ลบ = เกิน)", value: headcountGap ?? "-" },
     ]
     const staffing = {
-      ok: headcountGap <= 0,
+      ok: headcountGap === null || headcountGap <= 0,
       message:
-        headcountGap > 0
-          ? `ขาดพนักงาน ${headcountGap} คน — ออเดอร์มากกว่ากำลังคนที่มี`
-          : headcountGap === 0
-            ? "กำลังคนพอดีกับปริมาณงาน"
-            : `กำลังคนเพียงพอ (เกินความจำเป็น ${-headcountGap} คน)`,
+        headcountGap === null
+          ? "ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีท — ไม่สามารถคำนวณกำลังคนที่ควรใช้ได้"
+          : headcountGap > 0
+            ? `ขาดพนักงาน ${headcountGap} คน — ออเดอร์มากกว่ากำลังคนที่มี`
+            : headcountGap === 0
+              ? "กำลังคนพอดีกับปริมาณงาน"
+              : `กำลังคนเพียงพอ (เกินความจำเป็น ${-headcountGap} คน)`,
     }
     const period = `${effectiveStart} ถึง ${effectiveEnd}`
     const employeeLabel = employeeFilter === "all" ? "ทั้งหมด" : employeeFilter
+    // Share % is based on parcels — the same metric `rank` is sorted by — so every
+    // row's %, bar, and position agree with each other in the exported ranking sheet.
+    const ranking: RankingRow[] = teamRanking.map((e) => ({
+      rank: e.rank,
+      name: e.name,
+      parcels: e.totalParcels,
+      items: e.totalItems,
+      sharePct: teamTotalParcels > 0 ? (e.totalParcels / teamTotalParcels) * 100 : 0,
+    }))
 
     if (view === "month") {
       downloadReportExcel({
@@ -197,9 +229,14 @@ export function Reports() {
         tableTitle: "รายเดือน",
         tableHeaders: ["เดือน", "พัสดุ", "สินค้า", "จำนวนวันทำงาน", "จำนวนพนักงาน"],
         tableRows: monthlyRows.map((m) => [formatMonthLabel(m.month), m.parcels, m.items, m.activeDays, m.employeeCount]),
+        ranking,
       })
       return
     }
+    // A wide range spans several months — split the export into one sheet per month
+    // (each with its own subtotal) instead of one flat block, so it reads month-by-month
+    // instead of as an undifferentiated wall of rows.
+    const distinctMonths = new Set(rows.map((r) => r.date.slice(0, 7))).size
     downloadReportExcel({
       filename: `warehouse-report_${effectiveStart}_${effectiveEnd}.xlsx`,
       period,
@@ -209,11 +246,32 @@ export function Reports() {
       tableTitle: "รายวัน",
       tableHeaders: ["วันที่", "พนักงาน", "พัสดุ", "สินค้า"],
       tableRows: rows.map((r) => [r.date, r.employee, r.parcels ?? "", r.items ?? ""]),
+      groupBy:
+        distinctMonths > 1
+          ? {
+              keyColumnIndex: 0,
+              keyOf: (raw) => String(raw).slice(0, 7),
+              labelOf: (key) => formatMonthLabel(key),
+              sumColumnIndexes: [2, 3],
+              sumColumnHeaders: ["พัสดุ", "สินค้า"],
+            }
+          : undefined,
+      ranking,
     })
   }
 
   return (
     <div className="space-y-4">
+      <DataSourceStrip
+        isFetching={isFetching}
+        isError={isError}
+        generatedAt={data.generatedAt}
+        sheetLabel="รายงานพัสดุ (ผลิต/ผลงาน)"
+        period={`${effectiveStart} ถึง ${effectiveEnd}`}
+        teamLabel={employeeFilter === "all" ? "ทั้งหมด" : employeeFilter}
+        onRefresh={() => refetch()}
+      />
+
       <div className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">
         <div>
           <label className="block text-[11px] text-muted-foreground">ช่วงวันที่</label>
@@ -321,36 +379,49 @@ export function Reports() {
         />
       </div>
 
+      <ChartCard title="ผลงานรายวัน" subtitle="พัสดุ / สินค้า รายวัน — ให้เห็นภาพรวมก่อนลงตารางละเอียด">
+        <Suspense fallback={<Skeleton className="h-72 rounded-2xl" />}>
+          <BarLineChart
+            categories={filteredDates.map((d) => formatFullDateLabel(d))}
+            bars={[{ name: "พัสดุ", data: filteredDates.map((d) => dailyTotals.get(d)?.parcels ?? 0) }]}
+            line={{ name: "สินค้า", data: filteredDates.map((d) => dailyTotals.get(d)?.items ?? null) }}
+            height={280}
+          />
+        </Suspense>
+      </ChartCard>
+
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="glass-panel rounded-2xl p-4">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Target className="size-4 text-brand-400" /> Progress เป้าพัสดุ/วัน
-            </h3>
-            <span className="text-[11px] text-muted-foreground">
-              เป้า {formatNumber(effectiveTarget)} พัสดุ/วัน ({targetPerPerson}/คน × {currentHeadcount} คน · ตั้งที่หน้า Settings)
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            ปัจจุบัน {formatNumber(Math.round(avgParcelsPerDay))} / เป้า {formatNumber(effectiveTarget)} พัสดุ/วัน
-          </p>
-          <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                progressPct >= 100 ? "bg-emerald-glow" : progressPct >= 80 ? "bg-amber-500" : "bg-destructive"
-              )}
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          <p
-            className={cn(
-              "mt-1 text-xs font-semibold",
-              progressPct >= 100 ? "text-emerald-glow" : progressPct >= 80 ? "text-amber-500" : "text-destructive"
-            )}
-          >
-            {progressPct.toFixed(1)}%
-          </p>
+          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <Target className="size-4 text-brand-400" /> Progress เป้าพัสดุ/วัน
+          </h3>
+          {hasTarget && effectiveTarget !== null && progressPct !== null ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                ปัจจุบัน {formatNumber(Math.round(avgParcelsPerDay))} / เป้า {formatNumber(effectiveTarget)} พัสดุ/วัน ({targetPerPerson}/คน ×{" "}
+                {currentHeadcount} คน · ตั้งที่หน้า Settings)
+              </p>
+              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    progressPct >= 100 ? "bg-emerald-glow" : progressPct >= 80 ? "bg-amber-500" : "bg-destructive"
+                  )}
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <p
+                className={cn(
+                  "mt-1 text-xs font-semibold",
+                  progressPct >= 100 ? "text-emerald-glow" : progressPct >= 80 ? "text-amber-500" : "text-destructive"
+                )}
+              >
+                {progressPct.toFixed(1)}%
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีท — แสดงได้เฉพาะยอดงานจริง</p>
+          )}
         </div>
 
         <KpiCard
@@ -370,24 +441,38 @@ export function Reports() {
           <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <Users className="size-4 text-brand-400" /> วิเคราะห์กำลังคน
           </h3>
-          <p className="text-xs text-muted-foreground">
-            ปริมาณงานเฉลี่ย {formatNumber(Math.round(avgParcelsPerDay + avgItemsPerDay))} รายการ/วัน ต้องการพนักงานประมาณ{" "}
-            <span className="font-semibold text-foreground">{requiredHeadcount} คน</span> (เป้า {targetPerPerson}/คน/วัน) · เฉลี่ยที่ทำงานจริง{" "}
-            <span className="font-semibold text-foreground">{currentHeadcount} คน/วัน</span> (สะสมทั้งช่วง {formatNumber(uniqueEmployees)} คน)
-          </p>
-          <div
-            className={cn(
-              "mt-3 flex items-center gap-2 rounded-xl p-2.5 text-sm font-semibold",
-              headcountGap > 0 ? "bg-destructive/15 text-destructive" : "bg-emerald-glow/15 text-emerald-glow"
-            )}
-          >
-            {headcountGap > 0 ? <AlertTriangle className="size-4 shrink-0" /> : <CheckCircle2 className="size-4 shrink-0" />}
-            {headcountGap > 0
-              ? `ขาดพนักงาน ${headcountGap} คน — ออเดอร์มากกว่ากำลังคนที่มี`
-              : headcountGap === 0
-                ? "กำลังคนพอดีกับปริมาณงาน"
-                : `กำลังคนเพียงพอ (เกินความจำเป็น ${-headcountGap} คน)`}
-          </div>
+          {requiredHeadcount !== null && targetPerPerson !== null && headcountGap !== null ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                ปริมาณงานเฉลี่ย {formatNumber(Math.round(avgParcelsPerDay + avgItemsPerDay))} รายการ/วัน ต้องการพนักงานประมาณ{" "}
+                <span className="font-semibold text-foreground">{requiredHeadcount} คน</span> (เป้า {targetPerPerson}/คน/วัน) · เฉลี่ยที่ทำงานจริง{" "}
+                <span className="font-semibold text-foreground">{currentHeadcount} คน/วัน</span> (สะสมทั้งช่วง {formatNumber(uniqueEmployees)} คน)
+              </p>
+              <div
+                className={cn(
+                  "mt-3 flex items-center gap-2 rounded-xl p-2.5 text-sm font-semibold",
+                  headcountGap > 0 ? "bg-destructive/15 text-destructive" : "bg-emerald-glow/15 text-emerald-glow"
+                )}
+              >
+                {headcountGap > 0 ? <AlertTriangle className="size-4 shrink-0" /> : <CheckCircle2 className="size-4 shrink-0" />}
+                {headcountGap > 0
+                  ? `ขาดพนักงาน ${headcountGap} คน — ออเดอร์มากกว่ากำลังคนที่มี`
+                  : headcountGap === 0
+                    ? "กำลังคนพอดีกับปริมาณงาน"
+                    : `กำลังคนเพียงพอ (เกินความจำเป็น ${-headcountGap} คน)`}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                ปริมาณงานเฉลี่ย {formatNumber(Math.round(avgParcelsPerDay + avgItemsPerDay))} รายการ/วัน · เฉลี่ยที่ทำงานจริง{" "}
+                <span className="font-semibold text-foreground">{currentHeadcount} คน/วัน</span> (สะสมทั้งช่วง {formatNumber(uniqueEmployees)} คน)
+              </p>
+              <div className="mt-3 flex items-center gap-2 rounded-xl bg-sky-500/15 p-2.5 text-sm font-semibold text-sky-400">
+                ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีท — ไม่สามารถคำนวณกำลังคนที่ควรใช้ได้
+              </div>
+            </>
+          )}
         </div>
       </div>
 

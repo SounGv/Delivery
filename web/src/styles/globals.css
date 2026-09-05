@@ -5,11 +5,12 @@
 @theme {
   --font-sans: "Inter", "Noto Sans Thai", system-ui, -apple-system, sans-serif;
 
-  --color-brand-50: #eff6ff;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
+  /* Mosaic-inspired violet accent (cruip/tailwind-dashboard-template palette). */
+  --color-brand-50: #f1eeff;
+  --color-brand-400: #9c8cff;
+  --color-brand-500: #8470ff;
+  --color-brand-600: #755ff8;
+  --color-brand-700: #5d47de;
 
   --color-emerald-glow: #10b981;
   --color-slate-base: #0f172a;
@@ -55,62 +56,64 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --radius: 0.75rem;
+    /* Flat business-report radius (spec: 4-8px), not the previous rounded-card look. */
+    --radius: 0.5rem;
 
-    --bg-base: #05070f;
-    --bg-elevated: #0b0f1c;
-    --surface-glass: rgba(255, 255, 255, 0.05);
-    --surface-glass-border: rgba(255, 255, 255, 0.09);
+    --bg-base: #0b0f17;
+    --bg-elevated: #111827;
+    --surface-glass: #111827;
+    --surface-glass-border: #1f2937;
     --text-primary: #f1f5f9;
     --text-muted: #94a3b8;
 
-    --background: #05070f;
+    --background: #0b0f17;
     --foreground: #f1f5f9;
-    --card: rgba(15, 23, 42, 0.55);
+    --card: #111827;
     --card-foreground: #f1f5f9;
-    --popover: #0b0f1c;
+    --popover: #111827;
     --popover-foreground: #f1f5f9;
-    --primary: #3b82f6;
+    --primary: #755ff8;
     --primary-foreground: #f8fafc;
-    --secondary: rgba(255, 255, 255, 0.06);
+    --secondary: #1f2937;
     --secondary-foreground: #e2e8f0;
-    --muted: rgba(255, 255, 255, 0.05);
+    --muted: #1f2937;
     --muted-foreground: #94a3b8;
     --accent: rgba(16, 185, 129, 0.14);
     --accent-foreground: #6ee7b7;
     --destructive: #f87171;
-    --border: rgba(255, 255, 255, 0.09);
-    --input: rgba(255, 255, 255, 0.08);
-    --ring: rgba(59, 130, 246, 0.6);
+    --border: #1f2937;
+    --input: #1f2937;
+    --ring: rgba(117, 95, 248, 0.6);
   }
 
   :root.light {
     color-scheme: light;
-    --bg-base: #f4f6fb;
+    /* BigSeller-style flat business report: light-grey page, opaque white cards, thin grey borders. */
+    --bg-base: #f3f4f6;
     --bg-elevated: #ffffff;
-    --surface-glass: rgba(255, 255, 255, 0.7);
-    --surface-glass-border: rgba(15, 23, 42, 0.08);
-    --text-primary: #0f172a;
-    --text-muted: #475569;
+    --surface-glass: #ffffff;
+    --surface-glass-border: #e5e7eb;
+    --text-primary: #111827;
+    --text-muted: #6b7280;
 
-    --background: #f4f6fb;
-    --foreground: #0f172a;
-    --card: rgba(255, 255, 255, 0.75);
-    --card-foreground: #0f172a;
+    --background: #f3f4f6;
+    --foreground: #111827;
+    --card: #ffffff;
+    --card-foreground: #111827;
     --popover: #ffffff;
-    --popover-foreground: #0f172a;
-    --primary: #2563eb;
+    --popover-foreground: #111827;
+    --primary: #755ff8;
     --primary-foreground: #f8fafc;
-    --secondary: rgba(15, 23, 42, 0.05);
+    --secondary: #f3f4f6;
     --secondary-foreground: #1e293b;
-    --muted: rgba(15, 23, 42, 0.04);
-    --muted-foreground: #64748b;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
     --accent: rgba(16, 185, 129, 0.12);
     --accent-foreground: #047857;
     --destructive: #dc2626;
-    --border: rgba(15, 23, 42, 0.08);
-    --input: rgba(15, 23, 42, 0.08);
-    --ring: rgba(37, 99, 235, 0.5);
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: rgba(117, 95, 248, 0.5);
   }
 
   html, body, #root {
@@ -119,10 +122,7 @@
 
   body {
     margin: 0;
-    background:
-      radial-gradient(1200px 600px at 10% -10%, color-mix(in srgb, var(--color-brand-600) 18%, transparent), transparent),
-      radial-gradient(900px 500px at 100% 0%, color-mix(in srgb, var(--color-emerald-glow) 12%, transparent), transparent),
-      var(--bg-base);
+    background: var(--bg-base);
     color: var(--text-primary);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -131,10 +131,8 @@
 
 @layer components {
   .glass-panel {
-    background: var(--surface-glass);
-    border: 1px solid var(--surface-glass-border);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: var(--card);
+    border: 1px solid var(--border);
   }
 
   .rdp-theme {
@@ -159,6 +157,14 @@
 * {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent;
+}
+
+/* Flat business-report corner radius everywhere `.glass-panel` cards use rounded-2xl/rounded-xl —
+   deliberately unlayered so it wins over Tailwind's generated utility layer without touching
+   every page's className. rounded-full (avatars/badges) is untouched. */
+.rounded-2xl,
+.rounded-xl {
+  border-radius: 8px;
 }
 
 @media print {

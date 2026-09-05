@@ -1,7 +1,9 @@
 import { lazy, Suspense, useMemo, useState } from "react"
 import { Boxes, Download, PackageCheck, CalendarCheck2, Search, TrendingUp, Trophy, Users } from "lucide-react"
 import { useTeamDashboard } from "@/api/queries"
+import { useSettings } from "@/lib/settingsContext"
 import { KpiCard } from "@/components/kpi/KpiCard"
+import { EmployeeRoleRoster } from "@/components/employees/EmployeeRoleRoster"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -25,8 +27,8 @@ import { cn } from "@/lib/utils"
 const EmployeeTrendChart = lazy(() =>
   import("@/components/employees/EmployeeTrendChart").then((m) => ({ default: m.EmployeeTrendChart }))
 )
-const RankingTrendChart = lazy(() =>
-  import("@/components/employees/RankingTrendChart").then((m) => ({ default: m.RankingTrendChart }))
+const RankTrendChart = lazy(() =>
+  import("@/components/charts/RankTrendChart").then((m) => ({ default: m.RankTrendChart }))
 )
 const EmployeeRankingTop10Chart = lazy(() =>
   import("@/components/employees/EmployeeRankingTop10Chart").then((m) => ({ default: m.EmployeeRankingTop10Chart }))
@@ -46,6 +48,7 @@ function labelFor(key: string, period: ReportPeriod): string {
 
 export function Employees() {
   const { data, isLoading, isError, error } = useTeamDashboard()
+  const { selectedTeam } = useSettings()
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [period, setPeriod] = useState<ReportPeriod>("day")
   const [startDate, setStartDate] = useState<string>("")
@@ -178,6 +181,8 @@ export function Employees() {
         </div>
       </div>
 
+      {selectedTeam === "offline" && <EmployeeRoleRoster />}
+
       <div>
         <h3 className="mb-2 flex items-center gap-1.5 px-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           <Users className="size-3.5" /> ผลรวมทั้งทีม (ช่วงที่เลือก)
@@ -255,7 +260,7 @@ export function Employees() {
         </Suspense>
         {!isAllSelected && (
           <Suspense fallback={<Skeleton className="h-80 rounded-2xl" />}>
-            <RankingTrendChart employees={filteredEmployees} selectedName={employee.name} period={period} />
+            <RankTrendChart employees={filteredEmployees} highlightName={employee.name} period={period} title="Ranking Trend" />
           </Suspense>
         )}
       </div>
@@ -311,7 +316,11 @@ export function Employees() {
           </thead>
           <tbody>
             {searchedRanking.map((r) => (
-              <tr key={r.name} className="border-b border-white/5 last:border-0">
+              <tr
+                key={r.name}
+                className="cursor-pointer border-b border-white/5 last:border-0 hover:bg-muted/40"
+                onClick={() => setSelectedName(r.name)}
+              >
                 <td className="py-2 text-muted-foreground">#{r.rank}</td>
                 <td className="py-2 text-foreground">{r.name}</td>
                 <td className="py-2 text-muted-foreground">{formatNumber(r.totalParcels)}</td>

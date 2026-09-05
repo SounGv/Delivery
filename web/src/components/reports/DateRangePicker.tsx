@@ -88,7 +88,7 @@ export function DateRangePicker({ start, end, minDate, maxDate, today, onChange 
                 type="button"
                 onClick={() => handlePreset(p)}
                 className={cn(
-                  "shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                  "shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-sm font-medium transition-colors",
                   isActivePreset(p) ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
                 )}
               >
@@ -99,7 +99,7 @@ export function DateRangePicker({ start, end, minDate, maxDate, today, onChange 
           <div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <div>
-                <p className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">เดือนเริ่มต้น</p>
+                <p className="mb-1 px-1 text-xs font-medium text-muted-foreground">เดือนเริ่มต้น</p>
                 <Calendar
                   mode="range"
                   numberOfMonths={1}
@@ -113,7 +113,7 @@ export function DateRangePicker({ start, end, minDate, maxDate, today, onChange 
                 />
               </div>
               <div>
-                <p className="mb-1 px-1 text-[11px] font-medium text-muted-foreground">เดือนสิ้นสุด</p>
+                <p className="mb-1 px-1 text-xs font-medium text-muted-foreground">เดือนสิ้นสุด</p>
                 <Calendar
                   mode="range"
                   numberOfMonths={1}
@@ -128,7 +128,7 @@ export function DateRangePicker({ start, end, minDate, maxDate, today, onChange 
               </div>
             </div>
             {selected.from && !selected.to && (
-              <p className="mt-1 px-1 text-[11px] text-muted-foreground">เลือกวันสิ้นสุด...</p>
+              <p className="mt-1 px-1 text-xs text-muted-foreground">เลือกวันสิ้นสุด...</p>
             )}
           </div>
         </div>

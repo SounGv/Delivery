@@ -5,6 +5,8 @@ import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { getPreviousDate, getTeamTotalForDate, percentChange, rankEmployeesForDate } from "@/lib/dashboard-selectors"
+import { hasNoPrimaryParcelTarget } from "@/lib/employeeRoles"
+import { useEmployeeDetail } from "@/lib/employeeDetailStore"
 import { formatDateLabel, formatNumber, formatTime } from "@/lib/format"
 import { initialsOf } from "@/lib/avatar"
 import { cn } from "@/lib/utils"
@@ -28,6 +30,7 @@ function progressTone(pct: number): { bar: string; text: string; label: string }
 
 export function LiveWarehouse() {
   const { data, isLoading, isError, error } = useTeamDashboard()
+  const { openEmployeeDetail } = useEmployeeDetail()
 
   if (isLoading) return <LoadingSkeletonGrid count={4} />
   if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
@@ -104,7 +107,7 @@ export function LiveWarehouse() {
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {ranking.map((r, idx) => {
           const rank = idx + 1
-          const rawPct = target ? (((r.parcels ?? 0) + (r.items ?? 0)) / target) * 100 : null
+          const rawPct = target && !hasNoPrimaryParcelTarget(r.name) ? (((r.parcels ?? 0) + (r.items ?? 0)) / target) * 100 : null
           const tone = rawPct !== null ? progressTone(rawPct) : null
 
           return (
@@ -113,7 +116,8 @@ export function LiveWarehouse() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: idx * 0.03 }}
-              className="glass-panel flex flex-col gap-2 rounded-xl p-3"
+              className="glass-panel flex cursor-pointer flex-col gap-2 rounded-xl p-3 transition-colors hover:bg-muted/40"
+              onClick={() => openEmployeeDetail(r.name)}
             >
               <div className="flex items-center gap-2.5">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-emerald-glow text-xs font-semibold text-white">
@@ -148,7 +152,11 @@ export function LiveWarehouse() {
         })}
 
         {idle.map((e) => (
-          <div key={e.name} className="glass-panel flex items-center gap-2.5 rounded-xl p-3 opacity-50">
+          <div
+            key={e.name}
+            className="glass-panel flex cursor-pointer items-center gap-2.5 rounded-xl p-3 opacity-50 transition-colors hover:bg-muted/40 hover:opacity-80"
+            onClick={() => openEmployeeDetail(e.name)}
+          >
             <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-muted-foreground">
               {initialsOf(e.name)}
             </div>

@@ -40,20 +40,18 @@ export function KpiCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -3 }}
-      transition={{ duration: 0.35 }}
-      className="glass-panel relative overflow-hidden rounded-2xl p-4 shadow-xl shadow-black/10"
+      transition={{ duration: 0.25 }}
+      className="glass-panel rounded-2xl p-4"
     >
-      <div className={cn("absolute -right-6 -top-6 size-24 rounded-full opacity-20 blur-2xl", gradient)} />
-      <div className="relative flex items-start justify-between">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-muted-foreground">{title}</p>
+          <p className="truncate text-sm font-medium text-muted-foreground">{title}</p>
           {loading ? (
             <Skeleton className="mt-2 h-8 w-24" />
           ) : (
-            <p className="mt-1 truncate text-2xl font-bold tabular-nums text-foreground md:text-3xl">
+            <p className="mt-1 truncate text-2xl font-bold tabular-nums text-foreground">
               {valueText !== undefined
                 ? valueText
                 : value === null
@@ -67,20 +65,24 @@ export function KpiCard({
           {trend && (
             <p
               className={cn(
-                "mt-1 flex items-center gap-1 text-[11px] font-medium",
+                "mt-1.5 flex items-center gap-1 text-sm font-medium",
                 trend.value >= 0 ? "text-emerald-glow" : "text-destructive"
               )}
             >
-              {trend.value >= 0 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}
+              {trend.value >= 0 ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
               {Math.abs(trend.value).toFixed(1)}% {trend.label ?? "เทียบเมื่อวาน"}
             </p>
           )}
-          {subtitle && <p className="mt-1 truncate text-[11px] text-muted-foreground">{subtitle}</p>}
+          {subtitle && <p className="mt-1.5 truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl text-white shadow-lg", gradient)}>
-          <Icon className="size-5" />
+        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg text-white", gradient)}>
+          <Icon className="size-4.5" />
         </div>
       </div>
     </motion.div>
   )
 }
+
+/** Alias — the redesign spec names this component `MetricCard`; same component,
+ * no duplicate implementation. */
+export { KpiCard as MetricCard }

@@ -31,12 +31,12 @@ const OtReportCharts = lazy(() => import("@/components/ot/OtReportCharts").then(
 const OT_TYPES: OtType[] = ["OT_AFTER_WORK", "OT_ON_DAY_OFF", "WORKED_ON_DAY_OFF"]
 const OT_STATUSES: OtApprovalStatus[] = ["PENDING", "APPROVED", "REJECTED"]
 
-export function OtReport() {
+export function OtReport({ defaultDepartment }: { defaultDepartment?: string } = {}) {
   const { data, isLoading, isError, error } = useDashboardQuery()
   const otConfig = useOtConfig()
   const approvals = useOtApprovals()
   const [month, setMonth] = useState("all")
-  const [department, setDepartment] = useState(ALL_DEPARTMENTS)
+  const [department, setDepartment] = useState(defaultDepartment ?? ALL_DEPARTMENTS)
   const [employee, setEmployee] = useState("all")
   const [otType, setOtType] = useState<OtType | "all">("all")
   const [status, setStatus] = useState<OtApprovalStatus | "all">("all")

@@ -5,11 +5,14 @@ import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Skeleton } from "@/components/ui/skeleton"
-import { collectIncidents, countIncidentsByCategory, datesInMonth, monthKeyOf } from "@/lib/dashboard-selectors"
-import { formatDateLabel } from "@/lib/format"
+import { collectIncidents, countIncidentsByCategory, datesInMonth, incidentsByMonthAndCategory, monthKeyOf } from "@/lib/dashboard-selectors"
+import { formatDateLabel, formatMonthLabel, formatNumber } from "@/lib/format"
 
 const ErrorsByCategoryChart = lazy(() =>
   import("@/components/errors/ErrorsByCategoryChart").then((m) => ({ default: m.ErrorsByCategoryChart }))
+)
+const CategoryIncidentTrendChart = lazy(() =>
+  import("@/components/analytics/CategoryIncidentTrendChart").then((m) => ({ default: m.CategoryIncidentTrendChart }))
 )
 
 export function Errors() {
@@ -24,6 +27,17 @@ export function Errors() {
   const incidentsThisMonth = incidents.filter((i) => monthSet.has(i.date)).length
   const categoryCounts = countIncidentsByCategory(incidents)
   const latestIncidentDate = incidents[0]?.date
+
+  // Per-month totals — same month x category pivot the trend chart uses, summed
+  // across categories, newest month first, so "how many cases this month" reads
+  // straight off a table instead of only estimating it from a stacked bar.
+  const monthlyTrend = incidentsByMonthAndCategory(incidents)
+  const monthlyTotals = monthlyTrend.months
+    .map((month, idx) => ({
+      month,
+      total: monthlyTrend.categories.reduce((sum, c) => sum + (monthlyTrend.seriesByCategory[c.id]?.[idx] ?? 0), 0),
+    }))
+    .reverse()
 
   return (
     <div className="space-y-4">
@@ -44,6 +58,34 @@ export function Errors() {
         <Suspense fallback={<Skeleton className="h-60 rounded-2xl" />}>
           <ErrorsByCategoryChart counts={categoryCounts} />
         </Suspense>
+      )}
+
+      {monthlyTrend.months.length > 0 && (
+        <Suspense fallback={<Skeleton className="h-80 rounded-2xl" />}>
+          <CategoryIncidentTrendChart trend={monthlyTrend} />
+        </Suspense>
+      )}
+
+      {monthlyTotals.length > 0 && (
+        <div className="glass-panel overflow-x-auto rounded-2xl p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">สรุปรายเดือน</h3>
+          <table className="w-full min-w-[280px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border text-xs text-muted-foreground">
+                <th className="pb-2 font-medium">เดือน</th>
+                <th className="pb-2 font-medium">รายการผิดปกติ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthlyTotals.map((m) => (
+                <tr key={m.month} className="border-b border-white/5 last:border-0">
+                  <td className="py-2 text-foreground">{formatMonthLabel(m.month)}</td>
+                  <td className="py-2 text-muted-foreground">{formatNumber(m.total)} รายการ</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">

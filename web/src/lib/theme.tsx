@@ -13,7 +13,9 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 function readInitialTheme(): Theme {
   const stored = localStorage.getItem(STORAGE_KEY)
-  return stored === "light" ? "light" : "dark"
+  // Default to the light business-report look for anyone without a stored
+  // preference; a stored "dark" choice is still honored.
+  return stored === "dark" ? "dark" : "light"
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
