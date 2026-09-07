@@ -216,6 +216,71 @@ export interface DashboardResponse {
    * "offline" channel in orderReport, plus the only place with cost/gross-profit
    * data and a per-shop breakdown. Optional: absent until the parser is redeployed. */
   offlineShopSales?: OfflineShopDay[]
+  /** BigSeller work-performance import (see WorkPerformance's doc). Optional/null
+   * until both the raw export tab and its name/department mapping tab exist. */
+  workPerformance?: WorkPerformance | null
+}
+
+/** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)
+ * export column names — see WORK_PERFORMANCE_COLUMNS_ in apps-script/SheetParser.js
+ * for the exact header-to-key mapping. */
+export interface WorkPerformanceMetrics {
+  manageOrders: number
+  printLabel: number
+  printPickList: number
+  pdaPick: number
+  ship: number
+  printInvoice: number
+  pickWaveCount: number
+  pickParcels: number
+  pickSku: number
+  scanPhotoOrders: number
+  scanPhotoMessages: number
+  sortWaveCount: number
+  sortParcels: number
+  sortSku: number
+  packWaveCount: number
+  packParcels: number
+  packSku: number
+  inspectWaveCount: number
+  inspectParcels: number
+  inspectSku: number
+  pickSingleSkuSingleQty: number
+  pickSingleSkuMultiQty: number
+  pickMultiSku: number
+  sortSingleSkuSingleQty: number
+  sortSingleSkuMultiQty: number
+  sortMultiSku: number
+  packSingleSkuSingleQty: number
+  packSingleSkuMultiQty: number
+  packMultiSku: number
+}
+
+/** One BigSeller operator, joined against the "รายชื่อพนักงาน (BigSeller)"
+ * name/department mapping tab. */
+export interface WorkPerformanceEmployee {
+  /** BigSeller username, e.g. "st_ooh@UJR3123225". */
+  operator: string
+  name: string
+  /** ออนไลน์ / ออฟไลน์ / คลัง / แอดมิน — exactly as entered in the mapping tab. */
+  department: string
+  byDate: Record<string, WorkPerformanceMetrics>
+  totals: WorkPerformanceMetrics
+}
+
+/**
+ * New, standalone BigSeller work-performance import — pulled on-demand from
+ * BigSeller's own "รายงานผลการทำงาน" report (not the legacy manually-typed
+ * employee sheets). Deliberately kept separate from `employees`/`teamTotalsByDate`
+ * per explicit instruction, so the two can be compared before anyone decides to
+ * retire the old manual entry. Optional/null until both BigSeller tabs exist.
+ */
+export interface WorkPerformance {
+  dates: string[]
+  employees: WorkPerformanceEmployee[]
+  /** BigSeller usernames found in the raw export but missing from the mapping
+   * tab — surfaced instead of silently dropped, so a new account gets noticed. */
+  unmapped: string[]
 }
 
 export interface ApiErrorResponse {

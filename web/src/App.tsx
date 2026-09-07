@@ -12,6 +12,7 @@ import { OtHr } from "@/pages/OtHr"
 import { ReceivingWarehouse } from "@/pages/ReceivingWarehouse"
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
+import { WorkPerformance } from "@/pages/WorkPerformance"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
@@ -33,6 +34,7 @@ const PAGES: Record<string, React.ComponentType> = {
   "team-offline": OfflineTeamPage,
   "sales-summary": SalesSummary,
   "work-issues": WorkIssues,
+  "work-performance": WorkPerformance,
   settings: Settings,
   // legacy aliases -> original standalone pages (no longer in the main nav)
   live: LiveWarehouse,

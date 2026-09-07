@@ -1215,6 +1215,200 @@ function headerSampleHas_(headerSample, keywords) {
   return false;
 }
 
+/**
+ * Column order/meaning of the BigSeller "รายงานผลการทำงาน" (work-performance)
+ * export, as pasted verbatim into the "ผลงานพนักงาน (BigSeller)" tab — matched
+ * by EXACT trimmed header text (not substring: several headers share long
+ * common prefixes like "จำนวนพัสดุที่หยิบ" vs "...ที่คัดแยก" vs "...ที่แพ็ก",
+ * so substring matching would be ambiguous here unlike the other parsers in
+ * this file).
+ */
+var WORK_PERFORMANCE_COLUMNS_ = [
+  { header: 'จัดการคำสั่งซื้อ', key: 'manageOrders' },
+  { header: 'พิมพ์ใบปะหน้า', key: 'printLabel' },
+  { header: 'พิมพ์ Pick List', key: 'printPickList' },
+  { header: 'PDA หยิบของ', key: 'pdaPick' },
+  { header: 'จัดส่ง', key: 'ship' },
+  { header: 'พิมพ์ใบแจ้งหนี้', key: 'printInvoice' },
+  { header: 'จำนวน Wave ที่หยิบ', key: 'pickWaveCount' },
+  { header: 'จำนวนรวมพัสดุที่หยิบ', key: 'pickParcels' },
+  { header: 'จำนวนรวม SKU ที่หยิบ', key: 'pickSku' },
+  { header: 'จำนวนคำสั่งซื้อที่สแกนและส่งรูป', key: 'scanPhotoOrders' },
+  { header: 'จำนวนข้อความที่สแกนและส่งรูป', key: 'scanPhotoMessages' },
+  { header: 'จำนวน Wave ที่คัดแยก', key: 'sortWaveCount' },
+  { header: 'จำนวนพัสดุทั้งหมดที่คัดแยก', key: 'sortParcels' },
+  { header: 'จำนวนรวม SKU ที่คัดแยก', key: 'sortSku' },
+  { header: 'จำนวน Wave ที่แพ็ก', key: 'packWaveCount' },
+  { header: 'จำนวนรวมพัสดุที่แพ็ก', key: 'packParcels' },
+  { header: 'จำนวนรวม SKU ที่แพ็ก', key: 'packSku' },
+  { header: 'จำนวน Wave ที่ผ่านการตรวจสอบ', key: 'inspectWaveCount' },
+  { header: 'จำนวนพัสดุที่ตรวจสอบ', key: 'inspectParcels' },
+  { header: 'จำนวนรวมของ SKU ที่ถูกตรวจสอบ', key: 'inspectSku' },
+  { header: 'จำนวนพัสดุที่หยิบ (สินค้าเดียว (1 ชิ้น))', key: 'pickSingleSkuSingleQty' },
+  { header: 'จำนวนพัสดุที่หยิบ (สินค้าเดียว (หลายชิ้น))', key: 'pickSingleSkuMultiQty' },
+  { header: 'จำนวนพัสดุที่หยิบ (สินค้าหลายชนิด/ชิ้น)', key: 'pickMultiSku' },
+  { header: 'จำนวนพัสดุที่คัดแยก สินค้าเดียว (1 ชิ้น)', key: 'sortSingleSkuSingleQty' },
+  { header: 'จำนวนพัสดุที่คัดแยก สินค้าเดียว (หลายชิ้น)', key: 'sortSingleSkuMultiQty' },
+  { header: 'จำนวนพัสดุที่คัดแยก สินค้าหลายชนิด/ชิ้น', key: 'sortMultiSku' },
+  { header: 'จำนวนพัสดุที่แพ็ก (สินค้าเดียว (1 ชิ้น))', key: 'packSingleSkuSingleQty' },
+  { header: 'จำนวนพัสดุที่แพ็ก (สินค้าเดียว (หลายชิ้น))', key: 'packSingleSkuMultiQty' },
+  { header: 'จำนวนพัสดุที่แพ็ก (สินค้าหลายชนิด/ชิ้น)', key: 'packMultiSku' }
+];
+
+/**
+ * Reads the "ผลงานพนักงาน (BigSeller)" tab — a flat one-row-per-(date,
+ * operator) dump pasted verbatim from BigSeller's own "รายงานผลการทำงาน"
+ * export (`bigseller.com/web/statis/packagedAnalytics.htm`). Deliberately a
+ * SEPARATE, standalone parser/tab from every existing employee/production
+ * structure in this file — per explicit instruction, this new BigSeller-driven
+ * source must not be merged into the old manually-typed employee sheets while
+ * both are being compared. Detected by content (needs 'โอเปอเรเตอร์' +
+ * 'พิมพ์ใบปะหน้า' in the header), never by tab name/position.
+ * Ingestion is manual/on-demand (someone pastes a fresh BigSeller export here
+ * when asked) — there is no scheduled sync. Rows whose operator is '-' are the
+ * export's own daily TOTAL row and are skipped (recomputed from real rows
+ * instead, so a stale total never lingers). Returns [] for a non-matching
+ * sheet so it never breaks the payload.
+ */
+function parseWorkPerformanceSheet_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return [];
+  var displayValues = range.getDisplayValues();
+
+  var headerRowIdx = -1;
+  var dateCol = -1, operatorCol = -1;
+  var metricCols = {}; // key -> column index
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('โอเปอเรเตอร์') === -1 || joined.indexOf('พิมพ์ใบปะหน้า') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h === 'วันที่') dateCol = c;
+      else if (h === 'โอเปอเรเตอร์') operatorCol = c;
+      else {
+        for (var m = 0; m < WORK_PERFORMANCE_COLUMNS_.length; m++) {
+          if (WORK_PERFORMANCE_COLUMNS_[m].header === h) { metricCols[WORK_PERFORMANCE_COLUMNS_[m].key] = c; break; }
+        }
+      }
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || dateCol === -1 || operatorCol === -1) return [];
+
+  var out = [];
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var operator = String(row[operatorCol] == null ? '' : row[operatorCol]).trim();
+    if (!operator || operator === '-') continue; // blank row or the export's own TOTAL row
+    var dateObj = parseThaiLongDate_(row[dateCol], displayValues[i][dateCol]);
+    if (!dateObj) continue;
+
+    var entry = {
+      date: Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd'),
+      operator: operator
+    };
+    WORK_PERFORMANCE_COLUMNS_.forEach(function (col) {
+      var c = metricCols[col.key];
+      entry[col.key] = c === undefined ? 0 : (numFromCell_(row[c]) || 0);
+    });
+    out.push(entry);
+  }
+  return out;
+}
+
+/**
+ * Reads the "รายชื่อพนักงาน (BigSeller)" mapping tab — โอเปอเรเตอร์ (BigSeller
+ * username) | ชื่อ (real name, confirmed with the team) | แผนก (department:
+ * ออนไลน์/ออฟไลน์/คลัง/แอดมิน, also confirmed directly). Maintained by hand
+ * as new BigSeller accounts show up. Detected by content (needs 'โอเปอเรเตอร์'
+ * + 'ชื่อ' + 'แผนก' in the header). Returns {} for a non-matching sheet.
+ */
+function parseWorkPerformanceMappingSheet_(sheet) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return {};
+
+  var headerRowIdx = -1;
+  var col = {};
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('โอเปอเรเตอร์') === -1 || joined.indexOf('ชื่อ') === -1 || joined.indexOf('แผนก') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h === 'โอเปอเรเตอร์') col.operator = c;
+      else if (h === 'ชื่อ') col.name = c;
+      else if (h === 'แผนก') col.department = c;
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || col.operator === undefined) return {};
+
+  var out = {};
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var operator = String(row[col.operator] == null ? '' : row[col.operator]).trim();
+    if (!operator) continue;
+    out[operator] = {
+      name: col.name !== undefined ? String(row[col.name] == null ? '' : row[col.name]).trim() : operator,
+      department: col.department !== undefined ? String(row[col.department] == null ? '' : row[col.department]).trim() : ''
+    };
+  }
+  return out;
+}
+
+/**
+ * Joins parseWorkPerformanceSheet_'s raw rows with
+ * parseWorkPerformanceMappingSheet_'s name/department mapping into the shape
+ * the frontend consumes: one entry per known operator, with per-date metrics
+ * and totals. A raw row whose operator isn't (yet) in the mapping tab is never
+ * silently dropped — it's surfaced under `unmapped` so a new BigSeller account
+ * gets noticed instead of quietly missing from the report.
+ */
+function buildWorkPerformancePayload_(rawRows, mapping) {
+  if (!rawRows.length) return null;
+
+  var byOperator = {};
+  var dateSet = {};
+  var unmappedSet = {};
+
+  rawRows.forEach(function (row) {
+    dateSet[row.date] = true;
+    var info = mapping[row.operator];
+    if (!info) { unmappedSet[row.operator] = true; return; }
+    if (!byOperator[row.operator]) {
+      byOperator[row.operator] = {
+        operator: row.operator,
+        name: info.name || row.operator,
+        department: info.department || '',
+        byDate: {},
+        totals: {}
+      };
+      WORK_PERFORMANCE_COLUMNS_.forEach(function (col) { byOperator[row.operator].totals[col.key] = 0; });
+    }
+    var entry = byOperator[row.operator];
+    var metrics = {};
+    WORK_PERFORMANCE_COLUMNS_.forEach(function (col) {
+      var v = row[col.key] || 0;
+      metrics[col.key] = v;
+      entry.totals[col.key] += v;
+    });
+    entry.byDate[row.date] = metrics;
+  });
+
+  return {
+    dates: Object.keys(dateSet).sort(),
+    employees: Object.keys(byOperator).map(function (k) { return byOperator[k]; }),
+    unmapped: Object.keys(unmappedSet).sort()
+  };
+}
+
 function buildDashboardPayload_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = ss.getSpreadsheetTimeZone();
@@ -1232,6 +1426,8 @@ function buildDashboardPayload_() {
   var workIssues = [];
   var offlineShopSales = [];
   var offlineRefundMonthly = {}; // `${yyyy-MM}` -> { refund, qty } — see parseOfflineRefundMonthlySheet_
+  var workPerformanceRaw = [];
+  var workPerformanceMap = {};
 
   sheets.forEach(function (sheet) {
     // Normalized so a tab name whose Thai combining marks were typed/pasted in a
@@ -1279,6 +1475,27 @@ function buildDashboardPayload_() {
       // From here on, every candidate is detected by CONTENT (header keywords) so a
       // rename never silently drops data — but decided from the cheap `peek` sample
       // taken above, so only the ONE matching parser ever pays for a full-range read.
+
+      // New, standalone BigSeller work-performance import (see buildWorkPerformancePayload_'s
+      // doc) — a raw per-(date, operator) dump tab and its own name/department mapping tab.
+      // Deliberately never merged into the legacy employee/production structures above.
+      // Checked BEFORE the order-report tab below: this sheet's own "จัดการคำสั่งซื้อ"
+      // column contains "คำสั่งซื้อ" as a substring, so the order-report tab's looser
+      // ['วันที่', 'คำสั่งซื้อ'] content check would otherwise wrongly claim this tab first.
+      if (headerSampleHas_(peek.headerSample, ['โอเปอเรเตอร์', 'พิมพ์ใบปะหน้า'])) {
+        try {
+          var wpRows = parseWorkPerformanceSheet_(sheet, tz);
+          if (wpRows.length) workPerformanceRaw = workPerformanceRaw.concat(wpRows);
+        } catch (e10) { /* ignore malformed work-performance sheet */ }
+        return;
+      }
+      if (headerSampleHas_(peek.headerSample, ['โอเปอเรเตอร์', 'ชื่อ', 'แผนก'])) {
+        try {
+          var wpMap = parseWorkPerformanceMappingSheet_(sheet);
+          Object.keys(wpMap).forEach(function (op) { workPerformanceMap[op] = wpMap[op]; });
+        } catch (e11) { /* ignore malformed work-performance mapping sheet */ }
+        return;
+      }
 
       // The standalone BigSeller order-report export — TWO separate tabs, one per
       // sales channel ("รายงานคำสั่งซื้อ ออนไลน์" / "... ออฟไลน์"), each a flat
@@ -1483,7 +1700,8 @@ function buildDashboardPayload_() {
     receivingWarehouse: receivingWarehouse,
     orderReport: orderReportDays.length ? { days: orderReportDays } : null,
     workIssues: workIssues,
-    offlineShopSales: offlineShopSales
+    offlineShopSales: offlineShopSales,
+    workPerformance: buildWorkPerformancePayload_(workPerformanceRaw, workPerformanceMap)
   };
 }
 
