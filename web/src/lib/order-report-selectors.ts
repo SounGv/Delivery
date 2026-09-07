@@ -216,6 +216,31 @@ export function monthlyChannelComparison(days: OrderReportDay[]): MonthlyChannel
     .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
 }
 
+export interface MonthlySalesRow {
+  monthKey: string
+  sales: number
+  orders: number
+  parcels: number
+}
+
+/** Sales/order-count/parcel-count bucketed by calendar month, for whatever
+ * `days` the caller passes in — already channel-filtered by the page, unlike
+ * monthlyChannelComparison which always splits online vs offline itself. */
+export function monthlySalesTrend(days: OrderReportDay[]): MonthlySalesRow[] {
+  const byMonth = new Map<string, { sales: number; orders: number; parcels: number }>()
+  for (const d of days) {
+    const key = d.date.slice(0, 7)
+    const acc = byMonth.get(key) ?? { sales: 0, orders: 0, parcels: 0 }
+    acc.sales += d.effSales
+    acc.orders += d.effOrders
+    acc.parcels += d.parcels
+    byMonth.set(key, acc)
+  }
+  return [...byMonth.entries()]
+    .map(([monthKey, v]) => ({ monthKey, ...v }))
+    .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+}
+
 export interface WeekBucket {
   label: string
   startDate: string

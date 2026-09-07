@@ -28,6 +28,7 @@ const SalesTrendChart = lazy(() => import("@/components/charts/SalesTrendChart")
 const SalesWeekdayChart = lazy(() => import("@/components/charts/SalesWeekdayChart").then((m) => ({ default: m.SalesWeekdayChart })))
 const SalesWeeklyChart = lazy(() => import("@/components/charts/SalesWeeklyChart").then((m) => ({ default: m.SalesWeeklyChart })))
 const AovTrendChart = lazy(() => import("@/components/charts/AovTrendChart").then((m) => ({ default: m.AovTrendChart })))
+const MonthlyTrendChart = lazy(() => import("@/components/charts/MonthlyTrendChart").then((m) => ({ default: m.MonthlyTrendChart })))
 
 function ChartFallback({ height = 300 }: { height?: number }) {
   return <Skeleton className="rounded-2xl" style={{ height }} />
@@ -298,6 +299,11 @@ export function SalesSummary() {
         <div className="col-span-12 lg:col-span-6">
           <Suspense fallback={<ChartFallback height={300} />}>
             <AovTrendChart days={days} />
+          </Suspense>
+        </div>
+        <div className="col-span-12">
+          <Suspense fallback={<ChartFallback height={320} />}>
+            <MonthlyTrendChart days={days} />
           </Suspense>
         </div>
       </div>
