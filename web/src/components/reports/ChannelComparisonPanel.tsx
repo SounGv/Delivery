@@ -31,15 +31,15 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: "eme
   )
 }
 
-function ChannelColumn({ label, totals, hasRefundData }: { label: string; totals: OrderReportTotals; hasRefundData: boolean }) {
+function ChannelColumn({ label, totals }: { label: string; totals: OrderReportTotals }) {
   const net = totals.totalEffSales - totals.totalRefundAmount
   return (
     <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
       <p className="mb-2.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
       <div className="space-y-2">
         <Row label="ยอดขาย" value={money(totals.totalEffSales)} />
-        <Row label="ยอดคืนเงิน" value={hasRefundData ? money(totals.totalRefundAmount) : "ไม่มีข้อมูล"} tone={hasRefundData ? "rose" : "muted"} />
-        <Row label="ยอดขายสุทธิ" value={hasRefundData ? money(net) : `${money(totals.totalEffSales)}*`} tone="emerald" />
+        <Row label="ยอดคืนเงิน" value={money(totals.totalRefundAmount)} tone="rose" />
+        <Row label="ยอดขายสุทธิ" value={money(net)} tone="emerald" />
         <Row label="ออเดอร์" value={`${totals.totalEffOrders.toLocaleString("th-TH")} ออเดอร์`} />
         <Row label="AOV" value={`฿${totals.weightedAov.toFixed(2)}`} />
         <Row
@@ -65,12 +65,10 @@ export function ChannelComparisonPanel({ days }: { days: OrderReportDay[] }) {
       <h3 className="mb-1.5 flex items-center gap-2 text-lg font-semibold text-foreground">
         <ArrowRightLeft className="size-5" /> เทียบยอดขาย ออนไลน์ vs ออฟไลน์
       </h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        ตามช่วงวันที่ที่เลือกด้านบน ไม่ขึ้นกับตัวกรองช่องทาง — *ออฟไลน์เพิ่งเริ่มเก็บยอดคืนเงินตั้งแต่ 04 ก.ย. 2026 (คอลัมน์ใหม่ในชีท) ข้อมูลก่อนหน้านั้นนับเป็น 0 เพราะยังไม่เคยบันทึก ไม่ใช่ว่าไม่มีการคืนสินค้าจริง
-      </p>
+      <p className="mb-4 text-sm text-muted-foreground">ตามช่วงวันที่ที่เลือกด้านบน ไม่ขึ้นกับตัวกรองช่องทาง</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ChannelColumn label="ออนไลน์" totals={comparison.online} hasRefundData />
-        <ChannelColumn label="ออฟไลน์" totals={comparison.offline} hasRefundData />
+        <ChannelColumn label="ออนไลน์" totals={comparison.online} />
+        <ChannelColumn label="ออฟไลน์" totals={comparison.offline} />
       </div>
 
       {monthly.length > 0 && (
@@ -83,7 +81,7 @@ export function ChannelComparisonPanel({ days }: { days: OrderReportDay[] }) {
                   ออนไลน์
                 </th>
                 <th colSpan={3} className="border-b border-border pb-2 pl-3 text-center">
-                  ออฟไลน์*
+                  ออฟไลน์
                 </th>
               </tr>
               <tr className="border-b border-border text-sm text-muted-foreground">

@@ -1,4 +1,4 @@
-import type { OfflineShopDay, OrderReportChannel, OrderReportDay } from "@/api/types"
+import type { OrderReportChannel, OrderReportDay } from "@/api/types"
 import { dateFromIso } from "./format"
 
 export function sortedOrderReportDays(days: OrderReportDay[]): OrderReportDay[] {
@@ -164,10 +164,7 @@ export interface ChannelComparisonTotals {
 
 /** Online vs offline totals for the same date range, independent of whatever
  * single-channel filter the rest of the page is using — lets a "compare
- * channels" panel show both sides together. Offline's refund fields only
- * cover the sheet's "ยอดคืนเงิน" column added 2026-09-04 (see
- * offlineShopSalesToOrderDays_'s doc) — 0 for anything before that date, not
- * a claim those days truly had zero returns. */
+ * channels" panel show both sides together. */
 export function computeChannelComparison(days: OrderReportDay[]): ChannelComparisonTotals {
   return {
     online: computeOrderReportTotals(days.filter((d) => d.channel === "online")),
@@ -285,95 +282,3 @@ export function peakDay(sortedDays: OrderReportDay[]): OrderReportDay | null {
   return sortedDays.reduce((best, d) => (d.effSales > best.effSales ? d : best), first)
 }
 
-/** Converts filtered offline shop-day rows into one OrderReportDay per date
- * (summed across whichever shops are included) — lets the shop filter feed the
- * exact same KPI/chart/table pipeline the channel filter already uses. Mirrors
- * the Apps Script side's offlineShopSalesToOrderDays_ exactly: refundAmount/
- * refundOrders come from the sheet's "ยอดคืนเงิน" column (added 2026-09-04 —
- * rows logged before that have no value for it, so they sum to 0, same as any
- * other blank numeric cell); cancellations/discount codes still aren't
- * tracked offline at all, so those stay zero. */
-export function offlineShopDaysToOrderDays(shopSales: OfflineShopDay[]): OrderReportDay[] {
-  const byDate = new Map<string, { sales: number; orderCount: number; itemQty: number; refund: number; refundOrderCount: number }>()
-  for (const s of shopSales) {
-    const acc = byDate.get(s.date) ?? { sales: 0, orderCount: 0, itemQty: 0, refund: 0, refundOrderCount: 0 }
-    acc.sales += s.sales
-    acc.orderCount += s.orderCount
-    acc.itemQty += s.itemQty
-    acc.refund += s.refund ?? 0
-    acc.refundOrderCount += s.refundOrderCount ?? 0
-    byDate.set(s.date, acc)
-  }
-  return [...byDate.entries()]
-    .map(([date, d]) => ({
-      date,
-      channel: "offline" as const,
-      effSales: d.sales,
-      effOrders: d.orderCount,
-      totalOrders: d.orderCount,
-      parcels: d.itemQty,
-      totalRevenue: d.sales,
-      sellerSubsidy: 0,
-      productSales: d.sales,
-      origPrice: 0,
-      sales: d.sales,
-      refundAmount: d.refund,
-      refundOrders: d.refundOrderCount,
-      refundCustomers: 0,
-      refundRate: d.orderCount > 0 ? (d.refundOrderCount / d.orderCount) * 100 : 0,
-      cancelledAmount: 0,
-      cancelledOrders: 0,
-      aov: d.orderCount > 0 ? d.sales / d.orderCount : 0,
-      discountCode: 0,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date))
-}
-
-export interface ShopSummary {
-  shop: string
-  sales: number
-  cost: number
-  grossProfit: number
-  /** Gross profit / sales, as a percent. */
-  marginPct: number
-  orderCount: number
-  itemQty: number
-}
-
-/** Totals per shop across whatever offline shop-day rows are passed in (already
- * date-range-filtered by the caller) — sorted by sales, highest first. */
-export function summarizeByShop(shopSales: OfflineShopDay[]): ShopSummary[] {
-  const byShop = new Map<string, { sales: number; cost: number; orderCount: number; itemQty: number }>()
-  for (const s of shopSales) {
-    const acc = byShop.get(s.shop) ?? { sales: 0, cost: 0, orderCount: 0, itemQty: 0 }
-    acc.sales += s.sales
-    acc.cost += s.cost
-    acc.orderCount += s.orderCount
-    acc.itemQty += s.itemQty
-    byShop.set(s.shop, acc)
-  }
-  return [...byShop.entries()]
-    .map(([shop, d]) => ({
-      shop,
-      sales: d.sales,
-      cost: d.cost,
-      grossProfit: d.sales - d.cost,
-      marginPct: d.sales > 0 ? ((d.sales - d.cost) / d.sales) * 100 : 0,
-      orderCount: d.orderCount,
-      itemQty: d.itemQty,
-    }))
-    .sort((a, b) => b.sales - a.sales)
-}
-
-export interface OfflineTotals {
-  sales: number
-  cost: number
-  grossProfit: number
-  marginPct: number
-}
-
-export function computeOfflineTotals(shopSales: OfflineShopDay[]): OfflineTotals {
-  const sales = shopSales.reduce((s, d) => s + d.sales, 0)
-  const cost = shopSales.reduce((s, d) => s + d.cost, 0)
-  return { sales, cost, grossProfit: sales - cost, marginPct: sales > 0 ? ((sales - cost) / sales) * 100 : 0 }
-}
