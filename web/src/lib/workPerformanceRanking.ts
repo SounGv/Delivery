@@ -61,6 +61,13 @@ export interface DailyComparisonRow {
   yesterday: number
   /** null when there's no "yesterday" figure to compare against (0, or missing that day). */
   pctChange: number | null
+  /** Today's raw BigSeller columns, named exactly as the sheet does — shown
+   * directly on the page so "พัสดุรวม" is never a mystery number: it's visibly
+   * built from these real columns, not some opaque derived figure. */
+  todayPdaPick: number
+  todayPrintLabel: number
+  todayPickWaveCount: number
+  todayPickSku: number
 }
 
 /** Per-employee today-vs-yesterday comparison (พัสดุ = dailyParcelTotal), for
@@ -73,10 +80,22 @@ export function computeWpDailyComparison(employees: WorkPerformanceEmployee[], s
   if (!today) return []
   return employees
     .map((e) => {
-      const todayVal = today ? dailyParcelTotal(e.byDate[today] ?? zeroMetrics) : 0
+      const todayMetrics = e.byDate[today] ?? zeroMetrics
+      const todayVal = dailyParcelTotal(todayMetrics)
       const yesterdayVal = yesterday ? dailyParcelTotal(e.byDate[yesterday] ?? zeroMetrics) : 0
       const pctChange = yesterday && yesterdayVal > 0 ? ((todayVal - yesterdayVal) / yesterdayVal) * 100 : null
-      return { operator: e.operator, name: e.name, department: e.department, today: todayVal, yesterday: yesterdayVal, pctChange }
+      return {
+        operator: e.operator,
+        name: e.name,
+        department: e.department,
+        today: todayVal,
+        yesterday: yesterdayVal,
+        pctChange,
+        todayPdaPick: todayMetrics.pdaPick,
+        todayPrintLabel: todayMetrics.printLabel,
+        todayPickWaveCount: todayMetrics.pickWaveCount,
+        todayPickSku: todayMetrics.pickSku,
+      }
     })
     .filter((r) => r.today > 0 || r.yesterday > 0)
 }

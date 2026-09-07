@@ -268,15 +268,20 @@ export function WorkPerformance() {
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">
         <h3 className="mb-1 text-sm font-semibold text-foreground">เทียบผลงานวันนี้ vs เมื่อวาน</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          พัสดุ (หยิบ+แพ็ก+ตรวจสอบ+จัดส่งรวมกัน) — {todayLabel ?? "-"} เทียบกับ {yesterdayLabel ?? "ไม่มีข้อมูลวันก่อนหน้า"}
+          รายละเอียดของวันนี้ ({todayLabel ?? "-"}) ตามคอลัมน์จริงจากชีต + "พัสดุรวม" (หยิบ+แพ็ก+ตรวจสอบ+จัดส่งรวมกัน) เทียบกับ{" "}
+          {yesterdayLabel ?? "ไม่มีข้อมูลวันก่อนหน้า"}
         </p>
-        <table className="w-full min-w-[560px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="pb-2 font-medium">ชื่อ</th>
               <th className="pb-2 font-medium">แผนก</th>
-              <th className="pb-2 text-right font-medium">เมื่อวาน</th>
-              <th className="pb-2 text-right font-medium">วันนี้</th>
+              <th className="pb-2 text-right font-medium">PDA หยิบของ</th>
+              <th className="pb-2 text-right font-medium">พิมพ์ใบปะหน้า</th>
+              <th className="pb-2 text-right font-medium">จำนวน Wave ที่หยิบ</th>
+              <th className="pb-2 text-right font-medium">จำนวนรวม SKU ที่หยิบ</th>
+              <th className="pb-2 text-right font-medium">พัสดุรวม (เมื่อวาน)</th>
+              <th className="pb-2 text-right font-medium">พัสดุรวม (วันนี้)</th>
               <th className="pb-2 text-right font-medium">% เปลี่ยนแปลง</th>
             </tr>
           </thead>
@@ -285,6 +290,10 @@ export function WorkPerformance() {
               <tr key={r.operator} className="border-b border-white/5 last:border-0">
                 <td className="py-2 font-medium text-foreground">{r.name}</td>
                 <td className="py-2 text-muted-foreground">{r.department}</td>
+                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPdaPick.toLocaleString("th-TH")}</td>
+                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPrintLabel.toLocaleString("th-TH")}</td>
+                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPickWaveCount.toLocaleString("th-TH")}</td>
+                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPickSku.toLocaleString("th-TH")}</td>
                 <td className="py-2 text-right tabular-nums text-muted-foreground">{r.yesterday.toLocaleString("th-TH")}</td>
                 <td className="py-2 text-right tabular-nums text-foreground">{r.today.toLocaleString("th-TH")}</td>
                 <td className="py-2 text-right">
@@ -306,7 +315,7 @@ export function WorkPerformance() {
             ))}
             {dailyComparison.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-muted-foreground">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td>
+                <td colSpan={9} className="py-6 text-center text-muted-foreground">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td>
               </tr>
             )}
           </tbody>
