@@ -4,11 +4,36 @@ import { useDashboardQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
+import { Podium } from "@/components/workforce/Podium"
+import { RankingList } from "@/components/workforce/RankingList"
+import { computeRankDeltas, previousWindow, rankByMetric, type RankedEmployeeMetric, type RankingMetric } from "@/lib/workforce"
+import { computeWpEmployeeMetrics } from "@/lib/workPerformanceRanking"
 import { downloadCsv } from "@/lib/csv"
+import { formatNumber } from "@/lib/format"
+import { useSettings } from "@/lib/settingsContext"
 import { cn } from "@/lib/utils"
 import type { WorkPerformanceEmployee } from "@/api/types"
 
-const DEPARTMENT_ORDER = ["ออนไลน์", "ออฟไลน์", "คลัง", "แอดมิน"]
+// "แอดมิน" (the shop-owner/admin BigSeller account, e.g. Rootbeer) isn't a real
+// fulfilment worker — never a department to show, filter, or rank here.
+const EXCLUDED_DEPARTMENTS = new Set(["แอดมิน"])
+const DEPARTMENT_ORDER = ["ออนไลน์", "ออฟไลน์", "คลัง"]
+
+const RANKING_METRIC_OPTIONS: { key: RankingMetric; label: string }[] = [
+  { key: "parcels", label: "พัสดุ" },
+  { key: "items", label: "สินค้า" },
+  { key: "productivity", label: "Productivity" },
+  { key: "pctTarget", label: "% Target" },
+]
+
+function rankingMetricFormatter(metric: RankingMetric) {
+  return (m: RankedEmployeeMetric) => {
+    if (metric === "parcels") return `${formatNumber(m.parcels)} พัสดุ`
+    if (metric === "items") return `${formatNumber(m.items)} SKU`
+    if (metric === "productivity") return `${formatNumber(Math.round(m.productivity))} พัสดุ/วัน`
+    return `${(m.pctTarget ?? 0).toFixed(0)}% ของเป้า`
+  }
+}
 
 function sumMetric(emp: WorkPerformanceEmployee, key: keyof WorkPerformanceEmployee["totals"]): number {
   return emp.totals[key] ?? 0
@@ -25,9 +50,15 @@ function sumMetric(emp: WorkPerformanceEmployee, key: keyof WorkPerformanceEmplo
  */
 export function WorkPerformance() {
   const { data, isLoading, isError, error } = useDashboardQuery()
+  const { targetOverride } = useSettings()
   const [department, setDepartment] = useState("all")
+  const [rankingMetric, setRankingMetric] = useState<RankingMetric>("parcels")
 
-  const wp = data?.workPerformance ?? null
+  const employees = useMemo(
+    () => (data?.workPerformance?.employees ?? []).filter((e) => !EXCLUDED_DEPARTMENTS.has(e.department)),
+    [data]
+  )
+  const wp = data?.workPerformance ? { ...data.workPerformance, employees } : null
 
   const departments = useMemo(() => {
     if (!wp) return []
@@ -42,6 +73,31 @@ export function WorkPerformance() {
     const rows = department === "all" ? wp.employees : wp.employees.filter((e) => e.department === department)
     return [...rows].sort((a, b) => sumMetric(b, "pickParcels") - sumMetric(a, "pickParcels"))
   }, [wp, department])
+
+  // Same ranking system as the online team's "อันดับผลงานรายบุคคล" (Podium/
+  // RankingList) — see workPerformanceRanking.ts's doc for the metric mapping.
+  const targetPerPerson = targetOverride ?? data?.target?.value ?? null
+  const hasTarget = targetPerPerson !== null
+  const effectiveRankingMetric = hasTarget ? rankingMetric : rankingMetric === "pctTarget" ? "parcels" : rankingMetric
+  const ranking = useMemo(() => {
+    if (!wp) return []
+    const metrics = computeWpEmployeeMetrics(filtered, wp.dates, targetPerPerson ?? 0)
+    return rankByMetric(metrics, effectiveRankingMetric)
+  }, [wp, filtered, targetPerPerson, effectiveRankingMetric])
+  const top3 = ranking.filter((m) => m.rank <= 3)
+  const rest = ranking.filter((m) => m.rank > 3)
+  const rankDeltas = useMemo(() => {
+    if (!wp || wp.dates.length === 0) return new Map<string, number>()
+    // No baseline yet until the sheet accumulates enough history to have real
+    // dates before wp.dates[0] — computeRankDeltas already handles that case
+    // cleanly (an employee absent from the previous period just gets no arrow).
+    const prev = previousWindow(wp.dates[0]!, wp.dates[wp.dates.length - 1]!)
+    const prevDates = wp.dates.filter((d) => d >= prev.start && d <= prev.end)
+    const prevMetrics = computeWpEmployeeMetrics(filtered, prevDates, targetPerPerson ?? 0)
+    const prevRanking = rankByMetric(prevMetrics, effectiveRankingMetric)
+    return computeRankDeltas(ranking, prevRanking)
+  }, [wp, filtered, ranking, targetPerPerson, effectiveRankingMetric])
+  const formatRankingMetric = rankingMetricFormatter(rankingMetric)
 
   const grouped = useMemo(() => {
     const map = new Map<string, WorkPerformanceEmployee[]>()
@@ -165,6 +221,39 @@ export function WorkPerformance() {
             <Download className="size-4" /> Export CSV
           </button>
         </div>
+      </div>
+
+      <div className="glass-panel rounded-2xl p-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-foreground">อันดับผลงานรายบุคคล</h3>
+          <div className="flex gap-1 rounded-xl border border-border p-1">
+            {RANKING_METRIC_OPTIONS.filter((opt) => hasTarget || opt.key !== "pctTarget").map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setRankingMetric(opt.key)}
+                className={cn(
+                  "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  effectiveRankingMetric === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {top3.length > 0 ? (
+          <Podium top3={top3} metricFormatter={formatRankingMetric} showTarget={hasTarget} />
+        ) : (
+          <p className="py-6 text-center text-sm text-muted-foreground">ไม่มีข้อมูลในช่วงเวลาที่เลือก</p>
+        )}
+
+        {rest.length > 0 && (
+          <div className="mt-6">
+            <RankingList entries={rest} rankDeltas={rankDeltas} metricFormatter={formatRankingMetric} showTarget={hasTarget} />
+          </div>
+        )}
       </div>
 
       {grouped.map((g) => (
