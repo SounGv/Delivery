@@ -25,6 +25,8 @@ jobs:
 
       - name: Build
         working-directory: web
+        env:
+          VITE_APPS_SCRIPT_URL: ${{ secrets.VITE_APPS_SCRIPT_URL }}
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
