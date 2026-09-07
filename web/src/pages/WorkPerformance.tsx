@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { AlertTriangle, Boxes, Download, PackageCheck, ScanLine, Truck, Users } from "lucide-react"
+import { AlertTriangle, ArrowDown, ArrowUp, Boxes, Download, Minus, PackageCheck, ScanLine, Truck, Users } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
@@ -7,7 +7,7 @@ import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Podium } from "@/components/workforce/Podium"
 import { RankingList } from "@/components/workforce/RankingList"
 import { computeRankDeltas, previousWindow, rankByMetric, type RankedEmployeeMetric, type RankingMetric } from "@/lib/workforce"
-import { computeWpEmployeeMetrics } from "@/lib/workPerformanceRanking"
+import { computeWpDailyComparison, computeWpEmployeeMetrics } from "@/lib/workPerformanceRanking"
 import { downloadCsv } from "@/lib/csv"
 import { formatNumber } from "@/lib/format"
 import { useSettings } from "@/lib/settingsContext"
@@ -98,6 +98,15 @@ export function WorkPerformance() {
     return computeRankDeltas(ranking, prevRanking)
   }, [wp, filtered, ranking, targetPerPerson, effectiveRankingMetric])
   const formatRankingMetric = rankingMetricFormatter(rankingMetric)
+
+  // "วันนี้ vs เมื่อวาน" — the latest two dates the sheet actually has, sorted
+  // by today's parcel total so the busiest/most-changed people surface first.
+  const dailyComparison = useMemo(() => {
+    if (!wp) return []
+    return [...computeWpDailyComparison(filtered, wp.dates)].sort((a, b) => b.today - a.today)
+  }, [wp, filtered])
+  const todayLabel = wp?.dates[wp.dates.length - 1]
+  const yesterdayLabel = wp && wp.dates.length > 1 ? wp.dates[wp.dates.length - 2] : null
 
   const grouped = useMemo(() => {
     const map = new Map<string, WorkPerformanceEmployee[]>()
@@ -254,6 +263,54 @@ export function WorkPerformance() {
             <RankingList entries={rest} rankDeltas={rankDeltas} metricFormatter={formatRankingMetric} showTarget={hasTarget} />
           </div>
         )}
+      </div>
+
+      <div className="glass-panel overflow-x-auto rounded-2xl p-4">
+        <h3 className="mb-1 text-sm font-semibold text-foreground">เทียบผลงานวันนี้ vs เมื่อวาน</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          พัสดุ (หยิบ+แพ็ก+ตรวจสอบ+จัดส่งรวมกัน) — {todayLabel ?? "-"} เทียบกับ {yesterdayLabel ?? "ไม่มีข้อมูลวันก่อนหน้า"}
+        </p>
+        <table className="w-full min-w-[560px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-border text-xs text-muted-foreground">
+              <th className="pb-2 font-medium">ชื่อ</th>
+              <th className="pb-2 font-medium">แผนก</th>
+              <th className="pb-2 text-right font-medium">เมื่อวาน</th>
+              <th className="pb-2 text-right font-medium">วันนี้</th>
+              <th className="pb-2 text-right font-medium">% เปลี่ยนแปลง</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dailyComparison.map((r) => (
+              <tr key={r.operator} className="border-b border-white/5 last:border-0">
+                <td className="py-2 font-medium text-foreground">{r.name}</td>
+                <td className="py-2 text-muted-foreground">{r.department}</td>
+                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.yesterday.toLocaleString("th-TH")}</td>
+                <td className="py-2 text-right tabular-nums text-foreground">{r.today.toLocaleString("th-TH")}</td>
+                <td className="py-2 text-right">
+                  {r.pctChange === null ? (
+                    <span className="text-xs text-muted-foreground">ไม่มีข้อมูลเมื่อวาน</span>
+                  ) : (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 text-sm font-semibold tabular-nums",
+                        r.pctChange > 0 ? "text-emerald-glow" : r.pctChange < 0 ? "text-destructive" : "text-muted-foreground"
+                      )}
+                    >
+                      {r.pctChange > 0 ? <ArrowUp className="size-3.5" /> : r.pctChange < 0 ? <ArrowDown className="size-3.5" /> : <Minus className="size-3.5" />}
+                      {Math.abs(r.pctChange).toFixed(0)}%
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {dailyComparison.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-muted-foreground">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {grouped.map((g) => (
