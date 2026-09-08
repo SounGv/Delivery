@@ -22,7 +22,7 @@
  * a bump — they're only ever CACHE_TTL_SECONDS_ stale at most, an explicit and small
  * trade for going from tens-of-seconds to near-instant on every repeat load.
  */
-var CACHE_VERSION_ = 'v1';
+var CACHE_VERSION_ = 'v3';
 var CACHE_TTL_SECONDS_ = 90;
 // Stay safely under CacheService's ~100KB-per-key limit when splitting the payload.
 var CACHE_CHUNK_SIZE_ = 90000;

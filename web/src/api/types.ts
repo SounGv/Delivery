@@ -254,6 +254,11 @@ export interface WorkPerformanceMetrics {
   packSingleSkuSingleQty: number
   packSingleSkuMultiQty: number
   packMultiSku: number
+  /** Distinct หมายเลขเอกสาร that day from the "บันทึกการอัปเดตตำแหน่งสต็อก
+   * (BigSeller)" stock-move-log tab — ฝ่ายคลัง's real move/replenish work,
+   * since the columns above (all BigSeller's pick/pack/ship report) stay
+   * near-zero for warehouse staff. See parseStockMoveSheet_'s doc. */
+  stockMoveDocs: number
 }
 
 /** One BigSeller operator, joined against the "รายชื่อพนักงาน (BigSeller)"

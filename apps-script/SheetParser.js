@@ -496,6 +496,22 @@ function parseThaiLongDate_(raw, display) {
   return new Date(year, mon, day);
 }
 
+/** Parses "DD MMM. YYYY HH:MM" (BigSeller's stock-move-log timestamp) into just
+ * the date part — the time-of-day is discarded, since this tab is grouped per
+ * day, not per minute. Falls back to the cell's own Date value when already
+ * date-typed. */
+function parseThaiDateTimeDatePart_(raw, display) {
+  if (Object.prototype.toString.call(raw) === '[object Date]') return normalizeHeaderDate_(raw);
+  var s = String(display != null ? display : (raw != null ? raw : '')).trim();
+  var m = s.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})\b/);
+  if (!m) return null;
+  var day = parseInt(m[1], 10);
+  var mon = THAI_MONTH_MAP_[m[2]];
+  var year = parseInt(m[3], 10);
+  if (mon === undefined || isNaN(day) || isNaN(year)) return null;
+  return new Date(year, mon, day);
+}
+
 /** Reads a percentage cell as a plain number (e.g. "0.47%" -> 0.47), preferring the
  * display text since the underlying value for a percent-formatted cell is the raw
  * fraction (0.0047), not the number shown to the user. */
@@ -1321,6 +1337,64 @@ function parseWorkPerformanceSheet_(sheet, tz) {
 }
 
 /**
+ * Reads the "บันทึกการอัปเดตตำแหน่งสต็อก (BigSeller)" tab — a flat dump pasted
+ * verbatim from BigSeller's own stock-position-movement log
+ * (bigseller.com/web/inventory/warehouseInOutRecord.htm), filtered to the 4
+ * "APP ย้าย/เติมสต็อก" move types. This is ฝ่ายคลัง's REAL work: unlike the
+ * pick/pack/ship report above (which stays near-zero for warehouse staff,
+ * since moving/replenishing stock positions isn't picking or packing), every
+ * physical move/replenish action here writes a matched Stock-Out+Stock-In row
+ * PAIR (or two pairs for a replenish) sharing one เลขที่ใบย้ายสินค้า/เลขใบเติม
+ * สต็อก (หมายเลขเอกสาร) — so counting DISTINCT document numbers per operator
+ * per day (done in buildWorkPerformancePayload_) is the real "how many
+ * moves did this person do today" figure, not a row count. Detected by
+ * content (needs 'ปัญชี' + 'หมายเลขเอกสาร' in the header — 'ปัญชี' is
+ * BigSeller's own header spelling, not a typo introduced here). Returns []
+ * for a non-matching sheet so it never breaks the payload.
+ */
+function parseStockMoveSheet_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return [];
+  var displayValues = range.getDisplayValues();
+
+  var headerRowIdx = -1;
+  var operatorCol = -1, timeCol = -1, docCol = -1;
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('ปัญชี') === -1 || joined.indexOf('หมายเลขเอกสาร') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h === 'ปัญชี') operatorCol = c;
+      else if (h === 'เวลา') timeCol = c;
+      else if (h === 'หมายเลขเอกสาร') docCol = c;
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || operatorCol === -1 || timeCol === -1 || docCol === -1) return [];
+
+  var out = [];
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var operator = String(row[operatorCol] == null ? '' : row[operatorCol]).trim();
+    if (!operator) continue;
+    var dateObj = parseThaiDateTimeDatePart_(row[timeCol], displayValues[i][timeCol]);
+    if (!dateObj) continue;
+    var doc = String(row[docCol] == null ? '' : row[docCol]).trim();
+    if (!doc) continue;
+    out.push({
+      date: Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd'),
+      operator: operator,
+      doc: doc
+    });
+  }
+  return out;
+}
+
+/**
  * Reads the "รายชื่อพนักงาน (BigSeller)" mapping tab — โอเปอเรเตอร์ (BigSeller
  * username) | ชื่อ (real name, confirmed with the team) | แผนก (department:
  * ออนไลน์/ออฟไลน์/คลัง/แอดมิน, also confirmed directly). Maintained by hand
@@ -1364,36 +1438,48 @@ function parseWorkPerformanceMappingSheet_(sheet) {
 }
 
 /**
- * Joins parseWorkPerformanceSheet_'s raw rows with
- * parseWorkPerformanceMappingSheet_'s name/department mapping into the shape
- * the frontend consumes: one entry per known operator, with per-date metrics
- * and totals. A raw row whose operator isn't (yet) in the mapping tab is never
- * silently dropped — it's surfaced under `unmapped` so a new BigSeller account
- * gets noticed instead of quietly missing from the report.
+ * Joins parseWorkPerformanceSheet_'s raw rows (and, additively,
+ * parseStockMoveSheet_'s raw rows — ฝ่ายคลัง's real move/replenish work, see
+ * that function's doc) with parseWorkPerformanceMappingSheet_'s name/
+ * department mapping into the shape the frontend consumes: one entry per
+ * known operator, with per-date metrics and totals. A raw row whose operator
+ * isn't (yet) in the mapping tab is never silently dropped — it's surfaced
+ * under `unmapped` so a new BigSeller account gets noticed instead of
+ * quietly missing from the report.
  */
-function buildWorkPerformancePayload_(rawRows, mapping) {
-  if (!rawRows.length) return null;
+function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
+  if (!rawRows.length && !(stockMoveRaw && stockMoveRaw.length)) return null;
 
   var byOperator = {};
   var dateSet = {};
   var unmappedSet = {};
 
+  function zeroWorkMetrics() {
+    var m = { stockMoveDocs: 0 };
+    WORK_PERFORMANCE_COLUMNS_.forEach(function (col) { m[col.key] = 0; });
+    return m;
+  }
+
+  function ensureEmployee(operator) {
+    if (byOperator[operator]) return byOperator[operator];
+    var info = mapping[operator];
+    if (!info) { unmappedSet[operator] = true; return null; }
+    var entry = {
+      operator: operator,
+      name: info.name || operator,
+      department: info.department || '',
+      byDate: {},
+      totals: zeroWorkMetrics()
+    };
+    byOperator[operator] = entry;
+    return entry;
+  }
+
   rawRows.forEach(function (row) {
     dateSet[row.date] = true;
-    var info = mapping[row.operator];
-    if (!info) { unmappedSet[row.operator] = true; return; }
-    if (!byOperator[row.operator]) {
-      byOperator[row.operator] = {
-        operator: row.operator,
-        name: info.name || row.operator,
-        department: info.department || '',
-        byDate: {},
-        totals: {}
-      };
-      WORK_PERFORMANCE_COLUMNS_.forEach(function (col) { byOperator[row.operator].totals[col.key] = 0; });
-    }
-    var entry = byOperator[row.operator];
-    var metrics = {};
+    var entry = ensureEmployee(row.operator);
+    if (!entry) return;
+    var metrics = { stockMoveDocs: 0 };
     WORK_PERFORMANCE_COLUMNS_.forEach(function (col) {
       var v = row[col.key] || 0;
       metrics[col.key] = v;
@@ -1401,6 +1487,28 @@ function buildWorkPerformancePayload_(rawRows, mapping) {
     });
     entry.byDate[row.date] = metrics;
   });
+
+  // Distinct หมายเลขเอกสาร per (operator, date) — see parseStockMoveSheet_'s
+  // doc for why a raw row count would double/quadruple-count a single move.
+  if (stockMoveRaw && stockMoveRaw.length) {
+    var docSets = {}; // operator -> date -> { docNumber: true, ... }
+    stockMoveRaw.forEach(function (row) {
+      if (!docSets[row.operator]) docSets[row.operator] = {};
+      if (!docSets[row.operator][row.date]) docSets[row.operator][row.date] = {};
+      docSets[row.operator][row.date][row.doc] = true;
+    });
+    Object.keys(docSets).forEach(function (operator) {
+      var entry = ensureEmployee(operator);
+      if (!entry) return;
+      Object.keys(docSets[operator]).forEach(function (date) {
+        dateSet[date] = true;
+        var count = Object.keys(docSets[operator][date]).length;
+        if (!entry.byDate[date]) entry.byDate[date] = zeroWorkMetrics();
+        entry.byDate[date].stockMoveDocs = count;
+        entry.totals.stockMoveDocs += count;
+      });
+    });
+  }
 
   return {
     dates: Object.keys(dateSet).sort(),
@@ -1428,6 +1536,7 @@ function buildDashboardPayload_() {
   var offlineRefundMonthly = {}; // `${yyyy-MM}` -> { refund, qty } — see parseOfflineRefundMonthlySheet_
   var workPerformanceRaw = [];
   var workPerformanceMap = {};
+  var stockMoveRaw = [];
 
   sheets.forEach(function (sheet) {
     // Normalized so a tab name whose Thai combining marks were typed/pasted in a
@@ -1494,6 +1603,18 @@ function buildDashboardPayload_() {
           var wpMap = parseWorkPerformanceMappingSheet_(sheet);
           Object.keys(wpMap).forEach(function (op) { workPerformanceMap[op] = wpMap[op]; });
         } catch (e11) { /* ignore malformed work-performance mapping sheet */ }
+        return;
+      }
+
+      // ฝ่ายคลัง's real move/replenish work — see parseStockMoveSheet_'s doc.
+      // Joined into the SAME workPerformance payload above (not a separate
+      // top-level field) so the existing ผลงาน (BigSeller) page's per-operator
+      // byDate/totals structure just gains one more field (stockMoveDocs).
+      if (headerSampleHas_(peek.headerSample, ['ปัญชี', 'หมายเลขเอกสาร'])) {
+        try {
+          var smRows = parseStockMoveSheet_(sheet, tz);
+          if (smRows.length) stockMoveRaw = stockMoveRaw.concat(smRows);
+        } catch (e12) { /* ignore malformed stock-move sheet */ }
         return;
       }
 
@@ -1701,7 +1822,7 @@ function buildDashboardPayload_() {
     orderReport: orderReportDays.length ? { days: orderReportDays } : null,
     workIssues: workIssues,
     offlineShopSales: offlineShopSales,
-    workPerformance: buildWorkPerformancePayload_(workPerformanceRaw, workPerformanceMap)
+    workPerformance: buildWorkPerformancePayload_(workPerformanceRaw, workPerformanceMap, stockMoveRaw)
   };
 }
 

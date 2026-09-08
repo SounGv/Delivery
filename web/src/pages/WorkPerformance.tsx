@@ -485,39 +485,58 @@ export function WorkPerformance() {
         </table>
       </div>
 
-      {grouped.map((g) => (
-        <div key={g.department} className="glass-panel overflow-x-auto rounded-2xl p-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">
-            ฝ่าย{g.department} <span className="text-xs font-normal text-muted-foreground">({g.employees.length} คน)</span>
-          </h3>
-          <table className="w-full min-w-[880px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground">
-                <th className="pb-2 font-medium">ชื่อ</th>
-                <th className="pb-2 font-medium">Username (BigSeller)</th>
-                <th className="pb-2 text-right font-medium">หยิบ (พัสดุ)</th>
-                <th className="pb-2 text-right font-medium">คัดแยก (พัสดุ)</th>
-                <th className="pb-2 text-right font-medium">แพ็ก (พัสดุ)</th>
-                <th className="pb-2 text-right font-medium">ตรวจสอบ (พัสดุ)</th>
-                <th className="pb-2 text-right font-medium">จัดส่ง</th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.employees.map((emp) => (
-                <tr key={emp.operator} className="border-b border-white/5 last:border-0">
-                  <td className="py-2 font-medium text-foreground">{emp.name}</td>
-                  <td className="py-2 text-muted-foreground">{emp.operator}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "pickParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "sortParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "packParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "inspectParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "ship").toLocaleString("th-TH")}</td>
+      {grouped.map((g) => {
+        // ฝ่ายคลัง's real work is moving/replenishing stock positions, not
+        // pick/pack/inspect — those columns stay ~0 for this department, so
+        // show the stock-move document count (see workPerformanceRanking.ts's
+        // stockMoveDocs doc) instead of a wall of zeros.
+        const isWarehouse = g.department === "คลัง"
+        return (
+          <div key={g.department} className="glass-panel overflow-x-auto rounded-2xl p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
+              ฝ่าย{g.department} <span className="text-xs font-normal text-muted-foreground">({g.employees.length} คน)</span>
+            </h3>
+            <table className="w-full min-w-[880px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="pb-2 font-medium">ชื่อ</th>
+                  <th className="pb-2 font-medium">Username (BigSeller)</th>
+                  {isWarehouse ? (
+                    <th className="pb-2 text-right font-medium">จำนวนเอกสาร (ย้าย/เติมสต็อก)</th>
+                  ) : (
+                    <>
+                      <th className="pb-2 text-right font-medium">หยิบ (พัสดุ)</th>
+                      <th className="pb-2 text-right font-medium">คัดแยก (พัสดุ)</th>
+                      <th className="pb-2 text-right font-medium">แพ็ก (พัสดุ)</th>
+                      <th className="pb-2 text-right font-medium">ตรวจสอบ (พัสดุ)</th>
+                    </>
+                  )}
+                  <th className="pb-2 text-right font-medium">จัดส่ง</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+              </thead>
+              <tbody>
+                {g.employees.map((emp) => (
+                  <tr key={emp.operator} className="border-b border-white/5 last:border-0">
+                    <td className="py-2 font-medium text-foreground">{emp.name}</td>
+                    <td className="py-2 text-muted-foreground">{emp.operator}</td>
+                    {isWarehouse ? (
+                      <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "stockMoveDocs").toLocaleString("th-TH")}</td>
+                    ) : (
+                      <>
+                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "pickParcels").toLocaleString("th-TH")}</td>
+                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "sortParcels").toLocaleString("th-TH")}</td>
+                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "packParcels").toLocaleString("th-TH")}</td>
+                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "inspectParcels").toLocaleString("th-TH")}</td>
+                      </>
+                    )}
+                    <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "ship").toLocaleString("th-TH")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })}
     </div>
   )
 }

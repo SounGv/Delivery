@@ -178,4 +178,5 @@ const zeroMetrics: WorkPerformanceMetrics = {
   inspectWaveCount: 0, inspectParcels: 0, inspectSku: 0, pickSingleSkuSingleQty: 0,
   pickSingleSkuMultiQty: 0, pickMultiSku: 0, sortSingleSkuSingleQty: 0, sortSingleSkuMultiQty: 0,
   sortMultiSku: 0, packSingleSkuSingleQty: 0, packSingleSkuMultiQty: 0, packMultiSku: 0,
+  stockMoveDocs: 0,
 }
