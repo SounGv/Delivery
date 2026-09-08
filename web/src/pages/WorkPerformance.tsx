@@ -6,13 +6,26 @@ import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Podium } from "@/components/workforce/Podium"
 import { RankingList } from "@/components/workforce/RankingList"
+import { DateRangePicker } from "@/components/reports/DateRangePicker"
+import { ChartCard } from "@/components/charts/ChartCard"
+import { BarLineChart } from "@/components/charts/BarLineChart"
 import { computeRankDeltas, previousWindow, rankByMetric, type RankedEmployeeMetric, type RankingMetric } from "@/lib/workforce"
-import { computeWpDailyComparison, computeWpEmployeeMetrics } from "@/lib/workPerformanceRanking"
+import {
+  computeWpDailyComparison,
+  computeWpDailyTrend,
+  computeWpDailyTrendByDepartment,
+  computeWpEmployeeMetrics,
+  dailyItemTotal,
+  dailyParcelTotal,
+  dailyWaveTotal,
+  sumEmployeeMetricInRange,
+} from "@/lib/workPerformanceRanking"
 import { downloadCsv } from "@/lib/csv"
-import { formatNumber } from "@/lib/format"
+import { getDatePresets } from "@/lib/dashboard-selectors"
+import { formatFullDateLabel, formatNumber } from "@/lib/format"
 import { useSettings } from "@/lib/settingsContext"
 import { cn } from "@/lib/utils"
-import type { WorkPerformanceEmployee } from "@/api/types"
+import type { WorkPerformanceEmployee, WorkPerformanceMetrics } from "@/api/types"
 
 // "แอดมิน" (the shop-owner/admin BigSeller account, e.g. Rootbeer) isn't a real
 // fulfilment worker — never a department to show, filter, or rank here.
@@ -35,9 +48,23 @@ function rankingMetricFormatter(metric: RankingMetric) {
   }
 }
 
-function sumMetric(emp: WorkPerformanceEmployee, key: keyof WorkPerformanceEmployee["totals"]): number {
-  return emp.totals[key] ?? 0
+/** Range-aware replacement for reading `emp.totals[key]` (always whole-dataset) —
+ * sums a raw BigSeller column over whichever dates the page's filter selected. */
+function sumMetric(emp: WorkPerformanceEmployee, dates: string[], key: keyof WorkPerformanceMetrics): number {
+  return sumEmployeeMetricInRange(emp, dates, (m) => m[key])
 }
+
+/** Short "d MMM" label (no year) for dense day-by-day chart/table axes. */
+function shortDateLabel(iso: string): string {
+  return formatFullDateLabel(iso).split(" ").slice(0, 2).join(" ")
+}
+
+type TrendViewMode = "team" | "department" | "person"
+const VIEW_MODE_OPTIONS: { key: TrendViewMode; label: string }[] = [
+  { key: "team", label: "ทั้งทีม" },
+  { key: "department", label: "ฝ่าย" },
+  { key: "person", label: "รายคน" },
+]
 
 /**
  * "ผลงาน (BigSeller)" — per-employee daily fulfilment performance pulled
@@ -53,6 +80,10 @@ export function WorkPerformance() {
   const { targetOverride } = useSettings()
   const [department, setDepartment] = useState("all")
   const [rankingMetric, setRankingMetric] = useState<RankingMetric>("parcels")
+  const [viewMode, setViewMode] = useState<TrendViewMode>("team")
+  const [selectedPerson, setSelectedPerson] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
 
   const employees = useMemo(
     () => (data?.workPerformance?.employees ?? []).filter((e) => !EXCLUDED_DEPARTMENTS.has(e.department)),
@@ -68,39 +99,58 @@ export function WorkPerformance() {
     return [...ordered, ...extra]
   }, [wp])
 
+  const minDate = wp?.dates[0] ?? ""
+  const maxDate = wp?.dates[wp.dates.length - 1] ?? ""
+  // "Today" here means the latest date the sheet actually has (a BigSeller
+  // pull can lag behind the real calendar date), same convention as
+  // SalesSummary/WorkforcePlanning's date filters.
+  const defaultPreset = useMemo(() => {
+    if (!minDate || !maxDate) return { start: minDate, end: maxDate }
+    const presets = getDatePresets(maxDate, minDate)
+    return presets.find((p) => p.label === "เดือนนี้") ?? { start: minDate, end: maxDate }
+  }, [minDate, maxDate])
+  const effectiveStart = startDate || defaultPreset.start
+  const effectiveEnd = endDate || defaultPreset.end
+  const filteredDates = useMemo(
+    () => (wp ? wp.dates.filter((d) => d >= effectiveStart && d <= effectiveEnd) : []),
+    [wp, effectiveStart, effectiveEnd]
+  )
+
   const filtered = useMemo(() => {
     if (!wp) return []
     const rows = department === "all" ? wp.employees : wp.employees.filter((e) => e.department === department)
-    return [...rows].sort((a, b) => sumMetric(b, "pickParcels") - sumMetric(a, "pickParcels"))
-  }, [wp, department])
+    return [...rows].sort((a, b) => sumMetric(b, filteredDates, "pickParcels") - sumMetric(a, filteredDates, "pickParcels"))
+  }, [wp, department, filteredDates])
 
   // Same ranking system as the online team's "อันดับผลงานรายบุคคล" (Podium/
   // RankingList) — see workPerformanceRanking.ts's doc for the metric mapping.
+  // Scoped to the selected date range, same as every other section below.
   const targetPerPerson = targetOverride ?? data?.target?.value ?? null
   const hasTarget = targetPerPerson !== null
   const effectiveRankingMetric = hasTarget ? rankingMetric : rankingMetric === "pctTarget" ? "parcels" : rankingMetric
   const ranking = useMemo(() => {
     if (!wp) return []
-    const metrics = computeWpEmployeeMetrics(filtered, wp.dates, targetPerPerson ?? 0)
+    const metrics = computeWpEmployeeMetrics(filtered, filteredDates, targetPerPerson ?? 0)
     return rankByMetric(metrics, effectiveRankingMetric)
-  }, [wp, filtered, targetPerPerson, effectiveRankingMetric])
+  }, [wp, filtered, filteredDates, targetPerPerson, effectiveRankingMetric])
   const top3 = ranking.filter((m) => m.rank <= 3)
   const rest = ranking.filter((m) => m.rank > 3)
   const rankDeltas = useMemo(() => {
-    if (!wp || wp.dates.length === 0) return new Map<string, number>()
+    if (!wp || filteredDates.length === 0) return new Map<string, number>()
     // No baseline yet until the sheet accumulates enough history to have real
-    // dates before wp.dates[0] — computeRankDeltas already handles that case
-    // cleanly (an employee absent from the previous period just gets no arrow).
-    const prev = previousWindow(wp.dates[0]!, wp.dates[wp.dates.length - 1]!)
+    // dates before the selected range — computeRankDeltas already handles that
+    // case cleanly (an employee absent from the previous period just gets no arrow).
+    const prev = previousWindow(effectiveStart, effectiveEnd)
     const prevDates = wp.dates.filter((d) => d >= prev.start && d <= prev.end)
     const prevMetrics = computeWpEmployeeMetrics(filtered, prevDates, targetPerPerson ?? 0)
     const prevRanking = rankByMetric(prevMetrics, effectiveRankingMetric)
     return computeRankDeltas(ranking, prevRanking)
-  }, [wp, filtered, ranking, targetPerPerson, effectiveRankingMetric])
+  }, [wp, filtered, filteredDates, ranking, targetPerPerson, effectiveRankingMetric, effectiveStart, effectiveEnd])
   const formatRankingMetric = rankingMetricFormatter(rankingMetric)
 
-  // "วันนี้ vs เมื่อวาน" — the latest two dates the sheet actually has, sorted
-  // by today's parcel total so the busiest/most-changed people surface first.
+  // "วันนี้ vs เมื่อวาน" — always the latest two dates the sheet actually has,
+  // regardless of the date-range filter above (this comparison is inherently
+  // "today vs yesterday of real data", not a range).
   const dailyComparison = useMemo(() => {
     if (!wp) return []
     return [...computeWpDailyComparison(filtered, wp.dates)].sort((a, b) => b.today - a.today)
@@ -119,6 +169,22 @@ export function WorkPerformance() {
     return order.filter((d) => map.has(d)).map((d) => ({ department: d, employees: map.get(d)! }))
   }, [filtered, department, departments])
 
+  // "วันต่อวัน" (day-by-day) trend — one of three scopes, chosen via viewMode.
+  const trendDepartments = department === "all" ? departments : [department]
+  const personOptions = useMemo(() => filtered.map((e) => ({ operator: e.operator, name: e.name })), [filtered])
+  const effectivePersonOperator =
+    selectedPerson && filtered.some((e) => e.operator === selectedPerson) ? selectedPerson : personOptions[0]?.operator ?? ""
+  const teamTrend = useMemo(() => computeWpDailyTrend(filtered, filteredDates), [filtered, filteredDates])
+  const personTrend = useMemo(() => {
+    const emp = filtered.find((e) => e.operator === effectivePersonOperator)
+    return emp ? computeWpDailyTrend([emp], filteredDates) : []
+  }, [filtered, filteredDates, effectivePersonOperator])
+  const departmentTrend = useMemo(
+    () => computeWpDailyTrendByDepartment(filtered, filteredDates, trendDepartments),
+    [filtered, filteredDates, trendDepartments]
+  )
+  const activeTrend = viewMode === "person" ? personTrend : teamTrend
+
   if (isLoading) return <LoadingSkeletonGrid count={4} />
   if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
 
@@ -136,17 +202,19 @@ export function WorkPerformance() {
     )
   }
 
-  const totalPick = wp.employees.reduce((s, e) => s + sumMetric(e, "pickParcels"), 0)
-  const totalSort = wp.employees.reduce((s, e) => s + sumMetric(e, "sortParcels"), 0)
-  const totalPack = wp.employees.reduce((s, e) => s + sumMetric(e, "packParcels"), 0)
-  const totalShip = wp.employees.reduce((s, e) => s + sumMetric(e, "ship"), 0)
+  // Composite totals ("พัสดุ"/"สินค้า"/"Wave" — see workPerformanceRanking.ts)
+  // over the selected date range, across every mapped employee.
+  const totalParcels = wp.employees.reduce((s, e) => s + sumEmployeeMetricInRange(e, filteredDates, dailyParcelTotal), 0)
+  const totalItems = wp.employees.reduce((s, e) => s + sumEmployeeMetricInRange(e, filteredDates, dailyItemTotal), 0)
+  const totalWaves = wp.employees.reduce((s, e) => s + sumEmployeeMetricInRange(e, filteredDates, dailyWaveTotal), 0)
+  const totalShip = wp.employees.reduce((s, e) => s + sumMetric(e, filteredDates, "ship"), 0)
 
   const handleExport = () => {
     downloadCsv(
-      `bigseller-work-performance_${department}.csv`,
+      `bigseller-work-performance_${department}_${effectiveStart}_${effectiveEnd}.csv`,
       ["วันที่", "โอเปอเรเตอร์", "ชื่อ", "แผนก", "จัดการคำสั่งซื้อ", "พิมพ์ใบปะหน้า", "PDA หยิบของ", "จัดส่ง", "จำนวนรวมพัสดุที่หยิบ", "จำนวนรวมพัสดุที่คัดแยก", "จำนวนรวมพัสดุที่แพ็ก", "จำนวนพัสดุที่ตรวจสอบ"],
       filtered.flatMap((emp) =>
-        wp.dates
+        filteredDates
           .filter((d) => emp.byDate[d])
           .map((d) => {
             const m = emp.byDate[d]!
@@ -185,9 +253,9 @@ export function WorkPerformance() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard title="พนักงานทั้งหมด" value={wp.employees.length} icon={Users} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="คน" />
-        <KpiCard title="พัสดุที่หยิบรวม" value={totalPick} icon={ScanLine} gradient="bg-gradient-to-br from-sky-500 to-sky-700" suffix="ชิ้น" />
-        <KpiCard title="พัสดุที่คัดแยกรวม" value={totalSort} icon={Boxes} gradient="bg-gradient-to-br from-amber-500 to-amber-600" suffix="ชิ้น" />
-        <KpiCard title="พัสดุที่แพ็กรวม" value={totalPack} icon={PackageCheck} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="ชิ้น" />
+        <KpiCard title="จำนวนพัสดุรวม" value={totalParcels} icon={ScanLine} gradient="bg-gradient-to-br from-sky-500 to-sky-700" suffix="ชิ้น" />
+        <KpiCard title="สินค้ารวม" value={totalItems} icon={Boxes} gradient="bg-gradient-to-br from-amber-500 to-amber-600" suffix="SKU" />
+        <KpiCard title="Wave รวม" value={totalWaves} icon={PackageCheck} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="Wave" />
       </div>
 
       <div className="glass-panel flex flex-wrap items-center gap-3 rounded-2xl p-4">
@@ -216,11 +284,22 @@ export function WorkPerformance() {
             </button>
           ))}
         </div>
+        <DateRangePicker
+          start={effectiveStart}
+          end={effectiveEnd}
+          minDate={minDate}
+          maxDate={maxDate}
+          today={maxDate}
+          onChange={({ start, end }) => {
+            setStartDate(start)
+            setEndDate(end)
+          }}
+        />
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <Truck className="size-3.5" /> จัดส่งรวม {totalShip.toLocaleString("th-TH")}
           </span>
-          <span>ช่วงวันที่: {wp.dates[0]} – {wp.dates[wp.dates.length - 1]}</span>
+          <span>ช่วงที่แสดง: {formatFullDateLabel(effectiveStart)} – {formatFullDateLabel(effectiveEnd)}</span>
           <button
             type="button"
             onClick={handleExport}
@@ -264,6 +343,90 @@ export function WorkPerformance() {
           </div>
         )}
       </div>
+
+      <ChartCard
+        title="วันต่อวัน"
+        subtitle={`${formatFullDateLabel(effectiveStart)} – ${formatFullDateLabel(effectiveEnd)} · จำนวนพัสดุ/สินค้า/Wave ต่อวัน`}
+      >
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 rounded-xl border border-border p-1">
+            {VIEW_MODE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setViewMode(opt.key)}
+                className={cn(
+                  "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  viewMode === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {viewMode === "person" && (
+            <select
+              value={effectivePersonOperator}
+              onChange={(e) => setSelectedPerson(e.target.value)}
+              className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-xs font-medium text-foreground outline-none"
+            >
+              {personOptions.length === 0 && <option value="">ไม่มีข้อมูล</option>}
+              {personOptions.map((p) => (
+                <option key={p.operator} value={p.operator} className="bg-popover text-popover-foreground">
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {viewMode === "department" ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="pb-2 font-medium">วันที่</th>
+                  {trendDepartments.map((d) => (
+                    <th key={d} className="pb-2 text-right font-medium">{d}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {departmentTrend.map((r) => (
+                  <tr key={r.date} className="border-b border-white/5 last:border-0">
+                    <td className="py-2 text-muted-foreground">{shortDateLabel(r.date)}</td>
+                    {trendDepartments.map((d) => (
+                      <td key={d} className="py-2 text-right tabular-nums text-foreground">
+                        {(r.byDepartment[d] ?? 0).toLocaleString("th-TH")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {departmentTrend.length === 0 && (
+                  <tr>
+                    <td colSpan={trendDepartments.length + 1} className="py-6 text-center text-muted-foreground">
+                      ไม่มีข้อมูลในช่วงเวลาที่เลือก
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-muted-foreground">แสดงจำนวนพัสดุรวมต่อวัน แยกตามฝ่าย</p>
+          </div>
+        ) : activeTrend.length > 0 ? (
+          <BarLineChart
+            categories={activeTrend.map((r) => shortDateLabel(r.date))}
+            bars={[
+              { name: "พัสดุ", data: activeTrend.map((r) => r.parcels) },
+              { name: "สินค้า", data: activeTrend.map((r) => r.items) },
+            ]}
+            line={{ name: "Wave", data: activeTrend.map((r) => r.waves) }}
+            height={300}
+          />
+        ) : (
+          <p className="py-6 text-center text-sm text-muted-foreground">ไม่มีข้อมูลในช่วงเวลาที่เลือก</p>
+        )}
+      </ChartCard>
 
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">
         <h3 className="mb-1 text-sm font-semibold text-foreground">เทียบผลงานวันนี้ vs เมื่อวาน</h3>
@@ -344,11 +507,11 @@ export function WorkPerformance() {
                 <tr key={emp.operator} className="border-b border-white/5 last:border-0">
                   <td className="py-2 font-medium text-foreground">{emp.name}</td>
                   <td className="py-2 text-muted-foreground">{emp.operator}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, "pickParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, "sortParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, "packParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, "inspectParcels").toLocaleString("th-TH")}</td>
-                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, "ship").toLocaleString("th-TH")}</td>
+                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "pickParcels").toLocaleString("th-TH")}</td>
+                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "sortParcels").toLocaleString("th-TH")}</td>
+                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "packParcels").toLocaleString("th-TH")}</td>
+                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "inspectParcels").toLocaleString("th-TH")}</td>
+                  <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "ship").toLocaleString("th-TH")}</td>
                 </tr>
               ))}
             </tbody>

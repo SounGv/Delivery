@@ -21,6 +21,28 @@ export function dailyItemTotal(m: WorkPerformanceMetrics): number {
   return m.pickSku + m.packSku + m.inspectSku
 }
 
+/** "Wave" — a work-batch BigSeller groups orders into; counted across every
+ * stage that creates its own wave (pick/sort/pack/inspect). */
+export function dailyWaveTotal(m: WorkPerformanceMetrics): number {
+  return m.pickWaveCount + m.sortWaveCount + m.packWaveCount + m.inspectWaveCount
+}
+
+/** Sums one composite metric (dailyParcelTotal, dailyItemTotal, ...) for a
+ * single employee over an arbitrary date range — the range-aware replacement
+ * for reading `emp.totals[key]`, which is always whole-dataset. */
+export function sumEmployeeMetricInRange(
+  emp: WorkPerformanceEmployee,
+  dates: string[],
+  metricFn: (m: WorkPerformanceMetrics) => number
+): number {
+  let total = 0
+  for (const d of dates) {
+    const m = emp.byDate[d]
+    if (m) total += metricFn(m)
+  }
+  return total
+}
+
 /**
  * Feeds the same ranking system already used for the online team (Podium/
  * RankingList/rankByMetric/computeRankDeltas — see lib/workforce.ts) with
@@ -98,6 +120,55 @@ export function computeWpDailyComparison(employees: WorkPerformanceEmployee[], s
       }
     })
     .filter((r) => r.today > 0 || r.yesterday > 0)
+}
+
+export interface DailyTrendRow {
+  date: string
+  parcels: number
+  items: number
+  waves: number
+}
+
+/** Day-by-day totals across the given employees (already scoped to whichever
+ * department/person filter is active) — feeds the "วันต่อวัน" trend chart. */
+export function computeWpDailyTrend(employees: WorkPerformanceEmployee[], dates: string[]): DailyTrendRow[] {
+  return dates.map((date) => {
+    let parcels = 0
+    let items = 0
+    let waves = 0
+    for (const e of employees) {
+      const m = e.byDate[date]
+      if (!m) continue
+      parcels += dailyParcelTotal(m)
+      items += dailyItemTotal(m)
+      waves += dailyWaveTotal(m)
+    }
+    return { date, parcels, items, waves }
+  })
+}
+
+export interface DepartmentDailyRow {
+  date: string
+  byDepartment: Record<string, number>
+}
+
+/** Same day-by-day breakdown as computeWpDailyTrend, but split by department
+ * (พัสดุรวม only, per department) — feeds the "ฝ่าย" view of the trend section. */
+export function computeWpDailyTrendByDepartment(
+  employees: WorkPerformanceEmployee[],
+  dates: string[],
+  departments: string[]
+): DepartmentDailyRow[] {
+  return dates.map((date) => {
+    const byDepartment: Record<string, number> = {}
+    for (const dept of departments) byDepartment[dept] = 0
+    for (const e of employees) {
+      const m = e.byDate[date]
+      if (!m) continue
+      byDepartment[e.department] = (byDepartment[e.department] ?? 0) + dailyParcelTotal(m)
+    }
+    return { date, byDepartment }
+  })
 }
 
 const zeroMetrics: WorkPerformanceMetrics = {
