@@ -43,6 +43,11 @@ const RANKING_METRIC_OPTIONS: { key: RankingMetric; label: string }[] = [
   { key: "items", label: "สินค้า" },
   { key: "productivity", label: "Productivity" },
   { key: "pctTarget", label: "% Target" },
+  // Kept as three separate rankable metrics, never summed into one composite,
+  // per explicit request — each ranks by that one raw BigSeller column alone.
+  { key: "pdaPick", label: "PDA หยิบของ" },
+  { key: "pickSku", label: "SKU ที่หยิบ" },
+  { key: "printLabel", label: "พิมพ์ใบปะหน้า" },
 ]
 
 function rankingMetricFormatter(metric: RankingMetric) {
@@ -50,6 +55,9 @@ function rankingMetricFormatter(metric: RankingMetric) {
     if (metric === "parcels") return `${formatNumber(m.parcels)} พัสดุ`
     if (metric === "items") return `${formatNumber(m.items)} SKU`
     if (metric === "productivity") return `${formatNumber(Math.round(m.productivity))} พัสดุ/วัน`
+    if (metric === "pdaPick") return `${formatNumber(m.pdaPick ?? 0)} PDA`
+    if (metric === "pickSku") return `${formatNumber(m.pickSku ?? 0)} SKU`
+    if (metric === "printLabel") return `${formatNumber(m.printLabel ?? 0)} ใบ`
     return `${(m.pctTarget ?? 0).toFixed(0)}% ของเป้า`
   }
 }
@@ -321,7 +329,7 @@ export function WorkPerformance() {
       <div className="glass-panel rounded-2xl p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-foreground">อันดับผลงานรายบุคคล</h3>
-          <div className="flex gap-1 rounded-xl border border-border p-1">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-border p-1">
             {RANKING_METRIC_OPTIONS.filter((opt) => hasTarget || opt.key !== "pctTarget").map((opt) => (
               <button
                 key={opt.key}

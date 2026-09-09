@@ -233,7 +233,7 @@ export function computeEmployeeMetrics(employees: Employee[], start: string, end
     .filter((m) => m.activeDays > 0)
 }
 
-export type RankingMetric = "parcels" | "items" | "productivity" | "pctTarget"
+export type RankingMetric = "parcels" | "items" | "productivity" | "pctTarget" | "pdaPick" | "pickSku" | "printLabel"
 
 export interface RankedEmployeeMetric extends EmployeeMetric {
   rank: number

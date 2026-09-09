@@ -27,17 +27,6 @@ export function dailyWaveTotal(m: WorkPerformanceMetrics): number {
   return m.pickWaveCount + m.sortWaveCount + m.packWaveCount + m.inspectWaveCount
 }
 
-/**
- * Individual-ranking score (อันดับผลงานรายบุคคล — Podium/RankingList only):
- * PDA หยิบของ + จำนวนรวม SKU ที่หยิบ + พิมพ์ใบปะหน้า, per explicit request.
- * Deliberately NOT the same composite as dailyParcelTotal ("พัสดุรวม" shown
- * everywhere else — daily comparison table, KPI cards, per-department table) —
- * that one stays as-is; this is scoped to computeWpEmployeeMetrics below only.
- */
-export function rankingScoreTotal(m: WorkPerformanceMetrics): number {
-  return m.pdaPick + m.pickSku + m.printLabel
-}
-
 /** Sums one composite metric (dailyParcelTotal, dailyItemTotal, ...) for a
  * single employee over an arbitrary date range — the range-aware replacement
  * for reading `emp.totals[key]`, which is always whole-dataset. */
@@ -59,10 +48,10 @@ export function sumEmployeeMetricInRange(
  * RankingList/rankByMetric/computeRankDeltas — see lib/workforce.ts) with
  * BigSeller-sourced work-performance data instead of the legacy manually-typed
  * employee sheet. Nothing in workforce.ts had to change: EmployeeMetric is a
- * plain data shape, not tied to the old Employee type. `parcels` here is
- * rankingScoreTotal (PDA+SKU picked+print label), not dailyParcelTotal — see
- * that function's doc — since this feeds ONLY the ranking, not "พัสดุรวม"
- * anywhere else in the page.
+ * plain data shape, not tied to the old Employee type. pdaPick/printLabel/
+ * pickWaveCount/pickSku are also range-summed here so the ranking can be
+ * switched to any one of them individually (RankingMetric) — kept as
+ * separate fields, never combined into one composite, per explicit request.
  */
 export function computeWpEmployeeMetrics(
   employees: WorkPerformanceEmployee[],
@@ -81,9 +70,9 @@ export function computeWpEmployeeMetrics(
       for (const d of dates) {
         const m = e.byDate[d]
         if (!m) continue
-        const dayScore = rankingScoreTotal(m)
-        if (dayScore > 0) activeDays += 1
-        parcels += dayScore
+        const dayParcels = dailyParcelTotal(m)
+        if (dayParcels > 0) activeDays += 1
+        parcels += dayParcels
         items += dailyItemTotal(m)
         pdaPick += m.pdaPick
         printLabel += m.printLabel
