@@ -32,6 +32,11 @@ import type { WorkPerformanceEmployee, WorkPerformanceMetrics } from "@/api/type
 // fulfilment worker — never a department to show, filter, or rank here.
 const EXCLUDED_DEPARTMENTS = new Set(["แอดมิน"])
 const DEPARTMENT_ORDER = ["ออนไลน์", "ออฟไลน์", "คลัง"]
+// The individual ranking (Podium/RankingList) is fulfilment-line performance —
+// ฝ่ายคลัง never belongs there even when someone's incidental pick/ship
+// activity would otherwise place them on the board (e.g. helping ฝ่ายออนไลน์
+// for a day). Always excluded from ranking, independent of the department filter above.
+const RANKING_DEPARTMENTS = new Set(["ออนไลน์", "ออฟไลน์"])
 
 const RANKING_METRIC_OPTIONS: { key: RankingMetric; label: string }[] = [
   { key: "parcels", label: "พัสดุ" },
@@ -129,11 +134,12 @@ export function WorkPerformance() {
   const targetPerPerson = targetOverride ?? data?.target?.value ?? null
   const hasTarget = targetPerPerson !== null
   const effectiveRankingMetric = hasTarget ? rankingMetric : rankingMetric === "pctTarget" ? "parcels" : rankingMetric
+  const rankingEmployees = useMemo(() => filtered.filter((e) => RANKING_DEPARTMENTS.has(e.department)), [filtered])
   const ranking = useMemo(() => {
     if (!wp) return []
-    const metrics = computeWpEmployeeMetrics(filtered, filteredDates, targetPerPerson ?? 0)
+    const metrics = computeWpEmployeeMetrics(rankingEmployees, filteredDates, targetPerPerson ?? 0)
     return rankByMetric(metrics, effectiveRankingMetric)
-  }, [wp, filtered, filteredDates, targetPerPerson, effectiveRankingMetric])
+  }, [wp, rankingEmployees, filteredDates, targetPerPerson, effectiveRankingMetric])
   const top3 = ranking.filter((m) => m.rank <= 3)
   const rest = ranking.filter((m) => m.rank > 3)
   const rankDeltas = useMemo(() => {
@@ -143,10 +149,10 @@ export function WorkPerformance() {
     // case cleanly (an employee absent from the previous period just gets no arrow).
     const prev = previousWindow(effectiveStart, effectiveEnd)
     const prevDates = wp.dates.filter((d) => d >= prev.start && d <= prev.end)
-    const prevMetrics = computeWpEmployeeMetrics(filtered, prevDates, targetPerPerson ?? 0)
+    const prevMetrics = computeWpEmployeeMetrics(rankingEmployees, prevDates, targetPerPerson ?? 0)
     const prevRanking = rankByMetric(prevMetrics, effectiveRankingMetric)
     return computeRankDeltas(ranking, prevRanking)
-  }, [wp, filtered, filteredDates, ranking, targetPerPerson, effectiveRankingMetric, effectiveStart, effectiveEnd])
+  }, [wp, rankingEmployees, filteredDates, ranking, targetPerPerson, effectiveRankingMetric, effectiveStart, effectiveEnd])
   const formatRankingMetric = rankingMetricFormatter(rankingMetric)
 
   // "วันนี้ vs เมื่อวาน" — always the latest two dates the sheet actually has,

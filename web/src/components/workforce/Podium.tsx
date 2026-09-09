@@ -2,6 +2,7 @@ import { motion } from "framer-motion"
 import { Trophy } from "lucide-react"
 import { Avatar3D, type AvatarEmotion } from "./Avatar3D"
 import { cn } from "@/lib/utils"
+import { formatNumber } from "@/lib/format"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
 function emotionFor(pctTarget: number | null): AvatarEmotion {
@@ -64,6 +65,14 @@ function PodiumSlot({
         >
           {entry.pctTarget.toFixed(0)}% Target
         </p>
+      )}
+      {entry.pdaPick !== undefined && (
+        <div className="mt-1 grid grid-cols-2 gap-x-1.5 text-center text-[10px] leading-tight text-muted-foreground">
+          <span>PDA {formatNumber(entry.pdaPick)}</span>
+          <span>ป้าย {formatNumber(entry.printLabel ?? 0)}</span>
+          <span>Wave {formatNumber(entry.pickWaveCount ?? 0)}</span>
+          <span>SKU {formatNumber(entry.pickSku ?? 0)}</span>
+        </div>
       )}
       <div
         className={cn(

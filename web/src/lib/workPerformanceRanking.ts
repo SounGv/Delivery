@@ -60,6 +60,10 @@ export function computeWpEmployeeMetrics(
       let parcels = 0
       let items = 0
       let activeDays = 0
+      let pdaPick = 0
+      let printLabel = 0
+      let pickWaveCount = 0
+      let pickSku = 0
       for (const d of dates) {
         const m = e.byDate[d]
         if (!m) continue
@@ -67,10 +71,14 @@ export function computeWpEmployeeMetrics(
         if (dayParcels > 0) activeDays += 1
         parcels += dayParcels
         items += dailyItemTotal(m)
+        pdaPick += m.pdaPick
+        printLabel += m.printLabel
+        pickWaveCount += m.pickWaveCount
+        pickSku += m.pickSku
       }
       const productivity = activeDays > 0 ? parcels / activeDays : 0
       const pctTarget = targetPerPerson > 0 ? (productivity / targetPerPerson) * 100 : null
-      return { name: e.name, parcels, items, activeDays, productivity, pctTarget }
+      return { name: e.name, parcels, items, activeDays, productivity, pctTarget, pdaPick, printLabel, pickWaveCount, pickSku }
     })
     .filter((m) => m.activeDays > 0)
 }

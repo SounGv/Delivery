@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
 import { Avatar3D } from "./Avatar3D"
 import { cn } from "@/lib/utils"
+import { formatNumber } from "@/lib/format"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
 function emotionFor(pctTarget: number | null) {
@@ -51,6 +52,12 @@ export function RankingList({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-foreground">{m.name}</p>
             <p className="text-xs text-muted-foreground">{metricFormatter(m)}</p>
+            {m.pdaPick !== undefined && (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                PDA {formatNumber(m.pdaPick)} · ป้าย {formatNumber(m.printLabel ?? 0)} · Wave {formatNumber(m.pickWaveCount ?? 0)} · SKU{" "}
+                {formatNumber(m.pickSku ?? 0)}
+              </p>
+            )}
           </div>
           {showTarget && m.pctTarget !== null && (
             <span

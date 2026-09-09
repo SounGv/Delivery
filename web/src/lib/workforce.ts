@@ -211,6 +211,13 @@ export interface EmployeeMetric {
    * hasNoPrimaryParcelTarget) — they still show real parcels/items above, just
    * never a %-of-target figure, since parcel target isn't their KPI. */
   pctTarget: number | null
+  /** Raw BigSeller column breakdown, only populated by computeWpEmployeeMetrics
+   * (the ผลงาน (BigSeller) ranking) — undefined for every other ranking source,
+   * so Podium/RankingList render this breakdown only there. */
+  pdaPick?: number
+  printLabel?: number
+  pickWaveCount?: number
+  pickSku?: number
 }
 
 /** Only employees with at least one active day in range count — matches "ห้ามนำคนที่ไม่มีข้อมูลมานับ". */
