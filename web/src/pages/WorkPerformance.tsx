@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react"
-import { AlertTriangle, ArrowDown, ArrowUp, Boxes, Download, Minus, PackageCheck, ScanLine, Truck, Users } from "lucide-react"
+import { AlertTriangle, Boxes, Download, PackageCheck, ScanLine, Truck, Users } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Podium } from "@/components/workforce/Podium"
 import { RankingList } from "@/components/workforce/RankingList"
+import { DailyComparisonTable } from "@/components/workforce/DailyComparisonTable"
 import { DateRangePicker } from "@/components/reports/DateRangePicker"
 import { ChartCard } from "@/components/charts/ChartCard"
 import { BarLineChart } from "@/components/charts/BarLineChart"
@@ -428,68 +429,15 @@ export function WorkPerformance() {
         )}
       </ChartCard>
 
-      <div className="glass-panel overflow-x-auto rounded-2xl p-4">
-        <h3 className="mb-1 text-sm font-semibold text-foreground">เทียบผลงานวันนี้ vs เมื่อวาน</h3>
-        <p className="mb-3 text-xs text-muted-foreground">
-          รายละเอียดของวันนี้ ({todayLabel ?? "-"}) ตามคอลัมน์จริงจากชีต + "พัสดุรวม" (หยิบ+แพ็ก+ตรวจสอบ+จัดส่งรวมกัน) เทียบกับ{" "}
-          {yesterdayLabel ?? "ไม่มีข้อมูลวันก่อนหน้า"}
-        </p>
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs text-muted-foreground">
-              <th className="pb-2 font-medium">ชื่อ</th>
-              <th className="pb-2 font-medium">แผนก</th>
-              <th className="pb-2 text-right font-medium">PDA หยิบของ</th>
-              <th className="pb-2 text-right font-medium">พิมพ์ใบปะหน้า</th>
-              <th className="pb-2 text-right font-medium">จำนวน Wave ที่หยิบ</th>
-              <th className="pb-2 text-right font-medium">จำนวนรวม SKU ที่หยิบ</th>
-              <th className="pb-2 text-right font-medium">พัสดุรวม (เมื่อวาน)</th>
-              <th className="pb-2 text-right font-medium">พัสดุรวม (วันนี้)</th>
-              <th className="pb-2 text-right font-medium">% เปลี่ยนแปลง</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dailyComparison.map((r) => (
-              <tr key={r.operator} className="border-b border-white/5 last:border-0">
-                <td className="py-2 font-medium text-foreground">{r.name}</td>
-                <td className="py-2 text-muted-foreground">{r.department}</td>
-                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPdaPick.toLocaleString("th-TH")}</td>
-                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPrintLabel.toLocaleString("th-TH")}</td>
-                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPickWaveCount.toLocaleString("th-TH")}</td>
-                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.todayPickSku.toLocaleString("th-TH")}</td>
-                <td className="py-2 text-right tabular-nums text-muted-foreground">{r.yesterday.toLocaleString("th-TH")}</td>
-                <td className="py-2 text-right tabular-nums text-foreground">{r.today.toLocaleString("th-TH")}</td>
-                <td className="py-2 text-right">
-                  {r.pctChange === null ? (
-                    <span className="text-xs text-muted-foreground">ไม่มีข้อมูลเมื่อวาน</span>
-                  ) : (
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 text-sm font-semibold tabular-nums",
-                        r.pctChange > 0 ? "text-emerald-glow" : r.pctChange < 0 ? "text-destructive" : "text-muted-foreground"
-                      )}
-                    >
-                      {r.pctChange > 0 ? <ArrowUp className="size-3.5" /> : r.pctChange < 0 ? <ArrowDown className="size-3.5" /> : <Minus className="size-3.5" />}
-                      {Math.abs(r.pctChange).toFixed(0)}%
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {dailyComparison.length === 0 && (
-              <tr>
-                <td colSpan={9} className="py-6 text-center text-muted-foreground">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DailyComparisonTable rows={dailyComparison} todayLabel={todayLabel} yesterdayLabel={yesterdayLabel} />
 
       {grouped.map((g) => {
-        // ฝ่ายคลัง's real work is moving/replenishing stock positions, not
-        // pick/pack/inspect — those columns stay ~0 for this department, so
-        // show the stock-move document count (see workPerformanceRanking.ts's
-        // stockMoveDocs doc) instead of a wall of zeros.
+        // ฝ่ายคลัง's real work is moving/replenishing stock positions (not
+        // pick/pack/inspect), so its table gets 2 extra columns for that —
+        // ADDED alongside the usual pick/pack columns, not swapped in place of
+        // them, since a ฝ่ายคลัง person can have a real pick/pack day too
+        // (helping ฝ่ายออนไลน์/ออฟไลน์). See workPerformanceRanking.ts's
+        // transferDocs/replenishDocs doc.
         const isWarehouse = g.department === "คลัง"
         return (
           <div key={g.department} className="glass-panel overflow-x-auto rounded-2xl p-4">
@@ -501,14 +449,14 @@ export function WorkPerformance() {
                 <tr className="border-b border-border text-xs text-muted-foreground">
                   <th className="pb-2 font-medium">ชื่อ</th>
                   <th className="pb-2 font-medium">Username (BigSeller)</th>
-                  {isWarehouse ? (
-                    <th className="pb-2 text-right font-medium">จำนวนเอกสาร (ย้าย/เติมสต็อก)</th>
-                  ) : (
+                  <th className="pb-2 text-right font-medium">หยิบ (พัสดุ)</th>
+                  <th className="pb-2 text-right font-medium">คัดแยก (พัสดุ)</th>
+                  <th className="pb-2 text-right font-medium">แพ็ก (พัสดุ)</th>
+                  <th className="pb-2 text-right font-medium">ตรวจสอบ (พัสดุ)</th>
+                  {isWarehouse && (
                     <>
-                      <th className="pb-2 text-right font-medium">หยิบ (พัสดุ)</th>
-                      <th className="pb-2 text-right font-medium">คัดแยก (พัสดุ)</th>
-                      <th className="pb-2 text-right font-medium">แพ็ก (พัสดุ)</th>
-                      <th className="pb-2 text-right font-medium">ตรวจสอบ (พัสดุ)</th>
+                      <th className="pb-2 text-right font-medium">ใบย้ายสินค้า</th>
+                      <th className="pb-2 text-right font-medium">ใบเติมสินค้า</th>
                     </>
                   )}
                   <th className="pb-2 text-right font-medium">จัดส่ง</th>
@@ -519,14 +467,14 @@ export function WorkPerformance() {
                   <tr key={emp.operator} className="border-b border-white/5 last:border-0">
                     <td className="py-2 font-medium text-foreground">{emp.name}</td>
                     <td className="py-2 text-muted-foreground">{emp.operator}</td>
-                    {isWarehouse ? (
-                      <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "stockMoveDocs").toLocaleString("th-TH")}</td>
-                    ) : (
+                    <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "pickParcels").toLocaleString("th-TH")}</td>
+                    <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "sortParcels").toLocaleString("th-TH")}</td>
+                    <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "packParcels").toLocaleString("th-TH")}</td>
+                    <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "inspectParcels").toLocaleString("th-TH")}</td>
+                    {isWarehouse && (
                       <>
-                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "pickParcels").toLocaleString("th-TH")}</td>
-                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "sortParcels").toLocaleString("th-TH")}</td>
-                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "packParcels").toLocaleString("th-TH")}</td>
-                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "inspectParcels").toLocaleString("th-TH")}</td>
+                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "transferDocs").toLocaleString("th-TH")}</td>
+                        <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "replenishDocs").toLocaleString("th-TH")}</td>
                       </>
                     )}
                     <td className="py-2 text-right tabular-nums text-foreground">{sumMetric(emp, filteredDates, "ship").toLocaleString("th-TH")}</td>

@@ -85,11 +85,16 @@ export interface DailyComparisonRow {
   pctChange: number | null
   /** Today's raw BigSeller columns, named exactly as the sheet does — shown
    * directly on the page so "พัสดุรวม" is never a mystery number: it's visibly
-   * built from these real columns, not some opaque derived figure. */
+   * built from these real columns, not some opaque derived figure. Every
+   * column is shown for every employee regardless of department: a ฝ่ายคลัง
+   * person can have a real (non-zero) pick column on a day they helped
+   * ฝ่ายออนไลน์/ออฟไลน์, and vice versa. */
   todayPdaPick: number
   todayPrintLabel: number
   todayPickWaveCount: number
   todayPickSku: number
+  todayTransferDocs: number
+  todayReplenishDocs: number
 }
 
 /** Per-employee today-vs-yesterday comparison (พัสดุ = dailyParcelTotal), for
@@ -117,9 +122,11 @@ export function computeWpDailyComparison(employees: WorkPerformanceEmployee[], s
         todayPrintLabel: todayMetrics.printLabel,
         todayPickWaveCount: todayMetrics.pickWaveCount,
         todayPickSku: todayMetrics.pickSku,
+        todayTransferDocs: todayMetrics.transferDocs,
+        todayReplenishDocs: todayMetrics.replenishDocs,
       }
     })
-    .filter((r) => r.today > 0 || r.yesterday > 0)
+    .filter((r) => r.today > 0 || r.yesterday > 0 || r.todayTransferDocs > 0 || r.todayReplenishDocs > 0)
 }
 
 export interface DailyTrendRow {
@@ -178,5 +185,5 @@ const zeroMetrics: WorkPerformanceMetrics = {
   inspectWaveCount: 0, inspectParcels: 0, inspectSku: 0, pickSingleSkuSingleQty: 0,
   pickSingleSkuMultiQty: 0, pickMultiSku: 0, sortSingleSkuSingleQty: 0, sortSingleSkuMultiQty: 0,
   sortMultiSku: 0, packSingleSkuSingleQty: 0, packSingleSkuMultiQty: 0, packMultiSku: 0,
-  stockMoveDocs: 0,
+  transferDocs: 0, replenishDocs: 0,
 }

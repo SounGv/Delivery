@@ -254,11 +254,16 @@ export interface WorkPerformanceMetrics {
   packSingleSkuSingleQty: number
   packSingleSkuMultiQty: number
   packMultiSku: number
-  /** Distinct หมายเลขเอกสาร that day from the "บันทึกการอัปเดตตำแหน่งสต็อก
-   * (BigSeller)" stock-move-log tab — ฝ่ายคลัง's real move/replenish work,
-   * since the columns above (all BigSeller's pick/pack/ship report) stay
-   * near-zero for warehouse staff. See parseStockMoveSheet_'s doc. */
-  stockMoveDocs: number
+  /** Distinct เลขที่ใบย้ายสินค้า that day from the "บันทึกการอัปเดตตำแหน่งสต็อก
+   * (BigSeller)" stock-move-log tab (APP ย้ายและนำเข้า/ออกชั้นวาง) — ฝ่ายคลัง's
+   * real move work, since the columns above (BigSeller's pick/pack/ship
+   * report) stay near-zero for warehouse staff. See parseStockMoveSheet_'s
+   * doc. A non-คลัง employee can still show a real (non-zero) pick/pack
+   * column above on a day they helped ฝ่ายคลัง, and vice versa. */
+  transferDocs: number
+  /** Distinct เลขใบเติมสต็อก that day (APP เติมสต็อกและนำเข้า/ออกชั้นวาง) —
+   * kept separate from transferDocs, not summed, per explicit request. */
+  replenishDocs: number
 }
 
 /** One BigSeller operator, joined against the "รายชื่อพนักงาน (BigSeller)"

@@ -1359,7 +1359,7 @@ function parseStockMoveSheet_(sheet, tz) {
   var displayValues = range.getDisplayValues();
 
   var headerRowIdx = -1;
-  var operatorCol = -1, timeCol = -1, docCol = -1;
+  var operatorCol = -1, timeCol = -1, docCol = -1, typeCol = -1;
   for (var r = 0; r < Math.min(values.length, 5); r++) {
     var hdr = values[r];
     var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
@@ -1371,6 +1371,7 @@ function parseStockMoveSheet_(sheet, tz) {
       if (h === 'ปัญชี') operatorCol = c;
       else if (h === 'เวลา') timeCol = c;
       else if (h === 'หมายเลขเอกสาร') docCol = c;
+      else if (h === 'ประเภท') typeCol = c;
     }
     break;
   }
@@ -1385,10 +1386,18 @@ function parseStockMoveSheet_(sheet, tz) {
     if (!dateObj) continue;
     var doc = String(row[docCol] == null ? '' : row[docCol]).trim();
     if (!doc) continue;
+    var type = typeCol === -1 ? '' : String(row[typeCol] == null ? '' : row[typeCol]).trim();
     out.push({
       date: Utilities.formatDate(dateObj, tz, 'yyyy-MM-dd'),
       operator: operator,
-      doc: doc
+      doc: doc,
+      // "ย้าย..." (ย้ายและนำเข้า/ออกชั้นวาง) = a stock TRANSFER document;
+      // "เต็มสต็อก..." (เต็มสต็อกและนำเข้า/ออกชั้นวาง) = a REPLENISH document —
+      // "เต็มสต็อก" (not "เติมสต็อก") is BigSeller's own spelling for this type,
+      // confirmed against the raw export, same story as 'ปัญชี' above. Kept as
+      // two separate counts (not one) per explicit request — they're shown as
+      // separate columns (ใบย้ายสินค้า / ใบเติมสินค้า), not summed.
+      isReplenish: type.indexOf('เต็มสต็อก') !== -1
     });
   }
   return out;
@@ -1455,7 +1464,7 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
   var unmappedSet = {};
 
   function zeroWorkMetrics() {
-    var m = { stockMoveDocs: 0 };
+    var m = { transferDocs: 0, replenishDocs: 0 };
     WORK_PERFORMANCE_COLUMNS_.forEach(function (col) { m[col.key] = 0; });
     return m;
   }
@@ -1479,7 +1488,7 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
     dateSet[row.date] = true;
     var entry = ensureEmployee(row.operator);
     if (!entry) return;
-    var metrics = { stockMoveDocs: 0 };
+    var metrics = { transferDocs: 0, replenishDocs: 0 };
     WORK_PERFORMANCE_COLUMNS_.forEach(function (col) {
       var v = row[col.key] || 0;
       metrics[col.key] = v;
@@ -1488,26 +1497,35 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
     entry.byDate[row.date] = metrics;
   });
 
-  // Distinct หมายเลขเอกสาร per (operator, date) — see parseStockMoveSheet_'s
-  // doc for why a raw row count would double/quadruple-count a single move.
+  // Distinct หมายเลขเอกสาร per (operator, date), split by ย้าย (transfer) vs
+  // เติมสต็อก (replenish) — see parseStockMoveSheet_'s doc for why a raw row
+  // count would double/quadruple-count a single move, and why the two types
+  // are kept as separate columns instead of one combined count. A ฝ่ายคลัง
+  // person can also show real (non-zero) pick columns above on a day they
+  // helped ฝ่ายออนไลน์/ออฟไลน์ — that's expected, not a mapping error.
   if (stockMoveRaw && stockMoveRaw.length) {
-    var docSets = {}; // operator -> date -> { docNumber: true, ... }
+    var transferSets = {}, replenishSets = {}; // operator -> date -> { docNumber: true, ... }
     stockMoveRaw.forEach(function (row) {
-      if (!docSets[row.operator]) docSets[row.operator] = {};
-      if (!docSets[row.operator][row.date]) docSets[row.operator][row.date] = {};
-      docSets[row.operator][row.date][row.doc] = true;
+      var sets = row.isReplenish ? replenishSets : transferSets;
+      if (!sets[row.operator]) sets[row.operator] = {};
+      if (!sets[row.operator][row.date]) sets[row.operator][row.date] = {};
+      sets[row.operator][row.date][row.doc] = true;
     });
-    Object.keys(docSets).forEach(function (operator) {
-      var entry = ensureEmployee(operator);
-      if (!entry) return;
-      Object.keys(docSets[operator]).forEach(function (date) {
-        dateSet[date] = true;
-        var count = Object.keys(docSets[operator][date]).length;
-        if (!entry.byDate[date]) entry.byDate[date] = zeroWorkMetrics();
-        entry.byDate[date].stockMoveDocs = count;
-        entry.totals.stockMoveDocs += count;
+    function applyDocSets(sets, key) {
+      Object.keys(sets).forEach(function (operator) {
+        var entry = ensureEmployee(operator);
+        if (!entry) return;
+        Object.keys(sets[operator]).forEach(function (date) {
+          dateSet[date] = true;
+          var count = Object.keys(sets[operator][date]).length;
+          if (!entry.byDate[date]) entry.byDate[date] = zeroWorkMetrics();
+          entry.byDate[date][key] = count;
+          entry.totals[key] += count;
+        });
       });
-    });
+    }
+    applyDocSets(transferSets, 'transferDocs');
+    applyDocSets(replenishSets, 'replenishDocs');
   }
 
   return {
