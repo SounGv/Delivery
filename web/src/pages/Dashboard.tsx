@@ -26,8 +26,6 @@ import { AlertBar } from "@/components/dashboard/AlertBar"
 import { ChartCard } from "@/components/charts/ChartCard"
 import { ReportSection } from "@/components/common/ReportSection"
 import { EmployeeTable } from "@/components/employees/EmployeeTable"
-import { DailyComparisonTable } from "@/components/workforce/DailyComparisonTable"
-import { computeWpDailyComparison } from "@/lib/workPerformanceRanking"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -225,17 +223,6 @@ export function Dashboard() {
 
   const belowTargetCount = followUpRows.filter((r) => r.status === "below-target").length
 
-  // Per-person "วันนี้ vs เมื่อวาน" from BigSeller's own work-performance +
-  // stock-move data — a separate source from `data.employees` above (see
-  // WorkPerformance.tsx's doc for why), so this is purely additive and never
-  // touches any number computed from the legacy data further up this file.
-  // "แอดมิน" (shop-owner accounts) are never a real fulfilment worker.
-  const wp = data.workPerformance
-  const wpEmployees = wp ? wp.employees.filter((e) => e.department !== "แอดมิน") : []
-  const wpDailyComparison = wp ? [...computeWpDailyComparison(wpEmployees, wp.dates)].sort((a, b) => b.today - a.today) : []
-  const wpTodayLabel = wp?.dates[wp.dates.length - 1]
-  const wpYesterdayLabel = wp && wp.dates.length > 1 ? wp.dates[wp.dates.length - 2] : null
-
   return (
     <div className="space-y-4">
       {/* Alert bar — surfaces what needs attention before any number or chart. */}
@@ -314,11 +301,6 @@ export function Dashboard() {
       <ReportSection title="ต้องติดตามวันนี้" subtitle="เรียงจากความเสี่ยงสูงไปต่ำ — ไม่ใช่อันดับ #1 ก่อน">
         <EmployeeTable rows={followUpRows} onRowClick={openEmployeeDetail} searchable emptyMessage="ไม่มีพนักงานในทีมที่เลือก" />
       </ReportSection>
-
-      {/* Per-person วันนี้ vs เมื่อวาน from BigSeller (ผลงาน + ย้าย/เติมสต็อก) —
-          a separate data source from the follow-up table above, so it's
-          skipped entirely (not an error state) when that source isn't set up. */}
-      {wp && <DailyComparisonTable rows={wpDailyComparison} todayLabel={wpTodayLabel} yesterdayLabel={wpYesterdayLabel} />}
 
       {/* Actual vs target + rank trend — the two required Performance-style charts, on page 1. */}
       <div className="grid grid-cols-12 gap-4">
