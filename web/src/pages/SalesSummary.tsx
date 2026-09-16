@@ -8,6 +8,7 @@ import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { DateRangePicker } from "@/components/reports/DateRangePicker"
 import { ChannelComparisonPanel } from "@/components/reports/ChannelComparisonPanel"
+import { StoreReportPanel } from "@/components/reports/StoreReportPanel"
 import { formatFullDateLabel } from "@/lib/format"
 import { getDatePresets } from "@/lib/dashboard-selectors"
 import {
@@ -131,6 +132,7 @@ function ExtraStatsPanel({ totals }: { totals: OrderReportTotals }) {
 export function SalesSummary() {
   const { data, isLoading, isError, error } = useDashboardQuery()
   const report = data?.orderReport ?? null
+  const storeReportRows = data?.storeReport?.rows ?? []
 
   const allDays = useMemo(() => (report ? sortedOrderReportDays(report.days) : []), [report])
   const minDate = allDays[0]?.date ?? ""
@@ -219,6 +221,8 @@ export function SalesSummary() {
       </div>
 
       {channel === "all" && <ChannelComparisonPanel days={daysInRange} />}
+
+      <StoreReportPanel rows={storeReportRows} />
 
       {days.length === 0 ? (
         <div className="glass-panel rounded-2xl p-8 text-center text-sm text-muted-foreground">

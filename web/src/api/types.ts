@@ -169,6 +169,37 @@ export interface OrderReport {
   days: OrderReportDay[]
 }
 
+/** One store's totals for one pulled period, from the "รายงานร้านค้า (BigSeller)"
+ * sheet (a BigSeller Store Report export). Unlike OrderReportDay, this is NOT
+ * daily — periodStart/periodEnd is whatever date range was exported (currently
+ * pulled monthly), and every store's row for that pull shares the same period. */
+export interface StoreReportRow {
+  /** Literal text from the sheet, e.g. "01 ก.ย. 2026" — not a parsed date. */
+  periodStart: string
+  periodEnd: string
+  store: string
+  effSales: number
+  effOrders: number
+  totalRevenue: number
+  sellerSubsidy: number
+  origPrice: number
+  sales: number
+  productSales: number
+  totalOrders: number
+  parcels: number
+  customers: number
+  refundAmount: number
+  refundOrders: number
+  refundCustomers: number
+  avgPerCustomer: number
+  cancelledOrders: number
+  cancelledAmount: number
+}
+
+export interface StoreReport {
+  rows: StoreReportRow[]
+}
+
 /** One (date, shop) aggregate row from the offline manual-sales log ("รายงาน
  * คำสั่งซื้อ ออฟไลน์" — per-SKU-per-order entries grouped by day and shop). This is
  * the only source of cost data (for gross profit) in the whole sales-summary feature. */
@@ -209,6 +240,10 @@ export interface DashboardResponse {
   /** BigSeller order-report export ("รายงานคำสั่งซื้อ"). Optional/null until the
    * parser that reads that tab is redeployed. */
   orderReport?: OrderReport | null
+  /** Per-store BigSeller Store Report export ("รายงานร้านค้า (BigSeller)"),
+   * pulled at whatever cadence (currently monthly). Optional/null until the
+   * parser that reads that tab is redeployed, or before any period is pulled. */
+  storeReport?: StoreReport | null
   /** Workplace obstacles/issues log ("ปัญหารอแก้"). Optional: absent until the
    * parser that reads that tab is redeployed. */
   workIssues?: WorkIssue[]

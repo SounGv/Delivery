@@ -22,7 +22,7 @@
  * a bump — they're only ever CACHE_TTL_SECONDS_ stale at most, an explicit and small
  * trade for going from tens-of-seconds to near-instant on every repeat load.
  */
-var CACHE_VERSION_ = 'v4';
+var CACHE_VERSION_ = 'v5';
 // Was 90s. The sheets this reads have grown a lot (55k+ row stock-move log, months
 // of order-report history, ...) so a real cache-miss rebuild now takes ~80s — too
 // close to a 90s TTL, meaning most real visits (more than 90s apart) paid that full

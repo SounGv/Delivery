@@ -624,6 +624,87 @@ function mergeOrderReportDays_(a, b) {
   return Object.keys(byKey).sort().map(function (k) { return byKey[k]; });
 }
 
+/**
+ * Reads the "รายงานร้านค้า (BigSeller)" tab — a per-store BigSeller Store
+ * Report export, pulled by hand at whatever cadence (currently: monthly)
+ * and prepended as a new block of rows each time, tagged with the exact
+ * period (ช่วงเริ่มต้น/ช่วงสิ้นสุด) that pull covered. Unlike the daily
+ * order-report tabs, there is no per-day granularity here — one row is one
+ * store's TOTAL for its period. Detected by CONTENT (needs "ชื่อเล่นร้านค้าใน
+ * BigSeller" + "ช่วงเริ่มต้น" in the header) so a rename never silently drops
+ * data. Read-only. Returns [] for a non-matching sheet.
+ */
+function parseStoreReportSheet_(sheet, tz) {
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length < 2) return [];
+  var displayValues = range.getDisplayValues();
+
+  var headerRowIdx = -1;
+  var col = {};
+  for (var r = 0; r < Math.min(values.length, 5); r++) {
+    var hdr = values[r];
+    var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
+    if (joined.indexOf('ชื่อเล่นร้านค้าใน BigSeller') === -1 || joined.indexOf('ช่วงเริ่มต้น') === -1) continue;
+    headerRowIdx = r;
+    for (var c = 0; c < hdr.length; c++) {
+      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
+      if (h.normalize) h = h.normalize('NFC');
+      if (h === 'ช่วงเริ่มต้น') col.periodStart = c;
+      else if (h === 'ช่วงสิ้นสุด') col.periodEnd = c;
+      else if (h === 'ชื่อเล่นร้านค้าใน BigSeller') col.store = c;
+      else if (h.indexOf('ยอดขายของคำสั่งซื้อที่มีผล') !== -1) col.effSales = c;
+      else if (h === 'คำสั่งซื้อที่มีผล') col.effOrders = c;
+      else if (h.indexOf('รายได้รวม') !== -1) col.totalRevenue = c;
+      else if (h.indexOf('เงินอุดหนุน') !== -1) col.sellerSubsidy = c;
+      else if (h.indexOf('ราคาสินค้าเดิม') !== -1) col.origPrice = c;
+      else if (h === 'ยอดขาย') col.sales = c;
+      else if (h.indexOf('ยอดขายสินค้า') !== -1) col.productSales = c;
+      else if (h.indexOf('คำสั่งซื้อทั้งหมด') !== -1) col.totalOrders = c;
+      else if (h.indexOf('จำนวนพัสดุ') !== -1) col.parcels = c;
+      else if (h === 'ลูกค้า') col.customers = c;
+      else if (h.indexOf('จำนวนคำสั่งซื้อที่คืนเงิน') !== -1) col.refundAmount = c;
+      else if (h === 'คำสั่งซื้อที่คืนเงิน') col.refundOrders = c;
+      else if (h.indexOf('ลูกค้าที่คืนเงิน') !== -1) col.refundCustomers = c;
+      else if (h.indexOf('ยอดขายเฉลี่ยต่อลูกค้า') !== -1) col.avgPerCustomer = c;
+      else if (h === 'คำสั่งซื้อที่ยกเลิก') col.cancelledOrders = c;
+      else if (h.indexOf('ยอดเงินคำสั่งซื้อที่ยกเลิก') !== -1) col.cancelledAmount = c;
+    }
+    break;
+  }
+  if (headerRowIdx === -1 || col.store === undefined) return [];
+
+  var out = [];
+  for (var i = headerRowIdx + 1; i < values.length; i++) {
+    var row = values[i];
+    var storeName = row[col.store];
+    if (storeName === '' || storeName === null || storeName === undefined) continue;
+
+    out.push({
+      periodStart: String(displayValues[i][col.periodStart] || '').trim(),
+      periodEnd: String(displayValues[i][col.periodEnd] || '').trim(),
+      store: String(storeName).trim(),
+      effSales: numFromCell_(row[col.effSales]) || 0,
+      effOrders: numFromCell_(row[col.effOrders]) || 0,
+      totalRevenue: numFromCell_(row[col.totalRevenue]) || 0,
+      sellerSubsidy: numFromCell_(row[col.sellerSubsidy]) || 0,
+      origPrice: numFromCell_(row[col.origPrice]) || 0,
+      sales: numFromCell_(row[col.sales]) || 0,
+      productSales: numFromCell_(row[col.productSales]) || 0,
+      totalOrders: numFromCell_(row[col.totalOrders]) || 0,
+      parcels: numFromCell_(row[col.parcels]) || 0,
+      customers: numFromCell_(row[col.customers]) || 0,
+      refundAmount: numFromCell_(row[col.refundAmount]) || 0,
+      refundOrders: numFromCell_(row[col.refundOrders]) || 0,
+      refundCustomers: numFromCell_(row[col.refundCustomers]) || 0,
+      avgPerCustomer: numFromCell_(row[col.avgPerCustomer]) || 0,
+      cancelledOrders: numFromCell_(row[col.cancelledOrders]) || 0,
+      cancelledAmount: numFromCell_(row[col.cancelledAmount]) || 0
+    });
+  }
+  return out;
+}
+
 /** Splits a "30 พ.ค. 2026 9:13" cell into its date part (for Utilities.formatDate)
  * and the raw trailing time text (used only as an order-grouping key, never
  * parsed as a real time — the sheet's own display text is authoritative). */
@@ -1549,6 +1630,7 @@ function buildDashboardPayload_() {
   var shipErrors = [];
   var receivingWarehouse = null;
   var orderReportDays = [];
+  var storeReportRows = [];
   var workIssues = [];
   var offlineShopSales = [];
   var offlineRefundMonthly = {}; // `${yyyy-MM}` -> { refund, qty } — see parseOfflineRefundMonthlySheet_
@@ -1647,6 +1729,16 @@ function buildDashboardPayload_() {
           var orderDays = parseOrderReportSheet_(sheet, tz, orderChannel);
           if (orderDays.length) orderReportDays = mergeOrderReportDays_(orderReportDays, orderDays);
         } catch (e4) { /* ignore malformed order-report sheet */ }
+        return;
+      }
+
+      // The per-store BigSeller Store Report tab — one row per store per pulled
+      // period (currently pulled monthly), not per day. See parseStoreReportSheet_.
+      if (headerSampleHas_(peek.headerSample, ['ชื่อเล่นร้านค้าใน BigSeller', 'ช่วงเริ่มต้น'])) {
+        try {
+          var storeRows = parseStoreReportSheet_(sheet, tz);
+          if (storeRows.length) storeReportRows = storeReportRows.concat(storeRows);
+        } catch (e13) { /* ignore malformed store-report sheet */ }
         return;
       }
 
@@ -1838,6 +1930,7 @@ function buildDashboardPayload_() {
     shipErrors: shipErrors,
     receivingWarehouse: receivingWarehouse,
     orderReport: orderReportDays.length ? { days: orderReportDays } : null,
+    storeReport: storeReportRows.length ? { rows: storeReportRows } : null,
     workIssues: workIssues,
     offlineShopSales: offlineShopSales,
     workPerformance: buildWorkPerformancePayload_(workPerformanceRaw, workPerformanceMap, stockMoveRaw)
