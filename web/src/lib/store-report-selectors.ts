@@ -1,5 +1,13 @@
 import type { StoreReportRow } from "@/api/types"
 
+/** Not real storefronts — internal/adjustment rows BigSeller's own Store
+ * Report lumps in alongside actual stores. Excluded from every view here
+ * (not deleted from the sheet, which stays a faithful export snapshot).
+ * "LockStock" is a stock-lock/adjustment bucket, not a sales channel.
+ * "สินค้าเคลม (GV)" is warranty-claim replacements, not new sales.
+ * "Marketing" is marketing-sample/giveaway orders, not paid sales. */
+const EXCLUDED_STORES = new Set(["LockStock", "สินค้าเคลม (GV)", "Marketing"])
+
 /** Every distinct period present in the sheet, newest-pulled first (matches
  * insertion order: each pull is prepended as a new block of rows). */
 export function distinctStorePeriods(rows: StoreReportRow[]): { periodStart: string; periodEnd: string }[] {
@@ -18,7 +26,7 @@ export function distinctStorePeriods(rows: StoreReportRow[]): { periodStart: str
  * store first, matching how the BigSeller Store Report page itself reads. */
 export function storeReportForPeriod(rows: StoreReportRow[], periodStart: string, periodEnd: string): StoreReportRow[] {
   return rows
-    .filter((r) => r.periodStart === periodStart && r.periodEnd === periodEnd)
+    .filter((r) => r.periodStart === periodStart && r.periodEnd === periodEnd && !EXCLUDED_STORES.has(r.store))
     .slice()
     .sort((a, b) => b.sales - a.sales)
 }
