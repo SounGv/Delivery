@@ -35,7 +35,7 @@ export interface StoreReportTotals {
   totalSales: number
   totalEffSales: number
   totalOrders: number
-  totalParcels: number
+  totalCancelledOrders: number
   totalProductSales: number
 }
 
@@ -45,9 +45,9 @@ export function computeStoreReportTotals(rows: StoreReportRow[]): StoreReportTot
       totalSales: acc.totalSales + r.sales,
       totalEffSales: acc.totalEffSales + r.effSales,
       totalOrders: acc.totalOrders + r.totalOrders,
-      totalParcels: acc.totalParcels + r.parcels,
+      totalCancelledOrders: acc.totalCancelledOrders + r.cancelledOrders,
       totalProductSales: acc.totalProductSales + r.productSales,
     }),
-    { totalSales: 0, totalEffSales: 0, totalOrders: 0, totalParcels: 0, totalProductSales: 0 }
+    { totalSales: 0, totalEffSales: 0, totalOrders: 0, totalCancelledOrders: 0, totalProductSales: 0 }
   )
 }

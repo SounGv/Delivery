@@ -57,7 +57,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <th className="pb-2.5 text-right font-medium">ยอดขาย (฿)</th>
             <th className="pb-2.5 text-right font-medium">ยอดขายมีผล (฿)</th>
             <th className="pb-2.5 text-right font-medium">คำสั่งซื้อ</th>
-            <th className="pb-2.5 text-right font-medium">พัสดุ</th>
+            <th className="pb-2.5 text-right font-medium">ยกเลิก</th>
             <th className="pb-2.5 text-right font-medium">ยอดขายสินค้า (฿)</th>
           </tr>
         </thead>
@@ -68,7 +68,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
               <td className="py-2.5 text-right tabular-nums font-medium">{money(r.sales)}</td>
               <td className="py-2.5 text-right tabular-nums text-muted-foreground">{money(r.effSales)}</td>
               <td className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>
-              <td className="py-2.5 text-right tabular-nums">{num(r.parcels)}</td>
+              <td className="py-2.5 text-right tabular-nums text-destructive">{num(r.cancelledOrders)}</td>
               <td className="py-2.5 text-right tabular-nums">{money(r.productSales)}</td>
             </tr>
           ))}
@@ -79,7 +79,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <td className="pt-2.5 text-right tabular-nums">{money(totals.totalSales)}</td>
             <td className="pt-2.5 text-right tabular-nums text-muted-foreground">{money(totals.totalEffSales)}</td>
             <td className="pt-2.5 text-right tabular-nums">{num(totals.totalOrders)}</td>
-            <td className="pt-2.5 text-right tabular-nums">{num(totals.totalParcels)}</td>
+            <td className="pt-2.5 text-right tabular-nums text-destructive">{num(totals.totalCancelledOrders)}</td>
             <td className="pt-2.5 text-right tabular-nums">{money(totals.totalProductSales)}</td>
           </tr>
         </tfoot>
