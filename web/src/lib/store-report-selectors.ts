@@ -36,7 +36,7 @@ export interface StoreReportTotals {
   totalEffSales: number
   totalOrders: number
   totalParcels: number
-  totalCustomers: number
+  totalProductSales: number
 }
 
 export function computeStoreReportTotals(rows: StoreReportRow[]): StoreReportTotals {
@@ -46,8 +46,8 @@ export function computeStoreReportTotals(rows: StoreReportRow[]): StoreReportTot
       totalEffSales: acc.totalEffSales + r.effSales,
       totalOrders: acc.totalOrders + r.totalOrders,
       totalParcels: acc.totalParcels + r.parcels,
-      totalCustomers: acc.totalCustomers + r.customers,
+      totalProductSales: acc.totalProductSales + r.productSales,
     }),
-    { totalSales: 0, totalEffSales: 0, totalOrders: 0, totalParcels: 0, totalCustomers: 0 }
+    { totalSales: 0, totalEffSales: 0, totalOrders: 0, totalParcels: 0, totalProductSales: 0 }
   )
 }
