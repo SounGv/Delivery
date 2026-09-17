@@ -553,7 +553,7 @@ function parseOrderReportSheet_(sheet, tz, channel) {
   for (var r = 0; r < Math.min(values.length, 5); r++) {
     var hdr = values[r];
     var joined = hdr.map(function (v) { return String(v == null ? '' : v).normalize ? String(v == null ? '' : v).normalize('NFC') : String(v == null ? '' : v); }).join('|');
-    if (joined.indexOf('วันที่') === -1 || joined.indexOf('คำสั่งซื้อ') === -1) continue;
+    if (joined.indexOf('วันที่') === -1 || joined.indexOf('ยอดขายของคำสั่งซื้อที่มีผล') === -1) continue;
     headerRowIdx = r;
     for (var c = 0; c < hdr.length; c++) {
       var h = String(hdr[c] == null ? '' : hdr[c]).trim();
@@ -1723,7 +1723,14 @@ function buildDashboardPayload_() {
       // one-row-per-day sheet. The channel is read from the name (defaulting to
       // "online" if neither word appears) so the two tabs' same-dated rows are kept
       // side by side instead of one silently overwriting the other.
-      if (headerSampleHas_(peek.headerSample, ['วันที่', 'คำสั่งซื้อ'])) {
+      // Matched on the exact "ยอดขายของคำสั่งซื้อที่มีผล" column header, not just
+      // "วันที่" + "คำสั่งซื้อ" generically — a plain "วันที่"/"คำสั่งซื้อ" pair is
+      // common enough (e.g. the "ยกเลิกไม่ตัดสต๊อก ..." cancelled-order log has a
+      // "วันที่ยกเลิก ไม่ตัดสต๊อก" column and a "หมายเลขคำสั่งซื้อ" column) that the
+      // old looser check once misdetected that unrelated tab as an order-report
+      // tab, silently injecting bogus zero-value "online" days for dates only
+      // that other sheet covered.
+      if (headerSampleHas_(peek.headerSample, ['วันที่', 'ยอดขายของคำสั่งซื้อที่มีผล'])) {
         try {
           var orderChannel = nm.indexOf('ออฟไลน์') !== -1 ? 'offline' : 'online';
           var orderDays = parseOrderReportSheet_(sheet, tz, orderChannel);
