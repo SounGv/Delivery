@@ -639,9 +639,9 @@ function prevMonthKey(monthKey: string): string {
 const FOLLOW_UP_RISK_ORDER: Record<KpiStatus, number> = {
   "below-target": 0,
   watch: 1,
-  "no-data": 2,
-  "no-target": 3,
-  "on-target": 4,
+  "no-target": 2,
+  "on-target": 3,
+  "no-data": 4,
 }
 
 /**
