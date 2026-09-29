@@ -31,6 +31,14 @@ export function storeReportForPeriod(rows: StoreReportRow[], periodStart: string
     .sort((a, b) => b.sales - a.sales)
 }
 
+/** Every real store name present across all periods (excludes the non-store
+ * adjustment rows), sorted alphabetically for a stable dropdown order. */
+export function distinctStores(rows: StoreReportRow[]): string[] {
+  const set = new Set<string>()
+  for (const r of rows) if (!EXCLUDED_STORES.has(r.store)) set.add(r.store)
+  return [...set].sort((a, b) => a.localeCompare(b, "th"))
+}
+
 export interface StoreReportTotals {
   totalSales: number
   totalEffSales: number

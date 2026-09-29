@@ -3,9 +3,12 @@ import { Store } from "lucide-react"
 import {
   computeStoreReportTotals,
   distinctStorePeriods,
+  distinctStores,
   storeReportForPeriod,
 } from "@/lib/store-report-selectors"
 import type { StoreReportRow } from "@/api/types"
+
+const ALL_STORES = "__all_stores__"
 
 const money = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`
 const num = (n: number) => n.toLocaleString("th-TH")
@@ -16,14 +19,17 @@ const num = (n: number) => n.toLocaleString("th-TH")
  * (currently monthly), one period at a time, not daily. */
 export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
   const periods = useMemo(() => distinctStorePeriods(rows), [rows])
+  const stores = useMemo(() => distinctStores(rows), [rows])
   const [periodIdx, setPeriodIdx] = useState(0)
+  const [storeFilter, setStoreFilter] = useState(ALL_STORES)
   const period = periods[periodIdx]
 
   if (rows.length === 0 || !period) {
     return null
   }
 
-  const periodRows = storeReportForPeriod(rows, period.periodStart, period.periodEnd)
+  const periodRowsAll = storeReportForPeriod(rows, period.periodStart, period.periodEnd)
+  const periodRows = storeFilter === ALL_STORES ? periodRowsAll : periodRowsAll.filter((r) => r.store === storeFilter)
   const totals = computeStoreReportTotals(periodRows)
 
   return (
@@ -32,19 +38,37 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Store className="size-5" /> ยอดขายแยกร้านค้า/ช่องทาง
         </h3>
-        {periods.length > 1 && (
-          <select
-            value={periodIdx}
-            onChange={(e) => setPeriodIdx(Number(e.target.value))}
-            className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm font-medium text-foreground outline-none"
-          >
-            {periods.map((p, i) => (
-              <option key={`${p.periodStart}-${p.periodEnd}`} value={i} className="bg-popover text-popover-foreground">
-                {p.periodStart} – {p.periodEnd}
+        <div className="flex flex-wrap gap-2">
+          {stores.length > 1 && (
+            <select
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+              className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm font-medium text-foreground outline-none"
+            >
+              <option value={ALL_STORES} className="bg-popover text-popover-foreground">
+                ทุกร้านค้า/ช่องทาง
               </option>
-            ))}
-          </select>
-        )}
+              {stores.map((s) => (
+                <option key={s} value={s} className="bg-popover text-popover-foreground">
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
+          {periods.length > 1 && (
+            <select
+              value={periodIdx}
+              onChange={(e) => setPeriodIdx(Number(e.target.value))}
+              className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm font-medium text-foreground outline-none"
+            >
+              {periods.map((p, i) => (
+                <option key={`${p.periodStart}-${p.periodEnd}`} value={i} className="bg-popover text-popover-foreground">
+                  {p.periodStart} – {p.periodEnd}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
         ช่วง {period.periodStart} – {period.periodEnd} · รวม {periodRows.length} ร้านค้า/ช่องทาง · ยอดขายรวม {money(totals.totalSales)}
@@ -72,6 +96,13 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
               <td className="py-2.5 text-right tabular-nums">{money(r.productSales)}</td>
             </tr>
           ))}
+          {periodRows.length === 0 && (
+            <tr>
+              <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                ไม่มีข้อมูลร้านค้านี้ในช่วงที่เลือก
+              </td>
+            </tr>
+          )}
         </tbody>
         <tfoot>
           <tr className="border-t border-border text-sm font-semibold text-foreground">

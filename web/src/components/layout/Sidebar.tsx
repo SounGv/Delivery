@@ -33,14 +33,17 @@ export interface NavGroup {
 // (ฝ่ายออนไลน์/ฝ่ายออฟไลน์) is a single page gathering that crew's overview,
 // people, attendance, performance, and OT under tabs (see TeamDepartmentPage.tsx),
 // reusing the exact same pages/logic the old function-based menu pointed at.
-// ฝ่ายคลัง+รับเข้า, ยอดขาย, and งานที่ต้องเช็ค already had one dedicated
-// cross-team page each, so they're unchanged, just relabeled/regrouped here.
+// ฝ่ายคลัง and ฝ่ายรับเข้า used to share one combined "ฝ่ายคลัง+รับเข้า" page —
+// split into their own entries so every department follows the same one-page-
+// per-department pattern as ฝ่ายออนไลน์/ฝ่ายออฟไลน์. ยอดขาย and งานที่ต้องเช็ค
+// already had one dedicated cross-team page each, so they're unchanged.
 export const NAV_GROUPS: NavGroup[] = [
   {
     section: "เมนูหลัก",
     items: [
       { key: "dashboard", label: "ภาพรวม", icon: LayoutDashboard, enabled: true },
-      { key: "receiving-warehouse", label: "ฝ่ายคลัง+รับเข้า", icon: Landmark, enabled: true },
+      { key: "team-warehouse", label: "ฝ่ายคลัง", icon: Warehouse, enabled: true },
+      { key: "team-receiving", label: "ฝ่ายรับเข้า", icon: Landmark, enabled: true },
       { key: "team-online", label: "ฝ่ายออนไลน์", icon: Monitor, enabled: true },
       { key: "team-offline", label: "ฝ่ายออฟไลน์", icon: Home, enabled: true },
       { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },

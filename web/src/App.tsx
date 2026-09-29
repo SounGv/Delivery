@@ -9,7 +9,7 @@ import { Attendance } from "@/pages/Attendance"
 import { Performance } from "@/pages/Performance"
 import { Productivity } from "@/pages/Productivity"
 import { OtHr } from "@/pages/OtHr"
-import { ReceivingWarehouse } from "@/pages/ReceivingWarehouse"
+import { ReceivingWarehouse, ReceivingDepartmentPage, WarehouseDepartmentPage } from "@/pages/ReceivingWarehouse"
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
 import { WorkPerformance } from "@/pages/WorkPerformance"
@@ -29,7 +29,8 @@ import { EmployeeDetailDrawer } from "@/components/employees/EmployeeDetailDrawe
 // Summary has no real data source and was removed per the redesign spec.
 const PAGES: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
-  "receiving-warehouse": ReceivingWarehouse,
+  "team-warehouse": WarehouseDepartmentPage,
+  "team-receiving": ReceivingDepartmentPage,
   "team-online": OnlineTeamPage,
   "team-offline": OfflineTeamPage,
   "sales-summary": SalesSummary,
@@ -37,6 +38,7 @@ const PAGES: Record<string, React.ComponentType> = {
   "work-performance": WorkPerformance,
   settings: Settings,
   // legacy aliases -> original standalone pages (no longer in the main nav)
+  "receiving-warehouse": ReceivingWarehouse,
   live: LiveWarehouse,
   employees: Employees,
   attendance: Attendance,

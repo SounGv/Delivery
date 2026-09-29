@@ -27,9 +27,19 @@ function datesWithData(dep: RwDepartment[]): string[] {
 
 const num = (n: number | null) => (n == null ? "-" : n.toLocaleString("th-TH"))
 
-export function ReceivingWarehouse() {
+/** Shared view for both the combined legacy page and the two split
+ * per-department pages (ReceivingDepartmentPage / WarehouseDepartmentPage) —
+ * `onlyTitle` restricts `rw.departments` to a single department ("ฝ่ายรับเข้า"
+ * or "ฝ่ายคลัง") so each has its own sidebar entry, matching how ฝ่ายออนไลน์/
+ * ฝ่ายออฟไลน์ are already separate pages instead of one combined view. */
+function ReceivingWarehouseView({ onlyTitle }: { onlyTitle?: string }) {
   const { data, isLoading, isError, error } = useDashboardQuery()
-  const rw = data?.receivingWarehouse ?? null
+  const rwAll = data?.receivingWarehouse ?? null
+  const rw = useMemo(() => {
+    if (!rwAll) return null
+    if (!onlyTitle) return rwAll
+    return { ...rwAll, departments: rwAll.departments.filter((d) => d.title === onlyTitle) }
+  }, [rwAll, onlyTitle])
 
   const activeDates = useMemo(() => (rw ? datesWithData(rw.departments) : []), [rw])
   const [date, setDate] = useState<string>("")
@@ -41,7 +51,7 @@ export function ReceivingWarehouse() {
   if (!rw || rw.departments.length === 0) {
     return (
       <div className="glass-panel rounded-2xl p-8 text-center text-sm text-muted-foreground">
-        ยังไม่มีข้อมูลฝ่ายรับเข้า/ฝ่ายคลัง — ตรวจว่าได้ redeploy Apps Script (เวอร์ชันที่อ่านแท็บ "ตารางงาน … รับเข้า+คลัง") แล้วหรือยัง
+        ยังไม่มีข้อมูล{onlyTitle ?? "ฝ่ายรับเข้า/ฝ่ายคลัง"} — ตรวจว่าได้ redeploy Apps Script (เวอร์ชันที่อ่านแท็บ "ตารางงาน … รับเข้า+คลัง") แล้วหรือยัง
       </div>
     )
   }
@@ -66,7 +76,7 @@ export function ReceivingWarehouse() {
           </select>
         </div>
         <p className="text-xs text-muted-foreground">
-          ข้อมูลฝ่ายรับเข้า + ฝ่ายคลัง (จากแท็บ "รับเข้า+คลัง") · แสดงค่ารายบุคคลของวันที่เลือก และ KPI รวมฝ่าย (ค่าล่าสุด)
+          ข้อมูล{onlyTitle ?? "ฝ่ายรับเข้า + ฝ่ายคลัง"} (จากแท็บ "รับเข้า+คลัง") · แสดงค่ารายบุคคลของวันที่เลือก และ KPI รวมฝ่าย (ค่าล่าสุด)
         </p>
       </div>
 
@@ -159,4 +169,18 @@ export function ReceivingWarehouse() {
       })}
     </div>
   )
+}
+
+/** Combined view — kept only as the target of the legacy "receiving-warehouse"
+ * route alias (old bookmarks/deep-links), no longer linked from the sidebar. */
+export function ReceivingWarehouse() {
+  return <ReceivingWarehouseView />
+}
+
+export function ReceivingDepartmentPage() {
+  return <ReceivingWarehouseView onlyTitle="ฝ่ายรับเข้า" />
+}
+
+export function WarehouseDepartmentPage() {
+  return <ReceivingWarehouseView onlyTitle="ฝ่ายคลัง" />
 }
