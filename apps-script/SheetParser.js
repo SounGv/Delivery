@@ -86,6 +86,19 @@ function parseSheetTab_(sheet, tz) {
     blocks[i].fieldKeys = keys;
   }
 
+  // A raw/malformed dump tab (e.g. a BigSeller export pasted straight into a new
+  // sheet, with no real header row) can still trip the "blocks.length === 0" guard
+  // above if ANY cell in row 1 happens to be a genuine Date value — row 1 there is
+  // actual data, not a header, so it has no reason not to contain one. Every real
+  // monthly production tab sub-headers at least one date block with "ชื่อ" (the
+  // per-person name column); requiring that here rejects those dump tabs instead
+  // of misreading their order/tracking-number rows as employees and KPI category
+  // headers, which previously leaked into the dashboard's Category Compliance
+  // panel as garbage (tracking codes as row labels, raw Date.toString() dumps as
+  // values).
+  var hasNameColumn = blocks.some(function (b) { return b.fieldKeys.indexOf('ชื่อ') !== -1; });
+  if (!hasNameColumn) return null;
+
   var leadingCols = blocks[0].col;
   // Employees are keyed by name + team so the same person working in different
   // teams (e.g. moved from the online production line to the offline crew) is
