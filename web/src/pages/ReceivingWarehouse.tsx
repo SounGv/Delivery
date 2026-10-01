@@ -66,7 +66,7 @@ function ReceivingWarehouseView({ onlyTitle }: { onlyTitle?: string }) {
           <select
             value={activeDate}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm font-semibold text-foreground outline-none"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
           >
             {activeDates.map((d) => (
               <option key={d} value={d} className="bg-popover text-popover-foreground">

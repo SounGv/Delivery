@@ -293,7 +293,7 @@ export function Reports() {
             id="employee-filter"
             value={employeeFilter}
             onChange={(e) => setEmployeeFilter(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted"
           >
             <option value="all" className="bg-popover text-popover-foreground">ทั้งหมด</option>
             {data.employees.map((e) => (

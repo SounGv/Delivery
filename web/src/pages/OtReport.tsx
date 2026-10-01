@@ -105,7 +105,7 @@ export function OtReport({ defaultDepartment }: { defaultDepartment?: string } =
     )
   }
 
-  const selectCls = "rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+  const selectCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted"
 
   return (
     <div className="space-y-4">

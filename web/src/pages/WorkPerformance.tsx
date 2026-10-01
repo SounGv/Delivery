@@ -383,7 +383,7 @@ export function WorkPerformance() {
             <select
               value={effectivePersonOperator}
               onChange={(e) => setSelectedPerson(e.target.value)}
-              className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-xs font-medium text-foreground outline-none"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm outline-none hover:bg-muted"
             >
               {personOptions.length === 0 && <option value="">ไม่มีข้อมูล</option>}
               {personOptions.map((p) => (

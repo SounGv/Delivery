@@ -198,7 +198,7 @@ export function SalesSummary() {
           <select
             value={channel}
             onChange={(e) => setChannel(e.target.value as ChannelFilter)}
-            className="flex-1 rounded-lg border border-border bg-transparent px-2.5 py-2 text-base font-medium text-foreground outline-none sm:flex-none"
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-base font-semibold text-foreground shadow-sm outline-none hover:bg-muted sm:flex-none"
           >
             {(Object.keys(CHANNEL_FILTER_LABELS) as ChannelFilter[]).map((c) => (
               <option key={c} value={c} className="bg-popover text-popover-foreground">

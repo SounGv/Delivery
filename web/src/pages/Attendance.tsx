@@ -70,7 +70,7 @@ export function Attendance({ defaultDepartment }: { defaultDepartment?: string }
     return inMin !== null && inMin > workStart
   }).length
 
-  const selectCls = "rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+  const selectCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted"
 
   const deptLabel = department === ALL_DEPARTMENTS ? "ทุกฝ่าย" : department
 

@@ -43,7 +43,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <select
               value={storeFilter}
               onChange={(e) => setStoreFilter(e.target.value)}
-              className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm font-medium text-foreground outline-none"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
             >
               <option value={ALL_STORES} className="bg-popover text-popover-foreground">
                 ทุกร้านค้า/ช่องทาง
@@ -59,7 +59,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <select
               value={periodIdx}
               onChange={(e) => setPeriodIdx(Number(e.target.value))}
-              className="rounded-lg border border-border bg-transparent px-2.5 py-1.5 text-sm font-medium text-foreground outline-none"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
             >
               {periods.map((p, i) => (
                 <option key={`${p.periodStart}-${p.periodEnd}`} value={i} className="bg-popover text-popover-foreground">
@@ -74,7 +74,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         ช่วง {period.periodStart} – {period.periodEnd} · รวม {periodRows.length} ร้านค้า/ช่องทาง · ยอดขายรวม {money(totals.totalSales)}
       </p>
 
-      <table className="w-full min-w-[640px] text-left text-base">
+      <table className="w-full min-w-[760px] text-left text-base">
         <thead>
           <tr className="border-b border-border text-sm text-muted-foreground">
             <th className="pb-2.5 font-medium">ร้านค้า/ช่องทาง</th>
@@ -83,6 +83,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <th className="pb-2.5 text-right font-medium">คำสั่งซื้อ</th>
             <th className="pb-2.5 text-right font-medium">ยกเลิก</th>
             <th className="pb-2.5 text-right font-medium">ยอดขายสินค้า (฿)</th>
+            <th className="pb-2.5 text-right font-medium">คืนสินค้า (฿)</th>
           </tr>
         </thead>
         <tbody>
@@ -94,11 +95,15 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
               <td className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>
               <td className="py-2.5 text-right tabular-nums text-destructive">{num(r.cancelledOrders)}</td>
               <td className="py-2.5 text-right tabular-nums">{money(r.productSales)}</td>
+              <td className="py-2.5 text-right tabular-nums text-destructive">
+                {money(r.refundAmount)}
+                {r.refundOrders > 0 && <span className="ml-1 text-muted-foreground">({num(r.refundOrders)})</span>}
+              </td>
             </tr>
           ))}
           {periodRows.length === 0 && (
             <tr>
-              <td colSpan={6} className="py-6 text-center text-muted-foreground">
+              <td colSpan={7} className="py-6 text-center text-muted-foreground">
                 ไม่มีข้อมูลร้านค้านี้ในช่วงที่เลือก
               </td>
             </tr>
@@ -112,6 +117,10 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <td className="pt-2.5 text-right tabular-nums">{num(totals.totalOrders)}</td>
             <td className="pt-2.5 text-right tabular-nums text-destructive">{num(totals.totalCancelledOrders)}</td>
             <td className="pt-2.5 text-right tabular-nums">{money(totals.totalProductSales)}</td>
+            <td className="pt-2.5 text-right tabular-nums text-destructive">
+              {money(totals.totalRefundAmount)}
+              {totals.totalRefundOrders > 0 && <span className="ml-1 text-muted-foreground">({num(totals.totalRefundOrders)})</span>}
+            </td>
           </tr>
         </tfoot>
       </table>

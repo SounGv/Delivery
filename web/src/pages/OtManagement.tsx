@@ -93,7 +93,7 @@ export function OtManagement({ defaultDepartment }: { defaultDepartment?: string
             id="ot-month"
             value={activeMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm font-semibold text-foreground outline-none"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
           >
             {availableMonths.map((m) => (
               <option key={m} value={m} className="bg-popover text-popover-foreground">
@@ -109,7 +109,7 @@ export function OtManagement({ defaultDepartment }: { defaultDepartment?: string
               id="ot-dept"
               value={department}
               onChange={(e) => { setDepartment(e.target.value); setEmployee("all") }}
-              className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm font-semibold text-foreground outline-none"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
             >
               <option value={ALL_DEPARTMENTS} className="bg-popover text-popover-foreground">ทุกฝ่าย</option>
               {departments.map((d) => (
@@ -124,7 +124,7 @@ export function OtManagement({ defaultDepartment }: { defaultDepartment?: string
             id="ot-emp"
             value={employee}
             onChange={(e) => setEmployee(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted"
           >
             <option value="all" className="bg-popover text-popover-foreground">ทั้งหมด</option>
             {employeeNames.map((n) => (

@@ -111,7 +111,7 @@ export function KpiEvaluation() {
             id="month-select"
             value={activeMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm font-semibold text-foreground outline-none"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
           >
             {availableMonths.map((m) => (
               <option key={m} value={m} className="bg-popover text-popover-foreground">

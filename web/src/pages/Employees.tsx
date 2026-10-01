@@ -112,7 +112,7 @@ export function Employees() {
                 id="employee-select"
                 value={isAllSelected ? ALL_EMPLOYEES_KEY : employee.name}
                 onChange={(e) => setSelectedName(e.target.value)}
-                className="appearance-none rounded-lg border border-border bg-transparent py-1 pr-6 text-sm font-semibold text-foreground outline-none"
+                className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
               >
                 <option value={ALL_EMPLOYEES_KEY} className="bg-popover text-popover-foreground">
                   {ALL_EMPLOYEES_LABEL}

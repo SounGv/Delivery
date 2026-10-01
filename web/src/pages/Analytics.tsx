@@ -72,7 +72,7 @@ export function Analytics() {
             id="shop-select"
             value={shop.shop}
             onChange={(e) => setSelectedShop(e.target.value)}
-            className="rounded-lg border border-border bg-transparent px-2 py-1.5 text-sm text-foreground outline-none"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted"
           >
             {data.shopSla.map((s) => (
               <option key={s.shop} value={s.shop} className="bg-popover text-popover-foreground">{s.shop}</option>
