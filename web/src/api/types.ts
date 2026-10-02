@@ -254,6 +254,9 @@ export interface DashboardResponse {
   /** BigSeller work-performance import (see WorkPerformance's doc). Optional/null
    * until both the raw export tab and its name/department mapping tab exist. */
   workPerformance?: WorkPerformance | null
+  /** BigSeller after-sales/returns export ("BIGSELLER_RAW"). Optional/null until
+   * the parser that reads that tab is redeployed, or before it has any rows. */
+  returns?: ReturnsReport | null
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)
@@ -326,6 +329,61 @@ export interface WorkPerformance {
   /** BigSeller usernames found in the raw export but missing from the mapping
    * tab — surfaced instead of silently dropped, so a new account gets noticed. */
   unmapped: string[]
+}
+
+/** One after-sales/return case from the "BIGSELLER_RAW" sheet (BigSeller
+ * after-sales export), every platform. Dates (orderTime/requestTime/dueTime/
+ * nearestDue) are literal text exactly as the sheet displays them, not parsed
+ * dates — same convention as StoreReportRow's periodStart/periodEnd.
+ * Several fields are suffixed "Shopee" in their doc because the sheet itself
+ * only ever populates them for Shopee-platform rows (TikTok/Lazada leave them
+ * blank) — see parseReturnsSheet_ in apps-script/SheetParser.js. */
+export interface ReturnRow {
+  store: string
+  /** Lowercase, e.g. "shopee" / "tiktok" / "lazada". */
+  platform: string
+  orderNo: string
+  afterSalesId: string
+  parcelNo: string
+  outboundTracking: string
+  returnTracking: string
+  afterSalesType: string
+  returnStatus: string
+  stockInStatus: string
+  returnLogisticsStatus: string
+  orderStatus: string
+  refundAmount: number
+  sku: string
+  qtyToReturn: number
+  qtyStockedIn: number
+  orderTime: string
+  requestTime: string
+  dueTime: string
+  reason: string
+  /** Shopee-only: the platform's own request id. */
+  shopeeRequestId: string
+  /** Shopee-only: the platform's offered resolution, e.g. "คืนเงินและคืนสินค้า". */
+  shopeeOffer: string
+  /** Shopee-only: the platform's own request status. */
+  shopeeRequestStatus: string
+  /** Shopee-only: the customer's free-text return reason. */
+  shopeeReasonText: string
+  /** Shopee-only: return-shipping leg status, e.g. "เข้ารับสินค้าสำเร็จ". */
+  returnShipping: string
+  /** Shopee-only: literal nearest-deadline text. */
+  nearestDue: string
+  /** Days left until the nearest deadline (fractional, can be negative once overdue). Null when the sheet has no deadline for this row. */
+  daysUntilDue: number | null
+  /** Pre-computed overview flag from the sheet's own "ธง" column, e.g. "🔴 เร่งด่วน ≤2 วัน". */
+  flag: string
+  /** Shopee-only: "มี" when the platform is still showing a refund button to press, "ไม่มี" otherwise, "" when not applicable (non-Shopee). */
+  refundButtonPending: string
+  /** The after-sales team's own review status, any platform, e.g. "🔎 รอตรวจสอบใน TikTok" / "✅ พนักงานดำเนินการแล้ว". */
+  staffStatus: string
+}
+
+export interface ReturnsReport {
+  rows: ReturnRow[]
 }
 
 export interface ApiErrorResponse {

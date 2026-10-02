@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import type { EChartsOption } from "echarts"
 import { EChart } from "./EChart"
-import { ChartCard } from "./ChartCard"
+import { ChartCard, ChartChip } from "./ChartCard"
 import type { DashboardResponse } from "@/api/types"
 import { formatDateLabel } from "@/lib/format"
 import { readChartTheme } from "@/lib/chart-theme"
@@ -12,7 +12,9 @@ export function ProductivityHeatmap({ data }: { data: DashboardResponse }) {
 
   const option = useMemo<EChartsOption>(() => {
     const t = readChartTheme()
-    const dates = [...data.dates].sort()
+    // Last 30 days up to the latest day with data — monthly tabs pre-create every calendar
+    // day, so "all dates" would stretch the grid across empty/future months.
+    const dates = [...data.dates].sort().filter((d) => d <= data.todayDate).slice(-30)
     const employees = data.employees.map((e) => e.name)
 
     const cells: [number, number, number][] = []
@@ -32,6 +34,7 @@ export function ProductivityHeatmap({ data }: { data: DashboardResponse }) {
       textStyle: { color: t.muted },
       tooltip: {
         position: "top",
+        ...t.tooltip,
         formatter: (p) => {
           const params = p as unknown as { data: [number, number, number] }
           const [xi, yi, v] = params.data
@@ -42,13 +45,17 @@ export function ProductivityHeatmap({ data }: { data: DashboardResponse }) {
       xAxis: {
         type: "category",
         data: dates.map(formatDateLabel),
-        splitArea: { show: true },
+        splitArea: { show: false },
+        axisTick: { show: false },
+        axisLine: { show: false },
         axisLabel: { color: t.muted, rotate: 45 },
       },
       yAxis: {
         type: "category",
         data: employees,
-        splitArea: { show: true },
+        splitArea: { show: false },
+        axisTick: { show: false },
+        axisLine: { show: false },
         axisLabel: { color: t.foreground },
       },
       visualMap: {
@@ -59,13 +66,13 @@ export function ProductivityHeatmap({ data }: { data: DashboardResponse }) {
         left: "center",
         bottom: 0,
         textStyle: { color: t.muted },
-        inRange: { color: ["rgba(59,130,246,0.08)", t.brand, t.emerald] },
+        inRange: { color: ["rgba(43,168,162,0.10)", t.brand, t.gold] },
       },
       series: [
         {
           type: "heatmap",
           data: cells,
-          itemStyle: { borderRadius: 4, borderColor: "transparent", borderWidth: 2 },
+          itemStyle: { borderRadius: 6, borderColor: t.card, borderWidth: 3 },
           emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(0,0,0,0.3)" } },
         },
       ],
@@ -73,7 +80,12 @@ export function ProductivityHeatmap({ data }: { data: DashboardResponse }) {
   }, [data, theme])
 
   return (
-    <ChartCard title="Employee Productivity Heatmap" subtitle="จำนวนสินค้าต่อคนต่อวัน">
+    <ChartCard
+      emoji="🔥"
+      title="ความหนาแน่นผลงานรายคน"
+      subtitle="จำนวนสินค้าต่อคนต่อวัน · 30 วันล่าสุด"
+      actions={<ChartChip>ยิ่งสีเข้ม/ทอง ยิ่งทำได้มาก</ChartChip>}
+    >
       <EChart option={option} height={Math.max(280, 40 * data.employees.length + 80)} />
     </ChartCard>
   )

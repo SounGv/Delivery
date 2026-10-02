@@ -210,7 +210,7 @@ export function Attendance({ defaultDepartment }: { defaultDepartment?: string }
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard title="บันทึกเวลารวม" value={totalTimeRecords} icon={LogIn} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="รายการ" />
         <KpiCard title="พนักงาน" value={summary.employeeCount} icon={Users} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="คน" />
-        <KpiCard title="วันที่มีบันทึก" value={summary.dayCount} icon={CalendarCheck2} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="วัน" />
+        <KpiCard title="วันที่มีบันทึก" value={summary.dayCount} icon={CalendarCheck2} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="วัน" />
         <KpiCard title={`เข้างานหลัง ${otConfig.workStartHour}:00`} value={lateCount} icon={Clock} gradient="bg-gradient-to-br from-amber-500 to-rose-500" suffix="ครั้ง" />
       </div>
 
@@ -222,7 +222,7 @@ export function Attendance({ defaultDepartment }: { defaultDepartment?: string }
           <KpiCard title="ชั่วโมงทำงานรวม" value={summary.totalWorkedHours} icon={Timer} gradient="bg-gradient-to-br from-brand-500 to-brand-700" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
           <KpiCard title="พัสดุเฉลี่ย/คน/วัน" value={summary.avgParcelsPerPersonPerDay} icon={PackageCheck} gradient="bg-gradient-to-br from-brand-400 to-brand-600" suffix="พัสดุ" />
           <KpiCard title="สินค้าเฉลี่ย/คน/วัน" value={summary.avgItemsPerPersonPerDay} icon={Boxes} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="ชิ้น" />
-          <KpiCard title="พัสดุเฉลี่ย/ชม." value={summary.avgParcelsPerHour} icon={Gauge} gradient="bg-gradient-to-br from-violet-500 to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="พัสดุ/ชม." />
+          <KpiCard title="พัสดุเฉลี่ย/ชม." value={summary.avgParcelsPerHour} icon={Gauge} gradient="bg-gradient-to-br from-sky-500 to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="พัสดุ/ชม." />
           <KpiCard title="สินค้าเฉลี่ย/ชม." value={summary.avgItemsPerHour} icon={Gauge} gradient="bg-gradient-to-br from-amber-500 to-rose-500" formatValue={(n) => n.toFixed(1)} suffix="ชิ้น/ชม." />
         </div>
       </div>

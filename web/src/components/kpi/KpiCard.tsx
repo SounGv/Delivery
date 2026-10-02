@@ -22,6 +22,8 @@ interface KpiCardProps {
   /** Overrides the animated numeric value with literal text (e.g. a name or a time-of-day). */
   valueText?: string
   trend?: KpiCardTrend
+  /** "lg" is the hero treatment for a page's 2-3 headline numbers (bigger value, roomier card). */
+  size?: "md" | "lg"
 }
 
 export function KpiCard({
@@ -35,6 +37,7 @@ export function KpiCard({
   loading,
   valueText,
   trend,
+  size = "md",
 }: KpiCardProps) {
   const animated = useAnimatedNumber(value ?? 0)
 
@@ -43,7 +46,7 @@ export function KpiCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="glass-panel rounded-2xl p-4"
+      className={cn("glass-panel rounded-2xl", size === "lg" ? "p-5" : "p-4")}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -51,7 +54,7 @@ export function KpiCard({
           {loading ? (
             <Skeleton className="mt-2 h-8 w-24" />
           ) : (
-            <p className="mt-1 truncate text-2xl font-bold tabular-nums text-foreground">
+            <p className={cn("mt-1 truncate font-extrabold tabular-nums text-foreground", size === "lg" ? "text-3xl xl:text-4xl" : "text-2xl")}>
               {valueText !== undefined
                 ? valueText
                 : value === null
@@ -75,8 +78,14 @@ export function KpiCard({
           )}
           {subtitle && <p className="mt-1.5 truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg text-white", gradient)}>
-          <Icon className="size-4.5" />
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center text-white shadow-[0_4px_14px_rgba(43,168,162,0.25)]",
+            size === "lg" ? "size-12 rounded-2xl" : "size-9 rounded-xl",
+            gradient
+          )}
+        >
+          <Icon className={size === "lg" ? "size-6" : "size-4.5"} />
         </div>
       </div>
     </motion.div>

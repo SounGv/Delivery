@@ -136,7 +136,7 @@ export function OtManagement({ defaultDepartment }: { defaultDepartment?: string
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard title="OT วันนี้" value={todaySummary.totalHours} icon={Clock} gradient="bg-gradient-to-br from-brand-500 to-brand-700" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
-        <KpiCard title="OT เดือนนี้" value={monthAllSummary.totalHours} icon={CalendarClock} gradient="bg-gradient-to-br from-violet-500 to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
+        <KpiCard title="OT เดือนนี้" value={monthAllSummary.totalHours} icon={CalendarClock} gradient="bg-gradient-to-br from-sky-500 to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
         <KpiCard title="ชั่วโมง OT รวม" value={monthSummary.totalHours} icon={Timer} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
         <KpiCard title="พนักงาน OT" value={monthSummary.employeeCount} icon={Users} gradient="bg-gradient-to-br from-amber-500 to-amber-600" suffix="คน" />
         <KpiCard title="งานช่วง OT (พัสดุ)" value={monthSummary.totalParcels} icon={PackageCheck} gradient="bg-gradient-to-br from-brand-400 to-brand-600" suffix="พัสดุ" />

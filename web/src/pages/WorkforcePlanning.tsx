@@ -159,7 +159,7 @@ export function WorkforcePlanning() {
       {/* Section 1: KPI summary */}
       <div className={cn("grid grid-cols-2 gap-3", hasPlanTarget ? "sm:grid-cols-5" : "sm:grid-cols-3")}>
         <KpiCard title={workloadLabel} value={rangeWorkload} icon={PackageCheck} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix={workloadLabel} />
-        <KpiCard title="ทำงานจริง" value={rangeStat.currentHeadcount} icon={Users} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="คน" />
+        <KpiCard title="ทำงานจริง" value={rangeStat.currentHeadcount} icon={Users} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="คน" />
         {hasPlanTarget && (
           <>
             <KpiCard title="ควรใช้" value={rangeStat.requiredHeadcount} icon={Target} gradient="bg-gradient-to-br from-amber-500 to-amber-600" suffix="คน" />

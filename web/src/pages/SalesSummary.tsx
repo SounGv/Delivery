@@ -251,7 +251,7 @@ export function SalesSummary() {
           title="AOV เฉลี่ย"
           value={totals.weightedAov}
           icon={Receipt}
-          gradient="bg-gradient-to-br from-violet-500 to-brand-600"
+          gradient="bg-gradient-to-br from-sky-500 to-brand-600"
           formatValue={(n) => `฿${n.toFixed(2)}`}
           subtitle="ต่อคำสั่งซื้อ 1 รายการ"
         />

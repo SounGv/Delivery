@@ -49,7 +49,7 @@ export function Errors() {
           title="ล่าสุดเมื่อ"
           value={latestIncidentDate ? 1 : 0}
           icon={CalendarClock}
-          gradient="bg-gradient-to-br from-violet-500 to-brand-600"
+          gradient="bg-gradient-to-br from-sky-500 to-brand-600"
           formatValue={() => (latestIncidentDate ? formatDateLabel(latestIncidentDate) : "-")}
         />
       </div>

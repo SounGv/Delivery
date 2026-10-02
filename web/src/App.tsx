@@ -12,7 +12,7 @@ import { OtHr } from "@/pages/OtHr"
 import { ReceivingWarehouse, ReceivingDepartmentPage, WarehouseDepartmentPage } from "@/pages/ReceivingWarehouse"
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
-import { WorkPerformance } from "@/pages/WorkPerformance"
+import { Returns } from "@/pages/Returns"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
@@ -27,6 +27,10 @@ import { EmployeeDetailDrawer } from "@/components/employees/EmployeeDetailDrawe
 // bookmark/deep-link still resolves (no 404) even though they're no longer
 // directly in the sidebar. NOTE: "payroll" is intentionally absent — Payroll
 // Summary has no real data source and was removed per the redesign spec.
+// "work-performance" (ผลงาน (BigSeller)) is also intentionally absent — its one
+// unique section (อันดับผลงานรายบุคคล) moved into the ฝ่ายออนไลน์/ฝ่ายออฟไลน์
+// department pages (BigSellerRankingSection), and the page was removed by
+// explicit request rather than kept as a legacy alias.
 const PAGES: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
   "team-warehouse": WarehouseDepartmentPage,
@@ -35,7 +39,7 @@ const PAGES: Record<string, React.ComponentType> = {
   "team-offline": OfflineTeamPage,
   "sales-summary": SalesSummary,
   "work-issues": WorkIssues,
-  "work-performance": WorkPerformance,
+  returns: Returns,
   settings: Settings,
   // legacy aliases -> original standalone pages (no longer in the main nav)
   "receiving-warehouse": ReceivingWarehouse,

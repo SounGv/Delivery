@@ -21,9 +21,10 @@ import { useEmployeeDetail } from "@/lib/employeeDetailStore"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { CategoryStatusPanel } from "@/components/charts/CategoryStatusPanel"
 import { EmployeeWorkloadPanel } from "@/components/charts/EmployeeWorkloadPanel"
+import { CategoryReportPanel } from "@/components/reports/CategoryReportPanel"
 import { RecentActivityPanel } from "@/components/dashboard/RecentActivityPanel"
 import { AlertBar } from "@/components/dashboard/AlertBar"
-import { ChartCard } from "@/components/charts/ChartCard"
+import { ChartCard, ChartChip } from "@/components/charts/ChartCard"
 import { ReportSection } from "@/components/common/ReportSection"
 import { EmployeeTable } from "@/components/employees/EmployeeTable"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -67,8 +68,9 @@ function ChartFallback({ height = 320 }: { height?: number }) {
 
 /** Small up/down/flat pill used inside the hero to show day-over-day change. */
 function TrendBadge({ value, label = "เทียบวันก่อน" }: { value: number | null; label?: string }) {
+  // Only used on the teal hero band, so the pill is a translucent white chip with light text.
   if (value === null) {
-    return <span className="text-[11px] font-medium text-muted-foreground">— ไม่มีข้อมูลเทียบ</span>
+    return <span className="text-[11px] font-medium text-white/75">— ไม่มีข้อมูลเทียบ</span>
   }
   const flat = Math.abs(value) < 0.05
   const positive = value > 0
@@ -76,12 +78,8 @@ function TrendBadge({ value, label = "เทียบวันก่อน" }: {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-        flat
-          ? "bg-white/10 text-muted-foreground"
-          : positive
-            ? "bg-emerald-glow/15 text-emerald-glow"
-            : "bg-destructive/15 text-destructive"
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold",
+        flat ? "bg-white/20 text-white" : positive ? "bg-white/90 text-emerald-glow" : "bg-white/90 text-coral-dark"
       )}
     >
       <Icon className="size-3" />
@@ -96,10 +94,10 @@ function HeroStat({ label, value, suffix }: { label: string; value: number; suff
   const animated = useAnimatedNumber(value)
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">
+      <p className="text-xs text-white/75">{label}</p>
+      <p className="mt-0.5 text-xl font-extrabold tabular-nums text-white">
         {Math.round(animated).toLocaleString("th-TH")}
-        <span className="ml-1 text-sm font-medium text-muted-foreground">{suffix}</span>
+        <span className="ml-1 text-sm font-medium text-white/75">{suffix}</span>
       </p>
     </div>
   )
@@ -110,7 +108,7 @@ function HeroStat({ label, value, suffix }: { label: string; value: number; suff
 function HeroParcels({ value }: { value: number }) {
   const animated = useAnimatedNumber(value)
   return (
-    <span className="text-5xl font-bold leading-none tabular-nums text-foreground md:text-6xl">
+    <span className="text-5xl font-extrabold leading-none tabular-nums text-white drop-shadow-sm md:text-7xl">
       {Math.round(animated).toLocaleString("th-TH")}
     </span>
   )
@@ -138,7 +136,7 @@ function TargetRing({ percent, label }: { percent: number | null; label?: string
             fill="none"
             stroke="currentColor"
             strokeWidth={stroke}
-            className="text-white/10"
+            className="text-muted"
           />
           <circle
             cx={size / 2}
@@ -153,8 +151,8 @@ function TargetRing({ percent, label }: { percent: number | null; label?: string
           />
           <defs>
             <linearGradient id="ring-gradient" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor={hit ? "#10b981" : "#3b82f6"} />
-              <stop offset="100%" stopColor={hit ? "#34d399" : "#8b5cf6"} />
+              <stop offset="0%" stopColor={hit ? "#27ae60" : "#2ba8a2"} />
+              <stop offset="100%" stopColor={hit ? "#7bd99f" : "#ffd23f"} />
             </linearGradient>
           </defs>
         </svg>
@@ -185,7 +183,9 @@ export function Dashboard() {
 
   const recentWindow = useMemo(() => {
     if (!data) return { dates: [] as string[], employees: [] as Employee[] }
-    const sorted = [...data.dates].sort()
+    // Only days up to the latest one with data: monthly tabs pre-create every calendar
+    // day, so a plain "last 14 dates" lands on empty future days and blanks both charts.
+    const sorted = [...data.dates].sort().filter((d) => d <= data.todayDate)
     const dates = sorted.slice(-14)
     if (dates.length === 0) return { dates, employees: [] as Employee[] }
     const employees = data.employees.map((e) => filterEmployeeByDateRange(e, dates[0]!, dates[dates.length - 1]!))
@@ -234,26 +234,38 @@ export function Dashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="glass-panel relative col-span-12 overflow-hidden rounded-2xl p-5 lg:col-span-8"
+          className="relative col-span-12 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 via-brand-500 to-brand-400 p-5 text-white shadow-[0_8px_28px_rgba(43,168,162,0.30)] lg:col-span-8"
         >
+          {/* Fanned translucent cards — the Flip7 packaging motif. */}
+          <div className="pointer-events-none absolute -right-6 -top-8 hidden sm:block" aria-hidden>
+            {[-24, -12, 0, 12, 24].map((deg, i) => (
+              <span
+                key={deg}
+                className="absolute right-0 top-0 h-40 w-28 origin-bottom rounded-2xl bg-white/10 ring-1 ring-white/20"
+                style={{ transform: `translateX(${-i * 30}px) rotate(${deg}deg)` }}
+              />
+            ))}
+          </div>
           <div className="relative">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-white/85">
                 <PackageCheck className="size-3.5" /> ผลงานวันนี้
               </div>
-              <span className="text-xs text-muted-foreground">{formatFullDateLabel(data.todayDate)}</span>
+              <span className="rounded-full bg-gold px-3 py-1 text-xs font-extrabold text-[#5c4300] shadow-[0_4px_14px_rgba(255,210,63,0.45)]">
+                {formatFullDateLabel(data.todayDate)}
+              </span>
             </div>
 
             <div className="mt-3 flex flex-wrap items-end gap-x-3 gap-y-1">
               <HeroParcels value={today.parcels} />
-              <span className="pb-1 text-base font-medium text-muted-foreground">พัสดุ</span>
+              <span className="pb-1 text-base font-semibold text-white/85">พัสดุ</span>
               <span className="pb-1"><TrendBadge value={parcelTrend} /></span>
             </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-4 border-t border-border pt-4">
+            <div className="mt-5 grid grid-cols-3 gap-4 border-t border-dashed border-white/40 pt-4">
               <HeroStat label="ชิ้นงานวันนี้" value={today.items} suffix="ชิ้น" />
               <div>
-                <p className="text-xs text-muted-foreground">เทรนด์ชิ้นงาน</p>
+                <p className="text-xs text-white/75">เทรนด์ชิ้นงาน</p>
                 <p className="mt-1.5"><TrendBadge value={itemTrend} /></p>
               </div>
               <HeroStat label="พนักงานทำงาน" value={today.activeEmployees} suffix="คน" />
@@ -290,7 +302,7 @@ export function Dashboard() {
           </h3>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <KpiCard title="OT วันนี้" value={otToday.totalHours} icon={Clock} gradient="bg-gradient-to-br from-brand-500 to-brand-700" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
-            <KpiCard title="OT เดือนนี้" value={otMonth.totalHours} icon={CalendarClock} gradient="bg-gradient-to-br from-violet-500 to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
+            <KpiCard title="OT เดือนนี้" value={otMonth.totalHours} icon={CalendarClock} gradient="bg-gradient-to-br from-sky-500 to-brand-600" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
             <KpiCard title="พนักงาน OT เดือนนี้" value={otMonth.employeeCount} icon={Users} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="คน" />
             <KpiCard title="OT รออนุมัติ" value={otMonth.pendingCount} icon={FileText} gradient="bg-gradient-to-br from-amber-500 to-rose-500" suffix="รายการ" />
           </div>
@@ -298,14 +310,19 @@ export function Dashboard() {
       )}
 
       {/* Who needs follow-up TODAY — before any ranking, sorted by risk not rank. */}
-      <ReportSection title="ต้องติดตามวันนี้" subtitle="เรียงจากความเสี่ยงสูงไปต่ำ — ไม่ใช่อันดับ #1 ก่อน">
+      <ReportSection emoji="🚨" title="ต้องติดตามวันนี้" subtitle="เรียงจากความเสี่ยงสูงไปต่ำ — ไม่ใช่อันดับ #1 ก่อน">
         <EmployeeTable rows={followUpRows} onRowClick={openEmployeeDetail} searchable emptyMessage="ไม่มีพนักงานในทีมที่เลือก" />
       </ReportSection>
 
       {/* Actual vs target + rank trend — the two required Performance-style charts, on page 1. */}
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 lg:col-span-7">
-          <ChartCard title="ผลงานจริงเทียบเป้า" subtitle="พัสดุ / สินค้า รายวัน เทียบเป้าทีม (ปรับตามจำนวนคนที่ทำงานจริงวันนั้น)">
+          <ChartCard
+            emoji="📊"
+            title="ผลงานจริงเทียบเป้า"
+            subtitle="พัสดุ / สินค้า รายวัน เทียบเป้าทีม (ปรับตามจำนวนคนที่ทำงานจริงวันนั้น)"
+            actions={<ChartChip>{recentWindow.dates.length} วันล่าสุด</ChartChip>}
+          >
             <Suspense fallback={<ChartFallback height={300} />}>
               <BarLineChart
                 categories={recentWindow.dates.map((d) => formatDateLabel(d))}
@@ -320,6 +337,8 @@ export function Dashboard() {
                     return targetPerPerson && active > 0 ? targetPerPerson * active : null
                   }),
                 }}
+                leftAxisName="(พัสดุ / ชิ้น)"
+                rightAxisName="(เป้าทีม)"
                 height={300}
               />
             </Suspense>
@@ -342,6 +361,10 @@ export function Dashboard() {
         </div>
         <div className="col-span-12 lg:col-span-5">
           <RecentActivityPanel data={data} />
+        </div>
+
+        <div className="col-span-12">
+          <CategoryReportPanel data={data} />
         </div>
 
         <div className="col-span-12">

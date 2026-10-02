@@ -1,6 +1,9 @@
 import { useEffect } from "react"
-import { Gauge, LayoutDashboard, LineChart, Timer, UserCheck, Users } from "lucide-react"
+import { Gauge, Home, LayoutDashboard, LineChart, Monitor, Timer, Trophy, UserCheck, Users } from "lucide-react"
 import { Tabs } from "@/components/ui/Tabs"
+import { HeaderChip, PageHeader } from "@/components/layout/PageHeader"
+import { useTeamDashboard } from "@/api/queries"
+import { formatFullDateLabel } from "@/lib/format"
 import { LiveWarehouse } from "./LiveWarehouse"
 import { Employees } from "./Employees"
 import { Attendance } from "./Attendance"
@@ -8,6 +11,7 @@ import { WorkforcePlanning } from "./WorkforcePlanning"
 import { KpiEvaluation } from "./KpiEvaluation"
 import { Productivity } from "./Productivity"
 import { OtHr } from "./OtHr"
+import { BigSellerRankingSection } from "@/components/workforce/BigSellerRankingSection"
 import { useSettings } from "@/lib/settingsContext"
 import { TEAM_LABELS } from "@/lib/dashboard-selectors"
 import type { TeamId } from "@/api/types"
@@ -29,18 +33,32 @@ function TeamDepartmentPage({ team }: { team: TeamId }) {
     if (selectedTeam !== team) setSelectedTeam(team)
   }, [team, selectedTeam, setSelectedTeam])
 
+  const { data } = useTeamDashboard()
+  const HeaderIcon = team === "offline" ? Home : Monitor
+
   return (
-    <Tabs
-      items={[
-        { key: "live", label: "ภาพรวม", icon: LayoutDashboard, render: () => <LiveWarehouse /> },
-        { key: "employees", label: "พนักงาน", icon: Users, render: () => <Employees /> },
-        { key: "attendance", label: "เข้า-ออกงาน", icon: UserCheck, render: () => <Attendance defaultDepartment={deptLabel} /> },
-        { key: "ranking", label: "ผลงาน", icon: Gauge, render: () => <WorkforcePlanning /> },
-        { key: "kpi", label: "KPI", icon: Gauge, render: () => <KpiEvaluation /> },
-        { key: "productivity", label: "Productivity", icon: LineChart, render: () => <Productivity /> },
-        { key: "ot", label: "OT & HR", icon: Timer, render: () => <OtHr defaultDepartment={deptLabel} /> },
-      ]}
-    />
+    <div className="space-y-4">
+      <PageHeader
+        icon={HeaderIcon}
+        title={`ฝ่าย${deptLabel}`}
+        subtitle="ภาพรวมทีม พนักงาน เข้า-ออกงาน ผลงาน KPI และ OT รวมไว้ในที่เดียว"
+      >
+        {data && <HeaderChip>👥 {data.employees.length} คน</HeaderChip>}
+        {data && <HeaderChip>📅 ข้อมูลล่าสุด {formatFullDateLabel(data.todayDate)}</HeaderChip>}
+      </PageHeader>
+      <Tabs
+        items={[
+          { key: "live", label: "ภาพรวม", icon: LayoutDashboard, render: () => <LiveWarehouse /> },
+          { key: "employees", label: "พนักงาน", icon: Users, render: () => <Employees /> },
+          { key: "attendance", label: "เข้า-ออกงาน", icon: UserCheck, render: () => <Attendance defaultDepartment={deptLabel} /> },
+          { key: "ranking", label: "ผลงาน", icon: Gauge, render: () => <WorkforcePlanning /> },
+          { key: "bigseller-ranking", label: "อันดับผลงาน", icon: Trophy, render: () => <BigSellerRankingSection team={team} /> },
+          { key: "kpi", label: "KPI", icon: Gauge, render: () => <KpiEvaluation /> },
+          { key: "productivity", label: "Productivity", icon: LineChart, render: () => <Productivity /> },
+          { key: "ot", label: "OT & HR", icon: Timer, render: () => <OtHr defaultDepartment={deptLabel} /> },
+        ]}
+      />
+    </div>
   )
 }
 

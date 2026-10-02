@@ -24,6 +24,9 @@ export interface BarLineChartProps {
   line: BarLineChartLineSeries
   leftAxisFormatter?: (v: number) => string
   rightAxisFormatter?: (v: number) => string
+  /** Small unit labels printed above each axis, e.g. "(พัสดุ)" — same as BigSeller's "(THB)". */
+  leftAxisName?: string
+  rightAxisName?: string
   height?: number
 }
 
@@ -31,7 +34,16 @@ export interface BarLineChartProps {
  * target line (right axis), legend at bottom, thin grid, rounded bar tops.
  * A bare chart only — wrap it in `ChartCard` for a title/subtitle, same as
  * every other chart component in this app. */
-export function BarLineChart({ categories, bars, line, leftAxisFormatter, rightAxisFormatter, height = 300 }: BarLineChartProps) {
+export function BarLineChart({
+  categories,
+  bars,
+  line,
+  leftAxisFormatter,
+  rightAxisFormatter,
+  leftAxisName,
+  rightAxisName,
+  height = 300,
+}: BarLineChartProps) {
   const { theme } = useTheme()
 
   const option = useMemo<EChartsOption>(() => {
@@ -42,6 +54,8 @@ export function BarLineChart({ categories, bars, line, leftAxisFormatter, rightA
       textStyle: { color: t.muted },
       tooltip: {
         trigger: "axis",
+        ...t.tooltip,
+        axisPointer: { type: "shadow", shadowStyle: { color: "rgba(43,168,162,0.08)" } },
         formatter: (params) => {
           const arr = Array.isArray(params) ? params : [params]
           // `axisValueLabel` is present at runtime for axis-trigger tooltips but
@@ -56,24 +70,37 @@ export function BarLineChart({ categories, bars, line, leftAxisFormatter, rightA
           return [head, ...rows].join("<br/>")
         },
       },
-      legend: { bottom: 0, textStyle: { color: t.muted }, data: [...bars.map((b) => b.name), line.name] },
-      grid: { left: 8, right: 16, top: 24, bottom: 48, containLabel: true },
+      legend: {
+        bottom: 0,
+        icon: "roundRect",
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 18,
+        textStyle: { color: t.muted },
+        data: [...bars.map((b) => b.name), line.name],
+      },
+      grid: { left: 8, right: 16, top: 34, bottom: 44, containLabel: true },
       xAxis: {
         type: "category",
         data: categories,
         axisLine: { lineStyle: { color: t.border } },
+        axisTick: { show: false },
         axisLabel: { color: t.muted },
       },
       yAxis: [
         {
           type: "value",
           position: "left",
+          name: leftAxisName,
+          nameTextStyle: { color: t.muted, align: "left" },
           axisLabel: { color: t.muted, formatter: leftAxisFormatter },
-          splitLine: { lineStyle: { color: t.border } },
+          splitLine: { lineStyle: { color: t.border, type: "dashed" } },
         },
         {
           type: "value",
           position: "right",
+          name: rightAxisName,
+          nameTextStyle: { color: t.muted, align: "right" },
           axisLabel: { color: t.muted, formatter: rightAxisFormatter },
           splitLine: { show: false },
         },
@@ -84,8 +111,8 @@ export function BarLineChart({ categories, bars, line, leftAxisFormatter, rightA
           type: "bar" as const,
           data: b.data,
           yAxisIndex: 0,
-          barMaxWidth: 20,
-          itemStyle: { color: b.color ?? t.barColors[i % t.barColors.length], borderRadius: [3, 3, 0, 0] as [number, number, number, number] },
+          barMaxWidth: 14,
+          itemStyle: { color: b.color ?? t.barColors[i % t.barColors.length], borderRadius: [6, 6, 0, 0] as [number, number, number, number] },
         })),
         {
           name: line.name,
@@ -93,14 +120,14 @@ export function BarLineChart({ categories, bars, line, leftAxisFormatter, rightA
           data: line.data,
           yAxisIndex: 1,
           symbol: "circle",
-          symbolSize: 6,
+          symbolSize: 7,
           smooth: true,
-          itemStyle: { color: line.color ?? t.trendLine },
-          lineStyle: { width: 2.5, color: line.color ?? t.trendLine },
+          itemStyle: { color: line.color ?? t.trendLine, borderColor: t.card, borderWidth: 2 },
+          lineStyle: { width: 3, color: line.color ?? t.trendLine },
         },
       ],
     }
-  }, [categories, bars, line, leftAxisFormatter, rightAxisFormatter, theme])
+  }, [categories, bars, line, leftAxisFormatter, rightAxisFormatter, leftAxisName, rightAxisName, theme])
 
   return <EChart option={option} height={height} />
 }

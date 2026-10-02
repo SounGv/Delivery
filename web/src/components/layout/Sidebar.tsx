@@ -11,7 +11,7 @@ import {
   Warehouse,
   BarChart3,
   ClipboardCheck,
-  PackageCheck,
+  PackageX,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSettings } from "@/lib/settingsContext"
@@ -48,7 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "team-offline", label: "ฝ่ายออฟไลน์", icon: Home, enabled: true },
       { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
-      { key: "work-performance", label: "ผลงาน (BigSeller)", icon: PackageCheck, enabled: true },
+      { key: "returns", label: "คืนสินค้า", icon: PackageX, enabled: true },
     ],
   },
   {

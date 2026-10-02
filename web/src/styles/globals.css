@@ -5,18 +5,33 @@
 @theme {
   --font-sans: "Inter", "Noto Sans Thai", system-ui, -apple-system, sans-serif;
 
-  /* Mosaic-inspired violet accent (cruip/tailwind-dashboard-template palette). */
-  --color-brand-50: #f1eeff;
-  --color-brand-400: #9c8cff;
-  --color-brand-500: #8470ff;
-  --color-brand-600: #755ff8;
-  --color-brand-700: #5d47de;
+  /* Flip7 design system (flip7-card-game-DESIGN.md): teal primary, gold CTA/highlight,
+     coral energy, cream surfaces, sky info. The "brand-*" scale is kept as the token
+     name every page already uses, now holding the Flip7 teal ramp. */
+  --color-brand-50: #e8f6f5;
+  --color-brand-400: #3cc4bd;
+  --color-brand-500: #2ba8a2;
+  --color-brand-600: #1e8c86;
+  --color-brand-700: #17706b;
 
-  --color-emerald-glow: #10b981;
+  --color-gold: #ffd23f;
+  --color-gold-light: #ffe47a;
+  --color-gold-dark: #e6b800;
+  --color-coral: #ef6c4a;
+  --color-coral-light: #ff8a6a;
+  --color-coral-dark: #d45233;
+  --color-cream: #fff8e7;
+  --color-sky-flip: #5dade2;
+
+  /* "Success" in the Flip7 palette (used for on/above-target states). */
+  --color-emerald-glow: #27ae60;
   --color-slate-base: #0f172a;
 
   --animate-fade-up: fade-up 0.4s ease-out both;
   --animate-count-pulse: count-pulse 0.6s ease-out;
+  --animate-crown-bounce: crown-bounce 1.5s ease-in-out infinite;
+  --animate-glow-pulse: glow-pulse 2s ease-in-out infinite;
+  --animate-confetti-fall: confetti-fall 3.8s linear 3 both;
 
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(8px); }
@@ -25,6 +40,23 @@
   @keyframes count-pulse {
     0% { opacity: 0.4; transform: scale(0.98); }
     100% { opacity: 1; transform: scale(1); }
+  }
+  /* Victory crown: 4-step bounce with a small rotation wobble. */
+  @keyframes crown-bounce {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-6px) rotate(-6deg); }
+    50% { transform: translateY(0) rotate(0deg); }
+    75% { transform: translateY(-3px) rotate(6deg); }
+  }
+  /* Winner glow: opacity 0.5-1.0, scale 1.0-1.03. */
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.03); }
+  }
+  @keyframes confetti-fall {
+    0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translateY(var(--confetti-drop, 320px)) rotate(540deg); opacity: 0; }
   }
 
   /* shadcn/ui semantic tokens, wired to the CSS variables set per-theme below */
@@ -47,73 +79,81 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* Flip7 corner scale: sm 8 / md 16 / lg 24 / xl 32 (rpx), rendered at desktop
+     size. Cards (`rounded-2xl`) use the lg step, inner groups (`rounded-xl`) md. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: 1.25rem;
 }
 
 @layer base {
+  /* Dark variant: derived from the Flip7 teal (the design doc only defines a light
+     look) so the existing theme toggle keeps working. */
   :root {
     color-scheme: dark;
-    /* Flat business-report radius (spec: 4-8px), not the previous rounded-card look. */
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --bg-base: #0b0f17;
-    --bg-elevated: #111827;
-    --surface-glass: #111827;
-    --surface-glass-border: #1f2937;
-    --text-primary: #f1f5f9;
-    --text-muted: #94a3b8;
+    --bg-base: #0a1d1c;
+    --bg-elevated: #10302d;
+    --surface-glass: #10302d;
+    --surface-glass-border: #1d4a46;
+    --text-primary: #e8f6f5;
+    --text-muted: #8fb8b5;
+    --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.28);
 
-    --background: #0b0f17;
-    --foreground: #f1f5f9;
-    --card: #111827;
-    --card-foreground: #f1f5f9;
-    --popover: #111827;
-    --popover-foreground: #f1f5f9;
-    --primary: #755ff8;
-    --primary-foreground: #f8fafc;
-    --secondary: #1f2937;
-    --secondary-foreground: #e2e8f0;
-    --muted: #1f2937;
-    --muted-foreground: #94a3b8;
-    --accent: rgba(16, 185, 129, 0.14);
-    --accent-foreground: #6ee7b7;
-    --destructive: #f87171;
-    --border: #1f2937;
-    --input: #1f2937;
-    --ring: rgba(117, 95, 248, 0.6);
+    --background: #0a1d1c;
+    --foreground: #e8f6f5;
+    --card: #10302d;
+    --card-foreground: #e8f6f5;
+    --popover: #10302d;
+    --popover-foreground: #e8f6f5;
+    --primary: #3cc4bd;
+    --primary-foreground: #06201f;
+    --secondary: #17403c;
+    --secondary-foreground: #e8f6f5;
+    --muted: #17403c;
+    --muted-foreground: #8fb8b5;
+    --accent: rgba(60, 196, 189, 0.16);
+    --accent-foreground: #7adbd6;
+    --destructive: #ff8a6a;
+    --border: #1d4a46;
+    --input: #1d4a46;
+    --ring: rgba(60, 196, 189, 0.55);
   }
 
   :root.light {
     color-scheme: light;
-    /* BigSeller-style flat business report: light-grey page, opaque white cards, thin grey borders. */
-    --bg-base: #f3f4f6;
+    /* Flip7: teal-tinted page (#EFF8F7), white cards, teal-tinted borders. */
+    --bg-base: #eff8f7;
     --bg-elevated: #ffffff;
     --surface-glass: #ffffff;
-    --surface-glass-border: #e5e7eb;
-    --text-primary: #111827;
-    --text-muted: #6b7280;
+    --surface-glass-border: #cfe6e4;
+    --text-primary: #17302f;
+    --text-muted: #587674;
+    --shadow-card: 0 4px 20px rgba(43, 168, 162, 0.1);
 
-    --background: #f3f4f6;
-    --foreground: #111827;
+    --background: #eff8f7;
+    --foreground: #17302f;
     --card: #ffffff;
-    --card-foreground: #111827;
+    --card-foreground: #17302f;
     --popover: #ffffff;
-    --popover-foreground: #111827;
-    --primary: #755ff8;
-    --primary-foreground: #f8fafc;
-    --secondary: #f3f4f6;
-    --secondary-foreground: #1e293b;
-    --muted: #f3f4f6;
-    --muted-foreground: #6b7280;
-    --accent: rgba(16, 185, 129, 0.12);
-    --accent-foreground: #047857;
-    --destructive: #dc2626;
-    --border: #e5e7eb;
-    --input: #e5e7eb;
-    --ring: rgba(117, 95, 248, 0.5);
+    --popover-foreground: #17302f;
+    /* A step deeper than Primary Teal (#2BA8A2) so white text / teal text on white
+       stays readable (>= 4.5:1); the pure Primary Teal still drives gradients and fills. */
+    --primary: #1a7f79;
+    --primary-foreground: #ffffff;
+    --secondary: #e8f6f5;
+    --secondary-foreground: #17302f;
+    --muted: #e8f6f5;
+    --muted-foreground: #587674;
+    --accent: rgba(43, 168, 162, 0.12);
+    --accent-foreground: #17706b;
+    --destructive: #d63d2e;
+    --border: #cfe6e4;
+    --input: #cfe6e4;
+    --ring: rgba(43, 168, 162, 0.45);
   }
 
   html, body, #root {
@@ -130,9 +170,17 @@
 }
 
 @layer components {
+  /* Flip7 card: white surface, teal-tinted border, soft teal "shadow-card" glow. */
   .glass-panel {
     background: var(--card);
     border: 1px solid var(--border);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Flip7 section title: dashed bottom rule. */
+  .section-title {
+    border-bottom: 3px dashed var(--border);
+    padding-bottom: 0.75rem;
   }
 
   .rdp-theme {
@@ -159,12 +207,12 @@
   scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent;
 }
 
-/* Flat business-report corner radius everywhere `.glass-panel` cards use rounded-2xl/rounded-xl —
-   deliberately unlayered so it wins over Tailwind's generated utility layer without touching
-   every page's className. rounded-full (avatars/badges) is untouched. */
-.rounded-2xl,
-.rounded-xl {
-  border-radius: 8px;
+/* Flip7 pill buttons: solid primary buttons / active tabs are pill-shaped with a teal
+   glow instead of a plain shadow. Deliberately unlayered so it wins over the per-button
+   `rounded-lg` utility without touching every page's className. */
+button.bg-primary {
+  border-radius: 999px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-brand-500) 35%, transparent);
 }
 
 @media print {

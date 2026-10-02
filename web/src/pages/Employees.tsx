@@ -190,7 +190,7 @@ export function Employees() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           <KpiCard title="พัสดุรวมทีม" value={teamSummary.totalParcels} icon={PackageCheck} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="พัสดุ" />
           <KpiCard title="สินค้ารวมทีม" value={teamSummary.totalItems} icon={Boxes} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="ชิ้น" />
-          <KpiCard title="วันที่ทีมทำงาน" value={teamSummary.activeDays} icon={CalendarCheck2} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="วัน" />
+          <KpiCard title="วันที่ทีมทำงาน" value={teamSummary.activeDays} icon={CalendarCheck2} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="วัน" />
           <KpiCard
             title="พัสดุเฉลี่ยต่อวัน"
             value={teamSummary.avgParcelsPerDay}
@@ -217,7 +217,7 @@ export function Employees() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">
           <KpiCard title="พัสดุสะสม" value={employee.totalParcels} icon={PackageCheck} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="พัสดุ" />
           <KpiCard title="สินค้าสะสม" value={employee.totalItems} icon={Boxes} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="ชิ้น" />
-          <KpiCard title="วันที่ทำงาน" value={activeDaysTotal} icon={CalendarCheck2} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="วัน" />
+          <KpiCard title="วันที่ทำงาน" value={activeDaysTotal} icon={CalendarCheck2} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="วัน" />
           <KpiCard
             title="พัสดุเฉลี่ยต่อวัน"
             value={avgParcelsPerDay}

@@ -172,7 +172,7 @@ export function OtReport({ defaultDepartment }: { defaultDepartment?: string } =
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard title="ชั่วโมง OT รวม" value={summary.totalHours} icon={Timer} gradient="bg-gradient-to-br from-brand-500 to-brand-700" formatValue={(n) => n.toFixed(1)} suffix="ชม." />
         <KpiCard title="งานช่วง OT (พัสดุ)" value={summary.totalParcels} icon={PackageCheck} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="พัสดุ" />
-        <KpiCard title="จำนวนพนักงาน" value={summary.employeeCount} icon={Users} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="คน" />
+        <KpiCard title="จำนวนพนักงาน" value={summary.employeeCount} icon={Users} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="คน" />
         <KpiCard title="วันที่ทำ OT" value={summary.dayCount} icon={CalendarClock} gradient="bg-gradient-to-br from-amber-500 to-rose-500" suffix="วัน" />
       </div>
 

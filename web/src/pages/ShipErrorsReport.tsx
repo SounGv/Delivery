@@ -119,7 +119,7 @@ export function ShipErrorsReport() {
         <KpiCard title="ข้อผิดพลาดหลังส่ง" value={filtered.length} icon={AlertTriangle} gradient="bg-gradient-to-br from-rose-500 to-destructive" suffix="รายการ" />
         <KpiCard title="Error Rate (คุณภาพ)" value={errorRate} icon={Percent} gradient="bg-gradient-to-br from-amber-500 to-rose-500" formatValue={(n) => n.toFixed(2)} suffix="%" />
         <KpiCard title="พนักงานที่เกี่ยวข้อง" value={involvedEmployees} icon={Users} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="คน" />
-        <KpiCard title="PO ที่ผิด" value={distinctPOs} icon={ShieldCheck} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="PO" />
+        <KpiCard title="PO ที่ผิด" value={distinctPOs} icon={ShieldCheck} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="PO" />
       </div>
 
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">

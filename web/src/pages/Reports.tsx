@@ -331,7 +331,7 @@ export function Reports() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard title="รวมพัสดุ" value={totalParcels} icon={PackageCheck} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="พัสดุ" />
         <KpiCard title="รวมสินค้า" value={totalItems} icon={Boxes} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="ชิ้น" />
-        <KpiCard title="วันทำงาน" value={uniqueDays} icon={CalendarCheck2} gradient="bg-gradient-to-br from-violet-500 to-brand-600" suffix="วัน" />
+        <KpiCard title="วันทำงาน" value={uniqueDays} icon={CalendarCheck2} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="วัน" />
         <KpiCard
           title="พนักงานเฉลี่ย/วัน"
           value={avgActiveEmployeesPerDay}
@@ -363,7 +363,7 @@ export function Reports() {
           title="พัสดุเฉลี่ย/คน/วัน"
           value={avgParcelsPerPersonPerDay}
           icon={Users}
-          gradient="bg-gradient-to-br from-violet-500 to-brand-600"
+          gradient="bg-gradient-to-br from-sky-500 to-brand-600"
           formatValue={(n) => n.toFixed(0)}
           suffix="พัสดุ/คน/วัน"
           trend={parcelsPerPersonTrend !== null ? { value: parcelsPerPersonTrend, label: "เทียบช่วงก่อน" } : undefined}
