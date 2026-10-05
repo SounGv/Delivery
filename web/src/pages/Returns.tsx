@@ -22,6 +22,60 @@ import {
 import type { ReturnRow } from "@/api/types"
 
 const ALL = "__all__"
+/** Filter value for "this column is blank" (e.g. non-Shopee rows have no refund-button state). */
+const NONE = "__none__"
+
+interface FilterOption {
+  value: string
+  label: string
+  count: number
+}
+
+/** Distinct values of one column, most common first, with a "(ว่าง)" entry when some rows are blank. */
+function optionsOf(rows: ReturnRow[], get: (r: ReturnRow) => string): FilterOption[] {
+  const counts = new Map<string, number>()
+  for (const r of rows) {
+    const v = get(r) || NONE
+    counts.set(v, (counts.get(v) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .sort((a, b) => (a[0] === NONE ? 1 : b[0] === NONE ? -1 : b[1] - a[1]))
+    .map(([value, count]) => ({ value, label: value === NONE ? "(ว่าง)" : value, count }))
+}
+
+/** One compact select living in the table's filter row; highlights when a filter is active. */
+function ColumnSelect({
+  value,
+  onChange,
+  options,
+  allLabel,
+  label,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: FilterOption[]
+  allLabel: string
+  label: string
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        "w-full min-w-[6.5rem] max-w-[11rem] rounded-full border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none transition-colors hover:bg-muted",
+        value !== ALL ? "border-primary bg-primary/10" : "border-border"
+      )}
+    >
+      <option value={ALL} className="bg-popover text-popover-foreground">{allLabel}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value} className="bg-popover text-popover-foreground">
+          {o.label} ({o.count.toLocaleString("th-TH")})
+        </option>
+      ))}
+    </select>
+  )
+}
 /** 5,473 rows and growing rendered unvirtualized made the page visibly slow to
  * load and scroll — this keeps the DOM small by only ever mounting one page of
  * table rows, while every KPI/breakdown stays computed over the full filtered
@@ -43,6 +97,14 @@ export function Returns() {
   const [platform, setPlatform] = useState(ALL)
   const [store, setStore] = useState(ALL)
   const [statusFilter, setStatusFilter] = useState(ALL)
+  // Column filters (the row of selects under the table header).
+  const [searchQuery, setSearchQuery] = useState("")
+  const [qtyFilter, setQtyFilter] = useState(ALL)
+  const [flagFilter, setFlagFilter] = useState(ALL)
+  const [shippingFilter, setShippingFilter] = useState(ALL)
+  const [carrierFilter, setCarrierFilter] = useState(ALL)
+  const [staffFilter, setStaffFilter] = useState(ALL)
+  const [refundBtnFilter, setRefundBtnFilter] = useState(ALL)
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
 
@@ -50,7 +112,8 @@ export function Returns() {
 
   useEffect(() => {
     setPage(1)
-  }, [platform, store, statusFilter])
+    setExpanded(new Set())
+  }, [platform, store, statusFilter, searchQuery, qtyFilter, flagFilter, shippingFilter, carrierFilter, staffFilter, refundBtnFilter])
 
   if (isLoading) return <LoadingSkeletonGrid count={5} />
   if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
@@ -59,9 +122,49 @@ export function Returns() {
   const stores = distinctStores(rows)
   const hasData = rows.length > 0
 
+  const flagOptions = optionsOf(rows, (r) => r.flag)
+  const shippingOptions = optionsOf(rows, (r) => r.returnShipping)
+  const carrierOptions = optionsOf(rows, (r) => r.returnCarrier)
+  const staffOptions = optionsOf(rows, (r) => r.staffStatus)
+  const refundBtnOptions = optionsOf(rows, (r) => r.refundButtonPending)
+  const storeOptions = optionsOf(rows, (r) => r.store).sort((a, b) => a.label.localeCompare(b.label, "th"))
+  const platformOptions = optionsOf(rows, (r) => r.platform).map((o) => ({ ...o, label: platformLabel(o.label) }))
+  const diffCount = rows.filter(hasQtyDiscrepancy).length
+  const qtyOptions: FilterOption[] = [
+    { value: "match", label: "ตรงกัน", count: rows.length - diffCount },
+    { value: "diff", label: "ไม่ตรง (ขาด/เกิน)", count: diffCount },
+  ]
+
+  const query = searchQuery.trim().toLowerCase()
+  const columnFilterCount = [searchQuery.trim(), qtyFilter, flagFilter, shippingFilter, carrierFilter, staffFilter, refundBtnFilter].filter(
+    (v) => v !== "" && v !== ALL
+  ).length
+  const activeFilterCount =
+    columnFilterCount + [platform, store, statusFilter].filter((v) => v !== ALL).length
+  const clearFilters = () => {
+    setPlatform(ALL)
+    setStore(ALL)
+    setStatusFilter(ALL)
+    setSearchQuery("")
+    setQtyFilter(ALL)
+    setFlagFilter(ALL)
+    setShippingFilter(ALL)
+    setCarrierFilter(ALL)
+    setStaffFilter(ALL)
+    setRefundBtnFilter(ALL)
+  }
+
   const filtered = rows.filter((r) => {
     if (platform !== ALL && r.platform !== platform) return false
     if (store !== ALL && r.store !== store) return false
+    if (query && !`${r.sku} ${r.orderNo} ${r.parcelNo}`.toLowerCase().includes(query)) return false
+    if (qtyFilter === "match" && hasQtyDiscrepancy(r)) return false
+    if (qtyFilter === "diff" && !hasQtyDiscrepancy(r)) return false
+    if (flagFilter !== ALL && (r.flag || NONE) !== flagFilter) return false
+    if (shippingFilter !== ALL && (r.returnShipping || NONE) !== shippingFilter) return false
+    if (carrierFilter !== ALL && (r.returnCarrier || NONE) !== carrierFilter) return false
+    if (staffFilter !== ALL && (r.staffStatus || NONE) !== staffFilter) return false
+    if (refundBtnFilter !== ALL && (r.refundButtonPending || NONE) !== refundBtnFilter) return false
     if (statusFilter === "pending_refund" && !isPendingRefundButton(r)) return false
     if (statusFilter === "in_transit" && !isInTransit(r)) return false
     if (statusFilter === "urgent" && !isUrgent(r)) return false
@@ -222,19 +325,32 @@ export function Returns() {
       </div>
 
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-foreground">รายการคืนสินค้า</h3>
-          <ExportButton
-            disabled={filtered.length === 0}
-            label={`ส่งออก ${num(filtered.length)} รายการ`}
-            build={() => returnsReport(filtered, platform === ALL ? "all" : platform)}
-          />
-          <span className="text-[11px] text-muted-foreground">
-            แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ
-            (ทั้งหมด {num(rows.length)}) · คลิกแถวเพื่อดูรายละเอียดเพิ่มเติม
-          </span>
+        <div className="section-title mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-extrabold tracking-wide text-foreground">รายการคืนสินค้า</h3>
+            <p className="text-[11px] text-muted-foreground">
+              แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ
+              (ทั้งหมด {num(rows.length)}) · คลิกแถวเพื่อดูรายละเอียดเพิ่มเติม
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="rounded-full border border-border px-3 py-2 text-xs font-bold text-coral-dark transition-colors hover:bg-muted"
+              >
+                ล้างตัวกรอง ({activeFilterCount})
+              </button>
+            )}
+            <ExportButton
+              disabled={filtered.length === 0}
+              label={`ส่งออก ${num(filtered.length)} รายการ`}
+              build={() => returnsReport(filtered, platform === ALL ? "all" : platform)}
+            />
+          </div>
         </div>
-        <table className="w-full min-w-[1100px] text-left text-sm">
+        <table className="w-full min-w-[1200px] text-left text-sm [&_td]:px-2 [&_th]:px-2">
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="w-6 pb-2" />
@@ -249,6 +365,48 @@ export function Returns() {
               <th className="pb-2 font-medium">สถานะ (พนักงาน)</th>
               <th className="pb-2 font-medium">ปุ่มคืนเงิน</th>
               <th className="pb-2 text-right font-medium">ยอดคืนเงิน</th>
+            </tr>
+            <tr className="border-b border-border bg-muted/50">
+              <th className="py-2" />
+              <th className="py-2 font-normal">
+                <ColumnSelect label="กรองร้านค้า" allLabel="ทุกร้านค้า" value={store} onChange={setStore} options={storeOptions} />
+              </th>
+              <th className="py-2 font-normal">
+                <ColumnSelect label="กรองแพลตฟอร์ม" allLabel="ทุกแพลตฟอร์ม" value={platform} onChange={setPlatform} options={platformOptions} />
+              </th>
+              <th className="py-2 font-normal">
+                <input
+                  type="search"
+                  aria-label="ค้นหา SKU เลขคำสั่งซื้อ หรือเลขพัสดุ"
+                  placeholder="ค้นหา SKU / เลขออเดอร์"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={cn(
+                    "w-full min-w-[9rem] rounded-full border bg-background px-3 py-1.5 text-xs font-semibold text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground",
+                    searchQuery ? "border-primary bg-primary/10" : "border-border"
+                  )}
+                />
+              </th>
+              <th className="py-2 font-normal" colSpan={2}>
+                <ColumnSelect label="กรองจำนวน" allLabel="จำนวนทั้งหมด" value={qtyFilter} onChange={setQtyFilter} options={qtyOptions} />
+              </th>
+              <th className="py-2 font-normal">
+                <ColumnSelect label="กรองสถานะ" allLabel="ทุกสถานะ" value={flagFilter} onChange={setFlagFilter} options={flagOptions} />
+              </th>
+              <th className="py-2 font-normal">
+                <div className="flex flex-col gap-1">
+                  <ColumnSelect label="กรองขนส่งขากลับ" allLabel="ทุกสถานะขนส่ง" value={shippingFilter} onChange={setShippingFilter} options={shippingOptions} />
+                  <ColumnSelect label="กรองชื่อขนส่ง" allLabel="ทุกขนส่ง" value={carrierFilter} onChange={setCarrierFilter} options={carrierOptions} />
+                </div>
+              </th>
+              <th className="py-2" />
+              <th className="py-2 font-normal">
+                <ColumnSelect label="กรองสถานะพนักงาน" allLabel="ทุกสถานะ" value={staffFilter} onChange={setStaffFilter} options={staffOptions} />
+              </th>
+              <th className="py-2 font-normal">
+                <ColumnSelect label="กรองปุ่มคืนเงิน" allLabel="ทั้งหมด" value={refundBtnFilter} onChange={setRefundBtnFilter} options={refundBtnOptions} />
+              </th>
+              <th className="py-2" />
             </tr>
           </thead>
           <tbody>
@@ -325,7 +483,10 @@ function ReturnRowItem({ row, open, onToggle }: { row: ReturnRow; open: boolean;
           {diff && " ⚠"}
         </td>
         <td className="py-2.5 whitespace-nowrap text-xs">{row.flag || "-"}</td>
-        <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.returnShipping || "-"}</td>
+        <td className="max-w-[13rem] py-2.5 text-xs">
+          <p className="whitespace-nowrap text-muted-foreground">{row.returnShipping || "-"}</p>
+          {row.returnCarrier && <p className="font-semibold text-foreground">🚚 {row.returnCarrier}</p>}
+        </td>
         <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.nearestDue || "-"}</td>
         <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.staffStatus || "-"}</td>
         <td className="py-2.5 whitespace-nowrap text-xs">
@@ -351,6 +512,7 @@ function ReturnRowItem({ row, open, onToggle }: { row: ReturnRow; open: boolean;
               <Detail label="สาเหตุ" value={row.reason} />
               <Detail label="สถานะคำสั่งซื้อ" value={row.orderStatus} />
               <Detail label="สถานะ Stock-In" value={row.stockInStatus} />
+              <Detail label="ขนส่งขากลับ (ชื่อขนส่ง)" value={row.returnCarrier} />
               {row.shopeeReasonText && (
                 <div className="col-span-2 border-t border-dashed border-border pt-2 sm:col-span-4">
                   <Detail label="เหตุผลที่ขอคืนสินค้า (ข้อความเต็ม)" value={row.shopeeReasonText} />

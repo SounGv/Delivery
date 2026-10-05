@@ -370,6 +370,8 @@ export interface ReturnRow {
   shopeeReasonText: string
   /** Shopee-only: return-shipping leg status, e.g. "เข้ารับสินค้าสำเร็จ". */
   returnShipping: string
+  /** Carrier name for the return leg (sheet column "ขนส่งขากลับ"), e.g. "SPX Express", "Flash Express - Return". Blank when the sheet has none (e.g. TikTok rows). */
+  returnCarrier: string
   /** Shopee-only: literal nearest-deadline text. */
   nearestDue: string
   /** Days left until the nearest deadline (fractional, can be negative once overdue). Null when the sheet has no deadline for this row. */

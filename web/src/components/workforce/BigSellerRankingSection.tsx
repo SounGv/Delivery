@@ -16,14 +16,14 @@ import { useSettings } from "@/lib/settingsContext"
 import { cn } from "@/lib/utils"
 import type { TeamId } from "@/api/types"
 
+// "สินค้า", "SKU ที่หยิบ" and "พิมพ์ใบปะหน้า" tabs were dropped as duplicates: สินค้า and SKU ที่หยิบ
+// are the same SKU count (the first just adds pack/inspect), and ป้าย (พิมพ์ใบปะหน้า) is near-identical
+// to พัสดุ (see dailyParcelTotal). SKU and ป้าย still show in each person's small breakdown line.
 const RANKING_METRIC_OPTIONS: { key: RankingMetric; label: string }[] = [
   { key: "parcels", label: "พัสดุ" },
-  { key: "items", label: "สินค้า" },
   { key: "productivity", label: "Productivity" },
   { key: "pctTarget", label: "% Target" },
   { key: "pdaPick", label: "PDA หยิบของ" },
-  { key: "pickSku", label: "SKU ที่หยิบ" },
-  { key: "printLabel", label: "พิมพ์ใบปะหน้า" },
 ]
 
 function rankingMetricFormatter(metric: RankingMetric) {
@@ -178,14 +178,14 @@ export function BigSellerRankingSection({ team }: { team: TeamId }) {
         </div>
 
         {top3.length > 0 ? (
-          <Podium top3={top3} metricFormatter={formatRankingMetric} showTarget={hasTarget} />
+          <Podium top3={top3} metricFormatter={formatRankingMetric} showTarget={hasTarget} hideStat={effectiveRankingMetric} />
         ) : (
           <p className="py-6 text-center text-sm text-muted-foreground">ไม่มีข้อมูลในช่วงเวลาที่เลือก</p>
         )}
 
         {rest.length > 0 && (
           <div className="mt-6">
-            <RankingList entries={rest} rankDeltas={rankDeltas} metricFormatter={formatRankingMetric} showTarget={hasTarget} />
+            <RankingList entries={rest} rankDeltas={rankDeltas} metricFormatter={formatRankingMetric} showTarget={hasTarget} hideStat={effectiveRankingMetric} />
           </div>
         )}
       </div>

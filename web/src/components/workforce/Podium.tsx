@@ -1,7 +1,7 @@
 import { motion } from "framer-motion"
 import { Avatar3D, type AvatarEmotion } from "./Avatar3D"
 import { cn } from "@/lib/utils"
-import { formatNumber } from "@/lib/format"
+import { breakdownStats } from "./breakdownStats"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
 function emotionFor(pctTarget: number | null): AvatarEmotion {
@@ -84,11 +84,14 @@ function PodiumSlot({
   entry,
   metricValueLabel,
   showTarget,
+  hideStat,
 }: {
   entry: RankedEmployeeMetric
   metricValueLabel: string
   showTarget: boolean
+  hideStat?: string
 }) {
+  const stats = breakdownStats(entry, hideStat)
   const slot = SLOT[entry.rank as 1 | 2 | 3]
   const emotion = emotionFor(entry.pctTarget)
   const isWinner = entry.rank === 1
@@ -132,12 +135,13 @@ function PodiumSlot({
           {entry.pctTarget.toFixed(0)}% Target
         </p>
       )}
-      {entry.pdaPick !== undefined && (
-        <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-0.5 text-center text-[10px] leading-tight text-muted-foreground">
-          <span>PDA {formatNumber(entry.pdaPick)}</span>
-          <span>ป้าย {formatNumber(entry.printLabel ?? 0)}</span>
-          <span>Wave {formatNumber(entry.pickWaveCount ?? 0)}</span>
-          <span>SKU {formatNumber(entry.pickSku ?? 0)}</span>
+      {stats.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap justify-center gap-x-2 gap-y-0.5 text-center text-[10px] leading-tight text-muted-foreground">
+          {stats.map((s) => (
+            <span key={s.label}>
+              {s.label} {s.value}
+            </span>
+          ))}
         </div>
       )}
       <div
@@ -158,10 +162,13 @@ export function Podium({
   top3,
   metricFormatter,
   showTarget = true,
+  hideStat,
 }: {
   top3: RankedEmployeeMetric[]
   metricFormatter: (m: RankedEmployeeMetric) => string
   showTarget?: boolean
+  /** Breakdown figure to leave out of the small stats line because the ranking already headlines it. */
+  hideStat?: string
 }) {
   const byRank = new Map(top3.map((m) => [m.rank, m]))
   const first = byRank.get(1)
@@ -172,9 +179,9 @@ export function Podium({
     <div className="relative rounded-2xl bg-gradient-to-b from-gold/15 to-transparent px-2 pt-6">
       <Confetti />
       <div className="relative flex items-end justify-center gap-4 sm:gap-8">
-        {second && <PodiumSlot entry={second} metricValueLabel={metricFormatter(second)} showTarget={showTarget} />}
-        {first && <PodiumSlot entry={first} metricValueLabel={metricFormatter(first)} showTarget={showTarget} />}
-        {third && <PodiumSlot entry={third} metricValueLabel={metricFormatter(third)} showTarget={showTarget} />}
+        {second && <PodiumSlot entry={second} metricValueLabel={metricFormatter(second)} showTarget={showTarget} hideStat={hideStat} />}
+        {first && <PodiumSlot entry={first} metricValueLabel={metricFormatter(first)} showTarget={showTarget} hideStat={hideStat} />}
+        {third && <PodiumSlot entry={third} metricValueLabel={metricFormatter(third)} showTarget={showTarget} hideStat={hideStat} />}
       </div>
     </div>
   )

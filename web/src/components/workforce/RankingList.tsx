@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
 import { Avatar3D } from "./Avatar3D"
 import { cn } from "@/lib/utils"
-import { formatNumber } from "@/lib/format"
+import { breakdownStats } from "./breakdownStats"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
 function emotionFor(pctTarget: number | null) {
@@ -39,11 +39,14 @@ export function RankingList({
   rankDeltas,
   metricFormatter,
   showTarget = true,
+  hideStat,
 }: {
   entries: RankedEmployeeMetric[]
   rankDeltas: Map<string, number>
   metricFormatter: (m: RankedEmployeeMetric) => string
   showTarget?: boolean
+  /** Breakdown figure to leave out of the small stats line because the ranking already headlines it. */
+  hideStat?: string
 }) {
   return (
     <div className="space-y-2">
@@ -66,10 +69,11 @@ export function RankingList({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-extrabold tracking-wide text-foreground">{m.name}</p>
               <p className="text-xs font-medium text-muted-foreground">{metricFormatter(m)}</p>
-              {m.pdaPick !== undefined && (
+              {breakdownStats(m, hideStat).length > 0 && (
                 <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  PDA {formatNumber(m.pdaPick)} · ป้าย {formatNumber(m.printLabel ?? 0)} · Wave {formatNumber(m.pickWaveCount ?? 0)} · SKU{" "}
-                  {formatNumber(m.pickSku ?? 0)}
+                  {breakdownStats(m, hideStat)
+                    .map((s) => `${s.label} ${s.value}`)
+                    .join(" · ")}
                 </p>
               )}
             </div>

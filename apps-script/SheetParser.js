@@ -1700,6 +1700,9 @@ function parseReturnsSheet_(sheet, tz) {
       else if (h === 'สถานะคำขอ (Shopee)') col.shopeeRequestStatus = c;
       else if (h === 'เหตุผลที่ขอคืนสินค้า (Shopee)') col.shopeeReasonText = c;
       else if (h === 'ขนส่งขากลับ (Shopee)') col.returnShipping = c;
+      // Plain "ขนส่งขากลับ" (no "(Shopee)") is the carrier NAME for the return leg, e.g.
+      // "SPX Express" / "Flash Express - Return" — a different column from the status above.
+      else if (h === 'ขนส่งขากลับ') col.returnCarrier = c;
       else if (h === 'ครบกำหนดใกล้สุด (Shopee)') col.nearestDue = c;
       else if (h === 'หมดเวลาในอีก (วัน)') col.daysUntilDue = c;
       else if (h === 'ธง') col.flag = c;
@@ -1748,6 +1751,7 @@ function parseReturnsSheet_(sheet, tz) {
       shopeeRequestStatus: textOf(i, 'shopeeRequestStatus'),
       shopeeReasonText: textOf(i, 'shopeeReasonText'),
       returnShipping: textOf(i, 'returnShipping'),
+      returnCarrier: textOf(i, 'returnCarrier'),
       nearestDue: textOf(i, 'nearestDue'),
       daysUntilDue: numOf(i, 'daysUntilDue'),
       flag: textOf(i, 'flag'),
