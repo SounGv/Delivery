@@ -1,5 +1,6 @@
 import type { Category, ReturnRow } from "@/api/types"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
+import { isPendingRefundButton } from "@/lib/returns-selectors"
 
 /** A report ready to be saved as CSV: file name + header row + body rows. */
 export interface ExportTable {
@@ -15,16 +16,15 @@ export function returnsReport(rows: ReturnRow[], scopeLabel: string): ExportTabl
   return {
     filename: `returns_${scopeLabel}_${today()}.csv`,
     headers: [
-      "ร้าน", "แพลตฟอร์ม", "เลขคำสั่งซื้อ", "เลขพัสดุ BigSeller", "SKU", "จำนวนต้องคืน", "Stock-In แล้ว", "ยอดคืนเงิน",
-      "ประเภทหลังการขาย", "สถานะการคืนสินค้า", "สถานะ Stock-In", "สถานะคำสั่งซื้อ", "ขนส่งขากลับ (สถานะ)", "ขนส่งขากลับ (ชื่อขนส่ง)", "ธง",
-      "ปุ่มคืนเงินในแพลตฟอร์ม", "สถานะ (พนักงาน)", "เวลาสั่งซื้อ", "เวลาขอคืน", "เวลาครบกำหนดดำเนินการ",
-      "ครบกำหนดใกล้สุด", "เหลือเวลา (วัน)", "สาเหตุ", "เหตุผลที่ขอคืนสินค้า",
+      "ร้าน", "แพลตฟอร์ม", "เลขคำสั่งซื้อ", "ID คำสั่งซื้อหลังการขาย", "เลขพัสดุคืน", "SKU", "จำนวนต้องคืน", "Stock-In แล้ว", "ยอดคืนเงิน",
+      "ประเภทหลังการขาย", "สถานะการคืนสินค้า", "สถานะคืนเงิน", "สถานะ Stock-In", "ขนส่งขากลับ (สถานะ)", "ขนส่งขากลับ (ชื่อขนส่ง)", "สถานะแจ้งเตือน",
+      "รอกดคืนเงิน", "เวลาขอคืน", "เวลาครบกำหนด", "ขนส่งส่งถึงคลัง", "คลังสแกน Stock-In", "ขอคืนมาแล้ว (วัน)", "สาเหตุ", "หมายเหตุ Stock-In",
     ],
     rows: rows.map((r) => [
-      r.store, r.platform, r.orderNo, r.parcelNo, r.sku, r.qtyToReturn, r.qtyStockedIn, r.refundAmount,
-      r.afterSalesType, r.returnStatus, r.stockInStatus, r.orderStatus, r.returnShipping, r.returnCarrier, r.flag,
-      r.refundButtonPending, r.staffStatus, r.orderTime, r.requestTime, r.dueTime,
-      r.nearestDue, r.daysUntilDue ?? "", r.reason, r.shopeeReasonText,
+      r.store, r.platform, r.orderNo, r.afterSalesId, r.returnTracking, r.sku, r.qtyToReturn, r.qtyStockedIn, r.refundAmount,
+      r.afterSalesType, r.returnStatus, r.refundStatus, r.stockInStatus, r.returnShipping, r.returnCarrier, r.flag,
+      isPendingRefundButton(r) ? "ต้องกดคืนเงิน" : "", r.requestTime, r.dueTime, r.carrierDeliveredAt, r.stockedInAt,
+      r.daysSinceRequest ?? "", r.reason, r.stockInNote,
     ]),
   }
 }

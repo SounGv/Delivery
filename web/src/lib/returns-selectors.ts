@@ -12,28 +12,30 @@ export function distinctStores(rows: ReturnRow[]): string[] {
   return [...set].sort((a, b) => a.localeCompare(b, "th"))
 }
 
-/** Case is still "not back in the warehouse yet" — the sheet's own "ธง" flag
- * already encodes this ("🟢 ยังไม่รับสินค้า" / "🔵 รอ Stock-In ..."), checked by
- * substring since the flag always carries a leading emoji. */
+/** The return parcel is still on its way back — not yet in the warehouse. */
 export function isInTransit(row: ReturnRow): boolean {
-  return row.flag.indexOf("ยังไม่รับสินค้า") !== -1 || row.flag.indexOf("รอ Stock-In") !== -1
+  return row.returnStatus === "อยู่ระหว่างคืนสินค้า" || row.returnStatus === "รอคืนสินค้า"
 }
 
-/** Shopee scanned the item back into stock but the platform is still showing a
- * refund button to press — see ReturnRow.refundButtonPending's doc (Shopee-only). */
+/** The warehouse has scanned the whole return in, but the platform's refund is
+ * still open (in progress / in dispute) — someone needs to press refund there.
+ * Same rule the team sheet's old "ของเข้าคลังแล้ว ตรวจสอบว่ากดคืนเงินหรือยัง" view used. */
 export function isPendingRefundButton(row: ReturnRow): boolean {
-  return row.refundButtonPending === "มี"
+  return (
+    row.afterSalesType === "คืนเงิน/คืนสินค้า" &&
+    row.stockInStatus === "Stock-In ทั้งหมด" &&
+    (row.refundState === "IN_PROGRESS" || row.refundState === "DISPUTE")
+  )
 }
 
-/** Due within 2 days and not already resolved. Mirrors the sheet's own
- * "🔴 เร่งด่วน ≤2 วัน" flag rather than recomputing the threshold, so this never
- * drifts from what staff see in the source sheet. */
+/** The platform already refunded the customer but the goods never made it into
+ * stock (scanned but rejected, or overdue) — the sync project's two red alerts. */
 export function isUrgent(row: ReturnRow): boolean {
-  return row.flag.indexOf("เร่งด่วน") !== -1
+  return row.alertCode === "REFUNDED_NOT_STOCKED" || row.alertCode === "REFUNDED_STOCKIN_OVERDUE"
 }
 
-/** The sheet's own "สถานะการคืนสินค้า" marks the parcel lost in transit — never
- * came back, so it will never reach Stock-In no matter how long it waits. */
+/** The return-parcel status marks the parcel lost in transit — never came back,
+ * so it will never reach Stock-In no matter how long it waits. */
 export function isLost(row: ReturnRow): boolean {
   return row.returnStatus === "สูญหาย"
 }
@@ -94,9 +96,8 @@ export interface ReasonBreakdownRow {
   count: number
 }
 
-/** Only rows with a real "สาเหตุ" code (currently populated for Shopee requests
- * only) count here — blank reasons (cancellations, non-Shopee platforms) are
- * left out rather than shown as a misleading "ไม่ระบุ" majority slice.
+/** Only rows with a real "สาเหตุ" code count here — blank reasons are left out
+ * rather than shown as a misleading "ไม่ระบุ" majority slice.
  * BigSeller mixes platform reason CODES with free-typed Thai reasons across
  * dozens of distinct values, so this keeps only the top `limit` and lumps
  * everything else into "อื่นๆ" — a ranked breakdown reads as one screen's

@@ -22,7 +22,7 @@ import {
 import type { ReturnRow } from "@/api/types"
 
 const ALL = "__all__"
-/** Filter value for "this column is blank" (e.g. non-Shopee rows have no refund-button state). */
+/** Filter value for "this column is blank" (e.g. rows without a carrier name). */
 const NONE = "__none__"
 
 interface FilterOption {
@@ -86,12 +86,13 @@ const num = (n: number) => n.toLocaleString("th-TH")
 
 const PLATFORM_LABEL: Record<string, string> = { shopee: "Shopee", tiktok: "TikTok", lazada: "Lazada" }
 const platformLabel = (p: string) => PLATFORM_LABEL[p] ?? p
+/** Value of the "รอกดคืนเงิน" column — derived, so it is also what that column's filter matches on. */
+const refundBtnLabel = (r: ReturnRow) => (isPendingRefundButton(r) ? "ต้องกดคืนเงิน" : "เรียบร้อย")
 
-/** Product-returns dashboard sourced from the "BIGSELLER_RAW" after-sales export
- * (every platform). See lib/returns-selectors.ts for what each derived flag
- * means — most status text here is the SHEET'S OWN pre-computed column
- * ("ธง"/"สถานะ"/"ปุ่มคืนเงินในแพลตฟอร์ม"), passed through rather than
- * recomputed, so this page never drifts from what staff see in the sheet. */
+/** Product-returns dashboard sourced from the "DB_RETURN_CURRENT" tab kept by the
+ * BigSeller-Inventory sync project (Shopee/TikTok/Lazada). See
+ * lib/returns-selectors.ts for what each derived flag means — the alert codes
+ * come from that project's own rules, passed through rather than recomputed. */
 export function Returns() {
   const { data, isLoading, isError, error } = useDashboardQuery()
   const [platform, setPlatform] = useState(ALL)
@@ -103,7 +104,7 @@ export function Returns() {
   const [flagFilter, setFlagFilter] = useState(ALL)
   const [shippingFilter, setShippingFilter] = useState(ALL)
   const [carrierFilter, setCarrierFilter] = useState(ALL)
-  const [staffFilter, setStaffFilter] = useState(ALL)
+  const [refundStatusFilter, setRefundStatusFilter] = useState(ALL)
   const [refundBtnFilter, setRefundBtnFilter] = useState(ALL)
   const [page, setPage] = useState(1)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
@@ -113,7 +114,7 @@ export function Returns() {
   useEffect(() => {
     setPage(1)
     setExpanded(new Set())
-  }, [platform, store, statusFilter, searchQuery, qtyFilter, flagFilter, shippingFilter, carrierFilter, staffFilter, refundBtnFilter])
+  }, [platform, store, statusFilter, searchQuery, qtyFilter, flagFilter, shippingFilter, carrierFilter, refundStatusFilter, refundBtnFilter])
 
   if (isLoading) return <LoadingSkeletonGrid count={5} />
   if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
@@ -125,8 +126,8 @@ export function Returns() {
   const flagOptions = optionsOf(rows, (r) => r.flag)
   const shippingOptions = optionsOf(rows, (r) => r.returnShipping)
   const carrierOptions = optionsOf(rows, (r) => r.returnCarrier)
-  const staffOptions = optionsOf(rows, (r) => r.staffStatus)
-  const refundBtnOptions = optionsOf(rows, (r) => r.refundButtonPending)
+  const refundStatusOptions = optionsOf(rows, (r) => r.refundStatus)
+  const refundBtnOptions = optionsOf(rows, refundBtnLabel)
   const storeOptions = optionsOf(rows, (r) => r.store).sort((a, b) => a.label.localeCompare(b.label, "th"))
   const platformOptions = optionsOf(rows, (r) => r.platform).map((o) => ({ ...o, label: platformLabel(o.label) }))
   const diffCount = rows.filter(hasQtyDiscrepancy).length
@@ -136,7 +137,7 @@ export function Returns() {
   ]
 
   const query = searchQuery.trim().toLowerCase()
-  const columnFilterCount = [searchQuery.trim(), qtyFilter, flagFilter, shippingFilter, carrierFilter, staffFilter, refundBtnFilter].filter(
+  const columnFilterCount = [searchQuery.trim(), qtyFilter, flagFilter, shippingFilter, carrierFilter, refundStatusFilter, refundBtnFilter].filter(
     (v) => v !== "" && v !== ALL
   ).length
   const activeFilterCount =
@@ -150,21 +151,21 @@ export function Returns() {
     setFlagFilter(ALL)
     setShippingFilter(ALL)
     setCarrierFilter(ALL)
-    setStaffFilter(ALL)
+    setRefundStatusFilter(ALL)
     setRefundBtnFilter(ALL)
   }
 
   const filtered = rows.filter((r) => {
     if (platform !== ALL && r.platform !== platform) return false
     if (store !== ALL && r.store !== store) return false
-    if (query && !`${r.sku} ${r.orderNo} ${r.parcelNo}`.toLowerCase().includes(query)) return false
+    if (query && !`${r.sku} ${r.orderNo} ${r.returnTracking}`.toLowerCase().includes(query)) return false
     if (qtyFilter === "match" && hasQtyDiscrepancy(r)) return false
     if (qtyFilter === "diff" && !hasQtyDiscrepancy(r)) return false
     if (flagFilter !== ALL && (r.flag || NONE) !== flagFilter) return false
     if (shippingFilter !== ALL && (r.returnShipping || NONE) !== shippingFilter) return false
     if (carrierFilter !== ALL && (r.returnCarrier || NONE) !== carrierFilter) return false
-    if (staffFilter !== ALL && (r.staffStatus || NONE) !== staffFilter) return false
-    if (refundBtnFilter !== ALL && (r.refundButtonPending || NONE) !== refundBtnFilter) return false
+    if (refundStatusFilter !== ALL && (r.refundStatus || NONE) !== refundStatusFilter) return false
+    if (refundBtnFilter !== ALL && refundBtnLabel(r) !== refundBtnFilter) return false
     if (statusFilter === "pending_refund" && !isPendingRefundButton(r)) return false
     if (statusFilter === "in_transit" && !isInTransit(r)) return false
     if (statusFilter === "urgent" && !isUrgent(r)) return false
@@ -207,9 +208,9 @@ export function Returns() {
         <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
           <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังไม่พบข้อมูลจากชีท "BIGSELLER_RAW"</p>
+            <p className="font-semibold text-foreground">ยังไม่พบข้อมูลคืนสินค้าจากชีท "DB_RETURN_CURRENT"</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              ระบบอ่านชีทคืนสินค้าแบบ read-only แต่ API ยังไม่ส่งข้อมูลนี้มา — ต้องอัปเดต Apps Script แล้ว Deploy → New version
+              ระบบอ่านชีทของโปรเจกต์ BigSeller-Inventory แบบ read-only แต่ยังไม่ได้ข้อมูล — ตรวจว่า Apps Script เข้าถึงไฟล์ "BigSeller Inventory Sync - Database" ได้ และได้รัน sync:returns แล้ว
             </p>
           </div>
         </div>
@@ -244,7 +245,7 @@ export function Returns() {
             <option value={ALL} className="bg-popover text-popover-foreground">ทั้งหมด</option>
             <option value="pending_refund" className="bg-popover text-popover-foreground">รอกดคืนเงินในแพลตฟอร์ม</option>
             <option value="in_transit" className="bg-popover text-popover-foreground">อยู่ระหว่างขนส่งขากลับ</option>
-            <option value="urgent" className="bg-popover text-popover-foreground">เร่งด่วน ≤2 วัน</option>
+            <option value="urgent" className="bg-popover text-popover-foreground">คืนเงินแล้ว แต่ของไม่เข้าคลัง</option>
             <option value="lost" className="bg-popover text-popover-foreground">สูญหาย</option>
             <option value="discrepancy" className="bg-popover text-popover-foreground">จำนวนไม่ตรง (ต้องคืน vs Stock-In)</option>
           </select>
@@ -259,10 +260,17 @@ export function Returns() {
           icon={Clock}
           gradient="bg-gradient-to-br from-amber-500 to-rose-500"
           suffix="รายการ"
-          subtitle="สแกนรับแล้วแต่ยังไม่กดคืนเงิน (Shopee)"
+          subtitle="สแกนรับเข้าครบแล้ว แต่แพลตฟอร์มยังไม่คืนเงิน"
         />
         <KpiCard title="อยู่ระหว่างขนส่งขากลับ" value={totals.inTransitCount} icon={PackageX} gradient="bg-gradient-to-br from-sky-500 to-brand-600" suffix="รายการ" />
-        <KpiCard title="เร่งด่วน ≤2 วัน" value={totals.urgentCount} icon={AlertTriangle} gradient="bg-gradient-to-br from-rose-500 to-destructive" suffix="รายการ" />
+        <KpiCard
+          title="คืนเงินแล้ว แต่ของไม่เข้าคลัง"
+          value={totals.urgentCount}
+          icon={AlertTriangle}
+          gradient="bg-gradient-to-br from-rose-500 to-destructive"
+          suffix="รายการ"
+          subtitle="แพลตฟอร์มคืนเงินลูกค้าแล้ว แต่คลังไม่รับเข้าหรือของยังไม่ถึงเกินกำหนด"
+        />
         <KpiCard
           title="สูญหาย"
           value={totals.lostCount}
@@ -361,9 +369,9 @@ export function Returns() {
               <th className="pb-2 text-right font-medium">Stock-In</th>
               <th className="pb-2 font-medium">สถานะ</th>
               <th className="pb-2 font-medium">ขนส่งขากลับ</th>
-              <th className="pb-2 font-medium">ครบกำหนดใกล้สุด</th>
-              <th className="pb-2 font-medium">สถานะ (พนักงาน)</th>
-              <th className="pb-2 font-medium">ปุ่มคืนเงิน</th>
+              <th className="pb-2 font-medium">ขอคืนเมื่อ</th>
+              <th className="pb-2 font-medium">สถานะคืนเงิน</th>
+              <th className="pb-2 font-medium">รอกดคืนเงิน</th>
               <th className="pb-2 text-right font-medium">ยอดคืนเงิน</th>
             </tr>
             <tr className="border-b border-border bg-muted/50">
@@ -401,10 +409,10 @@ export function Returns() {
               </th>
               <th className="py-2" />
               <th className="py-2 font-normal">
-                <ColumnSelect label="กรองสถานะพนักงาน" allLabel="ทุกสถานะ" value={staffFilter} onChange={setStaffFilter} options={staffOptions} />
+                <ColumnSelect label="กรองสถานะคืนเงิน" allLabel="ทุกสถานะ" value={refundStatusFilter} onChange={setRefundStatusFilter} options={refundStatusOptions} />
               </th>
               <th className="py-2 font-normal">
-                <ColumnSelect label="กรองปุ่มคืนเงิน" allLabel="ทั้งหมด" value={refundBtnFilter} onChange={setRefundBtnFilter} options={refundBtnOptions} />
+                <ColumnSelect label="กรองรอกดคืนเงิน" allLabel="ทั้งหมด" value={refundBtnFilter} onChange={setRefundBtnFilter} options={refundBtnOptions} />
               </th>
               <th className="py-2" />
             </tr>
@@ -454,8 +462,7 @@ export function Returns() {
         )}
 
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          ที่มาข้อมูล: ชีต "BIGSELLER_RAW" (รวมออเดอร์คืนสินค้าทุกแพลตฟอร์ม) · <b className="text-foreground">สถานะ (พนักงาน)</b> คืองานตรวจสอบของฝ่ายหลังการขาย ·{" "}
-          <b className="text-foreground">ปุ่มคืนเงิน</b> บอกว่า Shopee ยังค้างปุ่มให้กดคืนเงินอยู่ไหม (คนละเรื่องกับสถานะตรวจสอบ ใช้ไม่ได้กับ TikTok/Lazada)
+          ที่มาข้อมูล: ชีต "DB_RETURN_CURRENT" จากโปรเจกต์ BigSeller-Inventory (Shopee / TikTok / Lazada · คืนเงิน/คืนสินค้า, คืนเงินเท่านั้น, เปลี่ยนสินค้า) · <b className="text-foreground">รอกดคืนเงิน</b> คือคลังสแกนรับเข้าครบแล้ว แต่แพลตฟอร์มยังไม่คืนเงิน · <b className="text-foreground">คืนเงินแล้ว แต่ของไม่เข้าคลัง</b> คือแจ้งเตือนสีแดงของโปรเจกต์ (ไม่รวมเคสคืนกลับผิดปกติและยกเลิก)
         </p>
       </div>
     </div>
@@ -464,7 +471,7 @@ export function Returns() {
 
 function ReturnRowItem({ row, open, onToggle }: { row: ReturnRow; open: boolean; onToggle: () => void }) {
   const diff = hasQtyDiscrepancy(row)
-  const refundBtnKnown = row.refundButtonPending !== ""
+  const refundBtnPending = isPendingRefundButton(row)
 
   return (
     <>
@@ -487,16 +494,12 @@ function ReturnRowItem({ row, open, onToggle }: { row: ReturnRow; open: boolean;
           <p className="whitespace-nowrap text-muted-foreground">{row.returnShipping || "-"}</p>
           {row.returnCarrier && <p className="font-semibold text-foreground">🚚 {row.returnCarrier}</p>}
         </td>
-        <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.nearestDue || "-"}</td>
-        <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.staffStatus || "-"}</td>
+        <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.requestTime || "-"}</td>
+        <td className="py-2.5 whitespace-nowrap text-xs text-muted-foreground">{row.refundStatus || "-"}</td>
         <td className="py-2.5 whitespace-nowrap text-xs">
-          {refundBtnKnown ? (
-            <span className={row.refundButtonPending === "มี" ? "font-semibold text-amber-500" : "text-muted-foreground"}>
-              {row.refundButtonPending === "มี" ? "ต้องกดคืนเงิน" : "เรียบร้อย"}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
+          <span className={refundBtnPending ? "font-semibold text-amber-500" : "text-muted-foreground"}>
+            {refundBtnPending ? "ต้องกดคืนเงิน" : "เรียบร้อย"}
+          </span>
         </td>
         <td className="py-2.5 text-right tabular-nums text-destructive">{money(row.refundAmount)}</td>
       </tr>
@@ -504,18 +507,21 @@ function ReturnRowItem({ row, open, onToggle }: { row: ReturnRow; open: boolean;
         <tr className="border-b border-white/5 bg-brand-500/5 last:border-0">
           <td colSpan={12} className="px-3 py-3">
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4">
-              <Detail label="เวลาสั่งซื้อ" value={row.orderTime} />
-              <Detail label="เวลาขอคืน" value={row.requestTime} />
-              <Detail label="เลขพัสดุ BigSeller" value={row.parcelNo} />
+              <Detail label="เลขคำสั่งซื้อ" value={row.orderNo} />
               <Detail label="ID คำสั่งซื้อหลังการขาย" value={row.afterSalesId} />
-              <Detail label="ข้อเสนอ (Shopee)" value={row.shopeeOffer} />
-              <Detail label="สาเหตุ" value={row.reason} />
-              <Detail label="สถานะคำสั่งซื้อ" value={row.orderStatus} />
+              <Detail label="เลขพัสดุคืน" value={row.returnTracking} />
+              <Detail label="ประเภทหลังการขาย" value={row.afterSalesType} />
+              <Detail label="เวลาขอคืน" value={row.requestTime} />
+              <Detail label="ครบกำหนด" value={row.dueTime} />
+              <Detail label="ขนส่งส่งถึงคลัง" value={row.carrierDeliveredAt} />
+              <Detail label="คลังสแกน Stock-In" value={row.stockedInAt} />
               <Detail label="สถานะ Stock-In" value={row.stockInStatus} />
-              <Detail label="ขนส่งขากลับ (ชื่อขนส่ง)" value={row.returnCarrier} />
-              {row.shopeeReasonText && (
+              <Detail label="คลังที่รับ" value={row.receivedWarehouse} />
+              <Detail label="สาเหตุ" value={row.reason} />
+              <Detail label="ขอคืนมาแล้ว (วัน)" value={row.daysSinceRequest === null ? "" : row.daysSinceRequest.toFixed(1)} />
+              {row.stockInNote && (
                 <div className="col-span-2 border-t border-dashed border-border pt-2 sm:col-span-4">
-                  <Detail label="เหตุผลที่ขอคืนสินค้า (ข้อความเต็ม)" value={row.shopeeReasonText} />
+                  <Detail label="หมายเหตุ Stock-In" value={row.stockInNote} />
                 </div>
               )}
             </div>

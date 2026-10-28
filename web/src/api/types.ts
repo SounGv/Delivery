@@ -331,57 +331,53 @@ export interface WorkPerformance {
   unmapped: string[]
 }
 
-/** One after-sales/return case from the "BIGSELLER_RAW" sheet (BigSeller
- * after-sales export), every platform. Dates (orderTime/requestTime/dueTime/
- * nearestDue) are literal text exactly as the sheet displays them, not parsed
- * dates — same convention as StoreReportRow's periodStart/periodEnd.
- * Several fields are suffixed "Shopee" in their doc because the sheet itself
- * only ever populates them for Shopee-platform rows (TikTok/Lazada leave them
- * blank) — see parseReturnsSheet_ in apps-script/SheetParser.js. */
+/** One after-sales/return case from the "DB_RETURN_CURRENT" tab kept by the
+ * BigSeller-Inventory sync project (Shopee/TikTok/Lazada, คืนเงิน/คืนสินค้า,
+ * คืนเงินเท่านั้น, เปลี่ยนสินค้า) — see parseReturnsDbSheet_ in
+ * apps-script/SheetParser.js. Dates are literal text exactly as the sheet
+ * displays them ("YYYY-MM-DD HH:mm"), not parsed dates — same convention as
+ * StoreReportRow's periodStart/periodEnd. */
 export interface ReturnRow {
   store: string
   /** Lowercase, e.g. "shopee" / "tiktok" / "lazada". */
   platform: string
   orderNo: string
   afterSalesId: string
-  parcelNo: string
-  outboundTracking: string
-  returnTracking: string
   afterSalesType: string
+  /** Return-parcel status, e.g. "คืนสินค้าแล้ว" / "อยู่ระหว่างคืนสินค้า" / "สูญหาย". */
   returnStatus: string
+  /** The project's normalised refund state: REFUNDED / ACCEPTED / IN_PROGRESS / DISPUTE / CLOSED / OTHER. */
+  refundState: string
+  /** Thai label of refundState, e.g. "คืนเงินแล้ว". */
+  refundStatus: string
   stockInStatus: string
-  returnLogisticsStatus: string
-  orderStatus: string
+  /** Return-parcel tracking number. */
+  returnTracking: string
+  /** Return-shipment status text, e.g. "จัดส่งสำเร็จ". */
+  returnShipping: string
+  /** Carrier name for the return leg; blank when BigSeller only has a generic code. */
+  returnCarrier: string
   refundAmount: number
   sku: string
   qtyToReturn: number
   qtyStockedIn: number
-  orderTime: string
   requestTime: string
   dueTime: string
+  /** When the carrier delivered the parcel to the warehouse (not when it was scanned). */
+  carrierDeliveredAt: string
+  /** When the warehouse scanned it in (Stock-In). */
+  stockedInAt: string
+  stockInNote: string
+  receivedWarehouse: string
+  /** Platform reason code/text, e.g. "CHANGE_MIND". */
   reason: string
-  /** Shopee-only: the platform's own request id. */
-  shopeeRequestId: string
-  /** Shopee-only: the platform's offered resolution, e.g. "คืนเงินและคืนสินค้า". */
-  shopeeOffer: string
-  /** Shopee-only: the platform's own request status. */
-  shopeeRequestStatus: string
-  /** Shopee-only: the customer's free-text return reason. */
-  shopeeReasonText: string
-  /** Shopee-only: return-shipping leg status, e.g. "เข้ารับสินค้าสำเร็จ". */
-  returnShipping: string
-  /** Carrier name for the return leg (sheet column "ขนส่งขากลับ"), e.g. "SPX Express", "Flash Express - Return". Blank when the sheet has none (e.g. TikTok rows). */
-  returnCarrier: string
-  /** Shopee-only: literal nearest-deadline text. */
-  nearestDue: string
-  /** Days left until the nearest deadline (fractional, can be negative once overdue). Null when the sheet has no deadline for this row. */
-  daysUntilDue: number | null
-  /** Pre-computed overview flag from the sheet's own "ธง" column, e.g. "🔴 เร่งด่วน ≤2 วัน". */
+  /** Alert code from the sync project: REFUNDED_NOT_STOCKED, REFUNDED_STOCKIN_OVERDUE, REFUNDED_STOCKIN_PARTIAL, DUE_SOON_NOT_STOCKED, or "". */
+  alertCode: string
+  alertText: string
+  /** Days since the request was filed (fractional), null when unknown. */
+  daysSinceRequest: number | null
+  /** Display status for the table, built from the alert/return/stock-in state, e.g. "🔴 สูญหาย". */
   flag: string
-  /** Shopee-only: "มี" when the platform is still showing a refund button to press, "ไม่มี" otherwise, "" when not applicable (non-Shopee). */
-  refundButtonPending: string
-  /** The after-sales team's own review status, any platform, e.g. "🔎 รอตรวจสอบใน TikTok" / "✅ พนักงานดำเนินการแล้ว". */
-  staffStatus: string
 }
 
 export interface ReturnsReport {

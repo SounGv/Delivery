@@ -1630,88 +1630,56 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
 }
 
 /**
- * Reads the "BIGSELLER_RAW" tab — a flat per-return-case dump pasted verbatim
- * from BigSeller's own after-sales/returns export, covering every platform
- * (Shopee/TikTok/Lazada). Detected by content (needs the 'ปุ่มคืนเงินในแพลตฟอร์ม'
- * header, unique to this sheet), never by tab name/position.
+ * Product-returns cases for the returns page. Source: the "DB_RETURN_CURRENT" tab
+ * kept by the BigSeller-Inventory sync project (`npm run sync:returns`) in its OWN
+ * workbook ("BigSeller Inventory Sync - Database"), opened by id — the team
+ * workbook no longer carries a returns tab. One row per (platform, shop, order,
+ * after-sale id, SKU, line) in the project's own scope: คืนเงิน/คืนสินค้า,
+ * คืนเงินเท่านั้น and เปลี่ยนสินค้า on Shopee/Lazada/TikTok.
  *
- * The sheet is also used as a poll-log: most rows only have "ดึงข้อมูลเมื่อ"
- * filled (a heartbeat marking when a sync last ran) with every other column
- * blank — these carry no return data and are dropped here (gated on "ร้าน"
- * being present, since every real return case has a store).
+ * Columns are looked up by their English header names (the project's own, see its
+ * FEATURE-returns-reconciliation-phase1.md §4.1), never by position. The alert
+ * rules (`alertCode`/`alertText`) are the project's; this only decorates them
+ * with an emoji for the table's status column.
  *
- * Several columns are suffixed "(Shopee)" in the sheet itself — they're only
- * ever populated for Shopee-platform rows (TikTok/Lazada leave them blank),
- * most notably `refundButtonPending` ("ปุ่มคืนเงินในแพลตฟอร์ม"): it answers
- * "is Shopee still showing a refund button to press" and has no equivalent
- * for the other platforms, which instead rely on `staffStatus` ("สถานะ") for
- * their own pending-review state (e.g. "รอตรวจสอบใน TikTok"). Kept as two
- * separate fields rather than merged into one cross-platform flag, so the
- * page can show Shopee's distinct signal without false-negatives for
- * TikTok/Lazada rows that simply never carry it.
- *
- * Dates are passed through as the SHEET'S OWN rendered text (getDisplayValues)
- * rather than reformatted here — same reasoning as parseThaiDateTimeCell_:
- * the sheet's own display text is authoritative. Read-only. Returns [] for a
- * non-matching sheet so it never breaks the payload.
+ * Read-only. Any failure (workbook not shared with this script's owner, tab
+ * renamed, ...) returns [] so the rest of the dashboard payload is unaffected.
  */
-function parseReturnsSheet_(sheet, tz) {
+var RETURNS_DB_SPREADSHEET_ID_ = '1UM5uP1FdgDfEHh9IYFQ9qS7kpVvjuyXRwRMs8guWDRo';
+var RETURNS_DB_TAB_ = 'DB_RETURN_CURRENT';
+// `logisticsProvider` carries these generic codes when the carrier name is unknown.
+var RETURN_CARRIER_PLACEHOLDERS_ = { other: true, others: true, standard: true };
+var RETURN_REFUND_STATUS_LABEL_ = {
+  REFUNDED: 'คืนเงินแล้ว',
+  ACCEPTED: 'คืนเงินแล้ว',
+  IN_PROGRESS: 'กำลังดำเนินการ',
+  DISPUTE: 'ข้อพิพาท',
+  CLOSED: 'ปิดคำขอ',
+  OTHER: 'อื่นๆ'
+};
+
+function loadReturnRowsFromDb_() {
+  try {
+    var sheet = SpreadsheetApp.openById(RETURNS_DB_SPREADSHEET_ID_).getSheetByName(RETURNS_DB_TAB_);
+    return sheet ? parseReturnsDbSheet_(sheet) : [];
+  } catch (err) {
+    Logger.log('returns DB unreadable: ' + err);
+    return [];
+  }
+}
+
+function parseReturnsDbSheet_(sheet) {
   var range = sheet.getDataRange();
   var values = range.getValues();
   if (values.length < 2) return [];
   var displayValues = range.getDisplayValues();
 
-  var headerRowIdx = -1;
   var col = {};
-  for (var r = 0; r < Math.min(values.length, 5); r++) {
-    var hdr = values[r];
-    var joined = hdr.map(function (v) {
-      var s = String(v == null ? '' : v);
-      return s.normalize ? s.normalize('NFC') : s;
-    }).join('|');
-    if (joined.indexOf('ปุ่มคืนเงินในแพลตฟอร์ม') === -1) continue;
-    headerRowIdx = r;
-    for (var c = 0; c < hdr.length; c++) {
-      var h = String(hdr[c] == null ? '' : hdr[c]).trim();
-      if (h.normalize) h = h.normalize('NFC');
-      if (h === 'ร้าน') col.store = c;
-      else if (h === 'แพลตฟอร์ม') col.platform = c;
-      else if (h === 'เลขคำสั่งซื้อ') col.orderNo = c;
-      else if (h === 'ID คำสั่งซื้อหลังการขาย') col.afterSalesId = c;
-      else if (h === 'เลขพัสดุ BigSeller') col.parcelNo = c;
-      else if (h === 'แทร็คกิ้งส่งออก') col.outboundTracking = c;
-      else if (h === 'แทร็คกิ้งคืนสินค้า') col.returnTracking = c;
-      else if (h === 'ประเภทหลังการขาย') col.afterSalesType = c;
-      else if (h === 'สถานะการคืนสินค้า') col.returnStatus = c;
-      else if (h === 'สถานะ Stock-In') col.stockInStatus = c;
-      else if (h === 'สถานะโลจิสติกส์คืน') col.returnLogisticsStatus = c;
-      else if (h === 'สถานะคำสั่งซื้อ') col.orderStatus = c;
-      else if (h === 'ยอดคืนเงิน') col.refundAmount = c;
-      else if (h === 'SKU') col.sku = c;
-      else if (h === 'จำนวนต้องคืน') col.qtyToReturn = c;
-      else if (h === 'Stock-In แล้ว') col.qtyStockedIn = c;
-      else if (h === 'เวลาสั่งซื้อ') col.orderTime = c;
-      else if (h === 'เวลาขอคืน') col.requestTime = c;
-      else if (h === 'เวลาครบกำหนดดำเนินการ') col.dueTime = c;
-      else if (h === 'สาเหตุ') col.reason = c;
-      else if (h === 'ดึงข้อมูลเมื่อ') col.pulledAt = c;
-      else if (h === 'เลขคำขอ Shopee') col.shopeeRequestId = c;
-      else if (h === 'ข้อเสนอ (Shopee)') col.shopeeOffer = c;
-      else if (h === 'สถานะคำขอ (Shopee)') col.shopeeRequestStatus = c;
-      else if (h === 'เหตุผลที่ขอคืนสินค้า (Shopee)') col.shopeeReasonText = c;
-      else if (h === 'ขนส่งขากลับ (Shopee)') col.returnShipping = c;
-      // Plain "ขนส่งขากลับ" (no "(Shopee)") is the carrier NAME for the return leg, e.g.
-      // "SPX Express" / "Flash Express - Return" — a different column from the status above.
-      else if (h === 'ขนส่งขากลับ') col.returnCarrier = c;
-      else if (h === 'ครบกำหนดใกล้สุด (Shopee)') col.nearestDue = c;
-      else if (h === 'หมดเวลาในอีก (วัน)') col.daysUntilDue = c;
-      else if (h === 'ธง') col.flag = c;
-      else if (h === 'ปุ่มคืนเงินในแพลตฟอร์ม') col.refundButtonPending = c;
-      else if (h === 'สถานะ') col.staffStatus = c;
-    }
-    break;
-  }
-  if (headerRowIdx === -1 || col.store === undefined) return [];
+  values[0].forEach(function (h, c) {
+    var name = String(h == null ? '' : h).trim();
+    if (name) col[name] = c;
+  });
+  if (col.shop === undefined || col.orderNumber === undefined || col.alertCode === undefined) return [];
 
   var textOf = function (i, key) {
     return col[key] === undefined ? '' : String(displayValues[i][col[key]] || '').trim();
@@ -1721,42 +1689,55 @@ function parseReturnsSheet_(sheet, tz) {
   };
 
   var out = [];
-  for (var i = headerRowIdx + 1; i < values.length; i++) {
-    var storeName = values[i][col.store];
-    if (storeName === '' || storeName === null || storeName === undefined) continue; // heartbeat-only row
+  for (var i = 1; i < values.length; i++) {
+    var shop = textOf(i, 'shop');
+    if (!shop) continue;
+
+    var returnStatus = textOf(i, 'returnStatus');
+    var stockInStatus = textOf(i, 'stockInStatus');
+    var refundState = textOf(i, 'refundState');
+    var alertCode = textOf(i, 'alertCode');
+    var alertText = textOf(i, 'alertText');
+
+    var flag = '';
+    if (returnStatus === 'สูญหาย') flag = '🔴 สูญหาย';
+    else if (alertCode === 'REFUNDED_NOT_STOCKED' || alertCode === 'REFUNDED_STOCKIN_OVERDUE') flag = '🔴 ' + (alertText || alertCode);
+    else if (alertCode) flag = '🟠 ' + (alertText || alertCode);
+    else if (returnStatus === 'อยู่ระหว่างคืนสินค้า' || returnStatus === 'รอคืนสินค้า') flag = '🔵 อยู่ระหว่างขนส่งขากลับ';
+    else if (stockInStatus === 'ยังไม่ Stock-In') flag = '🔵 รอ Stock-In';
+    else if (stockInStatus === 'Stock-In ทั้งหมด') flag = '🟢 ' + returnStatus;
+
+    var carrier = textOf(i, 'logisticsProvider');
+    if (RETURN_CARRIER_PLACEHOLDERS_[carrier.toLowerCase()]) carrier = '';
 
     out.push({
-      store: String(storeName).trim(),
-      platform: textOf(i, 'platform'),
-      orderNo: textOf(i, 'orderNo'),
-      afterSalesId: textOf(i, 'afterSalesId'),
-      parcelNo: textOf(i, 'parcelNo'),
-      outboundTracking: textOf(i, 'outboundTracking'),
-      returnTracking: textOf(i, 'returnTracking'),
-      afterSalesType: textOf(i, 'afterSalesType'),
-      returnStatus: textOf(i, 'returnStatus'),
-      stockInStatus: textOf(i, 'stockInStatus'),
-      returnLogisticsStatus: textOf(i, 'returnLogisticsStatus'),
-      orderStatus: textOf(i, 'orderStatus'),
+      store: shop,
+      platform: textOf(i, 'platform').toLowerCase(),
+      orderNo: textOf(i, 'orderNumber'),
+      afterSalesId: textOf(i, 'afterSaleId'),
+      afterSalesType: textOf(i, 'afterSaleType'),
+      returnStatus: returnStatus,
+      refundState: refundState,
+      refundStatus: RETURN_REFUND_STATUS_LABEL_[refundState] || '',
+      stockInStatus: stockInStatus,
+      returnTracking: textOf(i, 'returnTrackingNumber'),
+      returnShipping: textOf(i, 'returnShipmentStatus'),
+      returnCarrier: carrier,
       refundAmount: numOf(i, 'refundAmount') || 0,
-      sku: textOf(i, 'sku'),
-      qtyToReturn: numOf(i, 'qtyToReturn') || 0,
-      qtyStockedIn: numOf(i, 'qtyStockedIn') || 0,
-      orderTime: textOf(i, 'orderTime'),
-      requestTime: textOf(i, 'requestTime'),
-      dueTime: textOf(i, 'dueTime'),
-      reason: textOf(i, 'reason'),
-      shopeeRequestId: textOf(i, 'shopeeRequestId'),
-      shopeeOffer: textOf(i, 'shopeeOffer'),
-      shopeeRequestStatus: textOf(i, 'shopeeRequestStatus'),
-      shopeeReasonText: textOf(i, 'shopeeReasonText'),
-      returnShipping: textOf(i, 'returnShipping'),
-      returnCarrier: textOf(i, 'returnCarrier'),
-      nearestDue: textOf(i, 'nearestDue'),
-      daysUntilDue: numOf(i, 'daysUntilDue'),
-      flag: textOf(i, 'flag'),
-      refundButtonPending: textOf(i, 'refundButtonPending'),
-      staffStatus: textOf(i, 'staffStatus')
+      sku: textOf(i, 'merchantSku'),
+      qtyToReturn: numOf(i, 'quantity') || 0,
+      qtyStockedIn: numOf(i, 'quantityStockedIn') || 0,
+      requestTime: textOf(i, 'requestedAt'),
+      dueTime: textOf(i, 'dueAt'),
+      carrierDeliveredAt: textOf(i, 'carrierDeliveredAt'),
+      stockedInAt: textOf(i, 'stockedInAt'),
+      stockInNote: textOf(i, 'stockInNote'),
+      receivedWarehouse: textOf(i, 'receivedWarehouse'),
+      reason: textOf(i, 'returnReasonCode'),
+      alertCode: alertCode,
+      alertText: alertText,
+      daysSinceRequest: numOf(i, 'daysSinceRequest'),
+      flag: flag
     });
   }
   return out;
@@ -1783,7 +1764,8 @@ function buildDashboardPayload_() {
   var workPerformanceRaw = [];
   var workPerformanceMap = {};
   var stockMoveRaw = [];
-  var returnRows = [];
+  // Not a tab of this workbook — see loadReturnRowsFromDb_.
+  var returnRows = loadReturnRowsFromDb_();
 
   sheets.forEach(function (sheet) {
     // Normalized so a tab name whose Thai combining marks were typed/pasted in a
@@ -1917,17 +1899,6 @@ function buildDashboardPayload_() {
           var refundMonthly = parseOfflineRefundMonthlySheet_(sheet);
           Object.keys(refundMonthly).forEach(function (m) { offlineRefundMonthly[m] = refundMonthly[m]; });
         } catch (e9) { /* ignore malformed offline-refund sheet */ }
-        return;
-      }
-
-      // The "BIGSELLER_RAW" after-sales/returns export — flat one-row-per-return
-      // case, every platform, plus poll-log heartbeat rows (dropped inside the
-      // parser). See parseReturnsSheet_'s doc.
-      if (headerSampleHas_(peek.headerSample, ['ปุ่มคืนเงินในแพลตฟอร์ม'])) {
-        try {
-          var retRows = parseReturnsSheet_(sheet, tz);
-          if (retRows.length) returnRows = returnRows.concat(retRows);
-        } catch (e14) { /* ignore malformed returns sheet */ }
         return;
       }
 
