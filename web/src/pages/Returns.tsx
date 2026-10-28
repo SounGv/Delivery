@@ -210,7 +210,7 @@ export function Returns() {
           <div className="text-sm">
             <p className="font-semibold text-foreground">ยังไม่พบข้อมูลคืนสินค้าจากชีท "DB_RETURN_CURRENT"</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              ระบบอ่านชีทของโปรเจกต์ BigSeller-Inventory แบบ read-only แต่ยังไม่ได้ข้อมูล — ตรวจว่า Apps Script เข้าถึงไฟล์ "BigSeller Inventory Sync - Database" ได้ และได้รัน sync:returns แล้ว
+              ระบบอ่านแท็บ DB_RETURN_CURRENT ในชีตทีมแบบ read-only แต่ยังไม่ได้ข้อมูล — ตรวจว่าแท็บยังอยู่และได้รัน sync:returns (โปรเจกต์ BigSeller-Inventory) แล้ว
             </p>
           </div>
         </div>
@@ -462,7 +462,7 @@ export function Returns() {
         )}
 
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          ที่มาข้อมูล: ชีต "DB_RETURN_CURRENT" จากโปรเจกต์ BigSeller-Inventory (Shopee / TikTok / Lazada · คืนเงิน/คืนสินค้า, คืนเงินเท่านั้น, เปลี่ยนสินค้า) · <b className="text-foreground">รอกดคืนเงิน</b> คือคลังสแกนรับเข้าครบแล้ว แต่แพลตฟอร์มยังไม่คืนเงิน · <b className="text-foreground">คืนเงินแล้ว แต่ของไม่เข้าคลัง</b> คือแจ้งเตือนสีแดงของโปรเจกต์ (ไม่รวมเคสคืนกลับผิดปกติและยกเลิก)
+          ที่มาข้อมูล: แท็บ "DB_RETURN_CURRENT" ในชีตทีม (ดึงจาก BigSeller โดยโปรเจกต์ BigSeller-Inventory) (Shopee / TikTok / Lazada · คืนเงิน/คืนสินค้า, คืนเงินเท่านั้น, เปลี่ยนสินค้า) · <b className="text-foreground">รอกดคืนเงิน</b> คือคลังสแกนรับเข้าครบแล้ว แต่แพลตฟอร์มยังไม่คืนเงิน · <b className="text-foreground">คืนเงินแล้ว แต่ของไม่เข้าคลัง</b> คือแจ้งเตือนสีแดงของโปรเจกต์ (ไม่รวมเคสคืนกลับผิดปกติและยกเลิก)
         </p>
       </div>
     </div>

@@ -1631,9 +1631,8 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
 
 /**
  * Product-returns cases for the returns page. Source: the "DB_RETURN_CURRENT" tab
- * kept by the BigSeller-Inventory sync project (`npm run sync:returns`) in its OWN
- * workbook ("BigSeller Inventory Sync - Database"), opened by id — the team
- * workbook no longer carries a returns tab. One row per (platform, shop, order,
+ * of THIS workbook, kept by the BigSeller-Inventory sync project
+ * (`npm run sync:returns` with GOOGLE_SHEETS_RETURNS_ID pointing here). One row per (platform, shop, order,
  * after-sale id, SKU, line) in the project's own scope: คืนเงิน/คืนสินค้า,
  * คืนเงินเท่านั้น and เปลี่ยนสินค้า on Shopee/Lazada/TikTok.
  *
@@ -1642,10 +1641,9 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
  * rules (`alertCode`/`alertText`) are the project's; this only decorates them
  * with an emoji for the table's status column.
  *
- * Read-only. Any failure (workbook not shared with this script's owner, tab
- * renamed, ...) returns [] so the rest of the dashboard payload is unaffected.
+ * Read-only. Any failure (tab renamed, ...) returns [] so the rest of the
+ * dashboard payload is unaffected.
  */
-var RETURNS_DB_SPREADSHEET_ID_ = '1UM5uP1FdgDfEHh9IYFQ9qS7kpVvjuyXRwRMs8guWDRo';
 var RETURNS_DB_TAB_ = 'DB_RETURN_CURRENT';
 // `logisticsProvider` carries these generic codes when the carrier name is unknown.
 var RETURN_CARRIER_PLACEHOLDERS_ = { other: true, others: true, standard: true };
@@ -1660,7 +1658,7 @@ var RETURN_REFUND_STATUS_LABEL_ = {
 
 function loadReturnRowsFromDb_() {
   try {
-    var sheet = SpreadsheetApp.openById(RETURNS_DB_SPREADSHEET_ID_).getSheetByName(RETURNS_DB_TAB_);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RETURNS_DB_TAB_);
     return sheet ? parseReturnsDbSheet_(sheet) : [];
   } catch (err) {
     Logger.log('returns DB unreadable: ' + err);
@@ -1764,7 +1762,6 @@ function buildDashboardPayload_() {
   var workPerformanceRaw = [];
   var workPerformanceMap = {};
   var stockMoveRaw = [];
-  // Not a tab of this workbook — see loadReturnRowsFromDb_.
   var returnRows = loadReturnRowsFromDb_();
 
   sheets.forEach(function (sheet) {
