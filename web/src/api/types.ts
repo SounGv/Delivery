@@ -251,12 +251,33 @@ export interface DashboardResponse {
    * "offline" channel in orderReport, plus the only place with cost/gross-profit
    * data and a per-shop breakdown. Optional: absent until the parser is redeployed. */
   offlineShopSales?: OfflineShopDay[]
-  /** BigSeller work-performance import (see WorkPerformance's doc). Optional/null
-   * until both the raw export tab and its name/department mapping tab exist. */
-  workPerformance?: WorkPerformance | null
-  /** BigSeller after-sales/returns export ("BIGSELLER_RAW"). Optional/null until
-   * the parser that reads that tab is redeployed, or before it has any rows. */
-  returns?: ReturnsReport | null
+}
+
+/** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
+ * "core" is the DashboardResponse above; the other three are heavy and are fetched
+ * only by the page that shows them. Each carries the calendar `todayDate`. */
+export type PayloadPartPath = "core" | "returns" | "workPerformance" | "cancelled"
+
+interface PayloadPartMeta {
+  generatedAt: string
+  todayDate: string
+}
+
+/** BigSeller work-performance import (see WorkPerformance's doc). `null` until
+ * both the raw export tab and its name/department mapping tab exist. */
+export interface WorkPerformancePart extends PayloadPartMeta {
+  workPerformance: WorkPerformance | null
+}
+
+/** Product-return cases from the "DB_RETURN_CURRENT" tab; `null` before it has any rows. */
+export interface ReturnsPart extends PayloadPartMeta {
+  returns: ReturnsReport | null
+}
+
+/** Cancelled-order scan log from the gv-returns-sync workbook (two tabs: stock
+ * deducted / not deducted). */
+export interface CancelledPart extends PayloadPartMeta {
+  cancelledOrders: CancelledOrdersReport
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)
@@ -382,6 +403,41 @@ export interface ReturnRow {
 
 export interface ReturnsReport {
   rows: ReturnRow[]
+}
+
+export type CancelledStatus = "รอตรวจสอบ" | "รับแล้ว" | "ไม่ตรง"
+
+/** One cancelled-order line (one SKU of one order) from the gv-returns-sync
+ * workbook — see parseCancelledSheet_ in apps-script/SheetParser.js. `date` is
+ * yyyy-MM-dd; `printedAt` is "yyyy-MM-dd HH:mm" text (blank when unknown). */
+export interface CancelledRow {
+  /** true = the order was cancelled after stock was deducted (parcel must come back to the shelf). */
+  stockDeducted: boolean
+  date: string
+  channel: string
+  bsParcel: string
+  orderNo: string
+  tracking: string
+  sku: string
+  qty: number
+  /** BigSeller user who printed the label, without the "@account" suffix. */
+  printer: string
+  printedAt: string
+  status: CancelledStatus
+  /** What the warehouse scanned/typed for this line; blank = not scanned yet. */
+  scanned: string
+  /** Who received the parcel back (ชื่อคนเก็บ); blank until scanned. */
+  picker: string
+}
+
+export interface CancelledOrdersReport {
+  rows: CancelledRow[]
+  /** Repeated (parcel + order + SKU) lines that were collapsed into one. */
+  duplicatesDropped: number
+  /** Source tabs that could not be found. */
+  missingTabs: string[]
+  /** Non-empty when the source workbook could not be read at all. */
+  error: string
 }
 
 export interface ApiErrorResponse {

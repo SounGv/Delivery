@@ -1,15 +1,44 @@
 import { useMemo } from "react"
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query"
-import { fetchDashboard } from "./client"
+import { fetchDashboard, fetchPayloadPart } from "./client"
 import { getRefreshIntervalMs } from "@/lib/settingsStorage"
 import { useSettings } from "@/lib/settingsContext"
 import { computeTeamTotalsByDate, employeesForTeam } from "@/lib/dashboard-selectors"
-import type { DashboardResponse, Employee } from "./types"
+import type { CancelledPart, DashboardResponse, Employee, ReturnsPart, WorkPerformancePart } from "./types"
 
 export function useDashboardQuery() {
   return useQuery({
     queryKey: ["dashboard"],
     queryFn: ({ signal }) => fetchDashboard(signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+// The three heavy payload slices. Each is its own query so a page that doesn't
+// show it never downloads it, and it is fetched once and shared between components.
+export function useReturnsQuery() {
+  return useQuery({
+    queryKey: ["returns"],
+    queryFn: ({ signal }) => fetchPayloadPart<ReturnsPart>("returns", signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+export function useWorkPerformanceQuery() {
+  return useQuery({
+    queryKey: ["workPerformance"],
+    queryFn: ({ signal }) => fetchPayloadPart<WorkPerformancePart>("workPerformance", signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+export function useCancelledQuery() {
+  return useQuery({
+    queryKey: ["cancelled"],
+    queryFn: ({ signal }) => fetchPayloadPart<CancelledPart>("cancelled", signal),
     placeholderData: keepPreviousData,
     refetchInterval: getRefreshIntervalMs(),
   })

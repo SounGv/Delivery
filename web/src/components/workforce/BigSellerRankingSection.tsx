@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { AlertTriangle } from "lucide-react"
-import { useDashboardQuery } from "@/api/queries"
+import { useDashboardQuery, useWorkPerformanceQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { Podium } from "./Podium"
@@ -47,14 +47,19 @@ function rankingMetricFormatter(metric: RankingMetric) {
  * explicit request, the two crews must never be merged together here.
  */
 export function BigSellerRankingSection({ team }: { team: TeamId }) {
-  const { data, isLoading, isError, error } = useDashboardQuery()
+  const dashboard = useDashboardQuery()
+  const wpQuery = useWorkPerformanceQuery()
+  const data = dashboard.data
+  const isLoading = dashboard.isLoading || wpQuery.isLoading
+  const isError = dashboard.isError || wpQuery.isError
+  const error = dashboard.error ?? wpQuery.error
   const { targetOverride } = useSettings()
   const [rankingMetric, setRankingMetric] = useState<RankingMetric>("parcels")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
 
   const deptLabel = TEAM_LABELS[team]
-  const wp = data?.workPerformance ?? null
+  const wp = wpQuery.data?.workPerformance ?? null
   const rankingEmployees = useMemo(
     () => (wp?.employees ?? []).filter((e) => e.department === deptLabel),
     [wp, deptLabel]

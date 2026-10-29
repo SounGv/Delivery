@@ -22,7 +22,7 @@
  * a bump — they're only ever CACHE_TTL_SECONDS_ stale at most, an explicit and small
  * trade for going from tens-of-seconds to near-instant on every repeat load.
  */
-var CACHE_VERSION_ = 'v15';
+var CACHE_VERSION_ = 'v17';
 // Was 90s. The sheets this reads have grown a lot (55k+ row stock-move log, months
 // of order-report history, ...) so a real cache-miss rebuild now takes ~80s — too
 // close to a 90s TTL, meaning most real visits (more than 90s apart) paid that full
@@ -33,17 +33,49 @@ var CACHE_TTL_SECONDS_ = 360;
 // Stay safely under CacheService's ~100KB-per-key limit when splitting the payload.
 var CACHE_CHUNK_SIZE_ = 90000;
 
-function cachedDashboardPayload_() {
+/**
+ * The payload is served in four independently cached parts so a page only pays
+ * for the data it shows (the single 6 MB payload made every page wait on the
+ * 55k-row stock-move log and the returns DB):
+ *   ?path=core            production, sales, store report, issues, ...   (the light part)
+ *   ?path=returns         product returns            (DB_RETURN_CURRENT)
+ *   ?path=workPerformance BigSeller work performance + stock-move log
+ *   ?path=cancelled       cancelled-order scan log   (gv-returns-sync workbook)
+ * Each part has its own cache key, so a slow heavy part never delays the core.
+ *
+ * ?path=dashboard is the legacy single payload (all four parts merged) kept only
+ * so a web build that predates the split keeps working; drop it once no deployed
+ * web build calls it.
+ */
+var PAYLOAD_PARTS_ = {
+  core: 'core',
+  returns: 'returns',
+  workPerformance: 'workPerformance',
+  cancelled: 'cancelled'
+};
+
+/** One part's payload: from cache, else built (and cached, best-effort). */
+function payloadPart_(part) {
+  var cached = null;
+  try { cached = cachedDashboardPayload_(part); } catch (cacheReadErr) { cached = null; }
+  if (cached) return cached;
+  var built = buildDashboardPayload_(part);
+  try { setCachedDashboardPayload_(part, built); } catch (cacheWriteErr) { /* caching is best-effort */ }
+  return built;
+}
+
+function cachedDashboardPayload_(part) {
   var cache = CacheService.getScriptCache();
-  var metaRaw = cache.get(CACHE_VERSION_ + '_dash_meta');
+  var prefix = CACHE_VERSION_ + '_' + part;
+  var metaRaw = cache.get(prefix + '_meta');
   if (!metaRaw) return null;
   var meta;
   try { meta = JSON.parse(metaRaw); } catch (e) { return null; }
   var parts = [];
   for (var i = 0; i < meta.chunks; i++) {
-    var part = cache.get(CACHE_VERSION_ + '_dash_' + i);
-    if (part === null) return null; // a chunk expired/was evicted — treat as a full miss
-    parts.push(part);
+    var chunk = cache.get(prefix + '_' + i);
+    if (chunk === null) return null; // a chunk expired/was evicted — treat as a full miss
+    parts.push(chunk);
   }
   try {
     return JSON.parse(parts.join(''));
@@ -52,28 +84,36 @@ function cachedDashboardPayload_() {
   }
 }
 
-function setCachedDashboardPayload_(payload) {
+function setCachedDashboardPayload_(part, payload) {
   var json = JSON.stringify(payload);
   var cache = CacheService.getScriptCache();
+  var prefix = CACHE_VERSION_ + '_' + part;
   var puts = {};
   var chunkCount = 0;
   for (var i = 0; i < json.length; i += CACHE_CHUNK_SIZE_) {
-    puts[CACHE_VERSION_ + '_dash_' + chunkCount] = json.slice(i, i + CACHE_CHUNK_SIZE_);
+    puts[prefix + '_' + chunkCount] = json.slice(i, i + CACHE_CHUNK_SIZE_);
     chunkCount++;
   }
-  puts[CACHE_VERSION_ + '_dash_meta'] = JSON.stringify({ chunks: chunkCount });
+  puts[prefix + '_meta'] = JSON.stringify({ chunks: chunkCount });
   cache.putAll(puts, CACHE_TTL_SECONDS_);
 }
 
 /**
- * Rebuilds the dashboard payload and refreshes the cache proactively, so real
- * visitors (almost) never land on a cold cache and pay the ~80s rebuild cost
+ * Rebuilds every payload part and refreshes its cache proactively, so real
+ * visitors (almost) never land on a cold cache and pay the rebuild cost
  * themselves. Wired to a time-driven trigger — see installCacheWarmingTrigger_
  * below; run that ONCE from the editor (Run button), not on every deploy.
+ * One part failing does not stop the others.
  */
 function warmDashboardCache_() {
-  var payload = buildDashboardPayload_();
-  setCachedDashboardPayload_(payload);
+  Object.keys(PAYLOAD_PARTS_).forEach(function (path) {
+    try {
+      var part = PAYLOAD_PARTS_[path];
+      setCachedDashboardPayload_(part, buildDashboardPayload_(part));
+    } catch (err) {
+      Logger.log('warm ' + path + ' failed: ' + err);
+    }
+  });
 }
 
 /**
@@ -96,14 +136,15 @@ function doGet(e) {
   var output;
   try {
     if (path === 'dashboard') {
-      var cached = null;
-      try { cached = cachedDashboardPayload_(); } catch (cacheReadErr) { cached = null; }
-      if (cached) {
-        output = cached;
-      } else {
-        output = buildDashboardPayload_();
-        try { setCachedDashboardPayload_(output); } catch (cacheWriteErr) { /* caching is best-effort */ }
-      }
+      output = payloadPart_('core');
+      ['returns', 'workPerformance', 'cancelled'].forEach(function (name) {
+        var extra = payloadPart_(name);
+        Object.keys(extra).forEach(function (k) {
+          if (k !== 'generatedAt' && k !== 'todayDate') output[k] = extra[k];
+        });
+      });
+    } else if (PAYLOAD_PARTS_[path]) {
+      output = payloadPart_(PAYLOAD_PARTS_[path]);
     } else {
       output = { error: 'Unknown path: ' + path };
     }

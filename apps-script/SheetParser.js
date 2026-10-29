@@ -1741,9 +1741,186 @@ function parseReturnsDbSheet_(sheet) {
   return out;
 }
 
-function buildDashboardPayload_() {
+/**
+ * Cancelled-order scan log for the "สินค้ายกเลิก" page. Source: the "gv-returns-sync"
+ * workbook (NOT this one) — the warehouse keys the received parcel's tracking/order
+ * number into column K of the same row there, so the sheet stays where the staff
+ * already work and this only reads it. Two tabs with identical columns, one per kind
+ * of cancellation: stock already deducted vs. not deducted.
+ *
+ * Columns are matched by header text. Status comes from the sheet's own column J
+ * (รอตรวจสอบ / รับแล้ว / ไม่ตรง); when J holds anything else it is derived the same
+ * way the sheet's colouring rule does — K blank = waiting, K equal to the order no. or
+ * the tracking no. = received, anything else = mismatch.
+ *
+ * A few rows were pasted by hand with "12 ต.ค. 2026 14:26" dates and the same order
+ * can appear twice in a tab, so dates are normalised to yyyy-MM-dd and a repeated
+ * (BigSeller parcel + order + SKU) keeps only its most advanced row. Read-only: any
+ * failure (no access, tab renamed) is reported in `error` and never breaks the payload.
+ */
+var CANCELLED_SOURCE_ID_ = '1--623uQvh5eKsGlZ_xjxzQabUJz1WL8pJq2jPQU-9tg';
+var CANCELLED_TABS_ = [
+  { name: 'รายงานยกเลิกคำสั่งซื้อรายวัน', stockDeducted: true },
+  { name: 'รายงานยกเลิกคำสั่งซื้อรายวัน (ยังไม่ตัดสต็อก)', stockDeducted: false }
+];
+var CANCELLED_STATUS_RANK_ = { 'รอตรวจสอบ': 0, 'ไม่ตรง': 1, 'รับแล้ว': 2 };
+
+function loadCancelledOrders_() {
+  try {
+    var ss = SpreadsheetApp.openById(CANCELLED_SOURCE_ID_);
+    var tz = ss.getSpreadsheetTimeZone();
+    var rows = [];
+    var duplicatesDropped = 0;
+    var missingTabs = [];
+    CANCELLED_TABS_.forEach(function (tab) {
+      var sheet = ss.getSheetByName(tab.name);
+      if (!sheet) { missingTabs.push(tab.name); return; }
+      var parsed = parseCancelledSheet_(sheet, tz, tab.stockDeducted);
+      rows = rows.concat(parsed.rows);
+      duplicatesDropped += parsed.duplicatesDropped;
+    });
+    return { rows: rows, duplicatesDropped: duplicatesDropped, missingTabs: missingTabs, error: '' };
+  } catch (err) {
+    Logger.log('cancelled orders unreadable: ' + err);
+    return { rows: [], duplicatesDropped: 0, missingTabs: [], error: String(err && err.message ? err.message : err) };
+  }
+}
+
+function parseCancelledSheet_(sheet, tz, stockDeducted) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = Math.min(sheet.getLastColumn(), 14);
+  if (lastRow < 2 || lastCol < 1) return { rows: [], duplicatesDropped: 0 };
+  var range = sheet.getRange(1, 1, lastRow, lastCol);
+  var values = range.getValues();
+  var display = range.getDisplayValues();
+
+  var col = {};
+  values[0].forEach(function (h, c) {
+    var name = String(h == null ? '' : h).trim();
+    if (name.normalize) name = name.normalize('NFC');
+    if (name === 'วันที่') col.date = c;
+    else if (name === 'ช่องทาง') col.channel = c;
+    else if (name.indexOf('หมายเลขพัสดุ') === 0) col.bsParcel = c;
+    else if (name === 'หมายเลขคำสั่งซื้อ') col.orderNo = c;
+    else if (name.indexOf('แทร็คกิ้ง') !== -1) col.tracking = c;
+    else if (name.indexOf('SKU') !== -1) col.sku = c;
+    else if (name === 'จำนวน') col.qty = c;
+    else if (name.indexOf('ผู้พิมพ์') !== -1) col.printer = c;
+    else if (name === 'เวลาที่พิมพ์') col.printedAt = c;
+    else if (name === 'สถานะ') col.status = c;
+    else if (name.indexOf('สแกน') === 0) col.scanned = c;
+    else if (name === 'ชื่อคนเก็บ') col.picker = c;
+  });
+  if (col.date === undefined || col.orderNo === undefined) {
+    throw new Error('tab "' + sheet.getName() + '": header columns not found');
+  }
+
+  var textOf = function (i, key) {
+    return col[key] === undefined ? '' : String(display[i][col[key]] == null ? '' : display[i][col[key]]).trim();
+  };
+
+  var byKey = {};
+  var order = [];
+  var dropped = 0;
+  for (var i = 1; i < values.length; i++) {
+    var orderNo = textOf(i, 'orderNo');
+    var sku = textOf(i, 'sku');
+    var dateIso = cancelledDateIso_(col.date === undefined ? '' : values[i][col.date], textOf(i, 'date'), tz);
+    if (!orderNo && !sku) continue;
+    if (!dateIso) continue;
+
+    var tracking = textOf(i, 'tracking');
+    var scanned = textOf(i, 'scanned');
+    var status = textOf(i, 'status');
+    if (CANCELLED_STATUS_RANK_[status] === undefined) {
+      status = !scanned ? 'รอตรวจสอบ' : (scanned === orderNo || scanned === tracking ? 'รับแล้ว' : 'ไม่ตรง');
+    }
+    var printedRaw = col.printedAt === undefined ? '' : values[i][col.printedAt];
+
+    var row = {
+      stockDeducted: stockDeducted,
+      date: dateIso,
+      channel: textOf(i, 'channel'),
+      bsParcel: textOf(i, 'bsParcel'),
+      orderNo: orderNo,
+      tracking: tracking,
+      sku: sku,
+      qty: numFromCell_(col.qty === undefined ? '' : values[i][col.qty]) || 0,
+      printer: textOf(i, 'printer').replace(/@.*$/, ''),
+      printedAt: cancelledDateTimeText_(printedRaw, textOf(i, 'printedAt'), tz),
+      status: status,
+      scanned: scanned,
+      picker: textOf(i, 'picker')
+    };
+
+    var key = row.bsParcel + '|' + row.orderNo + '|' + row.sku;
+    var prev = byKey[key];
+    if (!prev) {
+      byKey[key] = row;
+      order.push(key);
+    } else {
+      dropped++;
+      if (CANCELLED_STATUS_RANK_[row.status] > CANCELLED_STATUS_RANK_[prev.status]) byKey[key] = row;
+    }
+  }
+  return {
+    rows: order.map(function (k) { return byKey[k]; }),
+    duplicatesDropped: dropped
+  };
+}
+
+/** yyyy-MM-dd from a date cell that may be a real Date, "2026-10-21 ..." text or "12 ต.ค. 2026 14:26" text. */
+function cancelledDateIso_(raw, displayText, tz) {
+  if (Object.prototype.toString.call(raw) === '[object Date]') return Utilities.formatDate(raw, tz, 'yyyy-MM-dd');
+  var s = String(displayText || '').trim();
+  var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+  var parsed = parseThaiDateTimeCell_(null, s);
+  return parsed && parsed.dateObj ? Utilities.formatDate(parsed.dateObj, tz, 'yyyy-MM-dd') : '';
+}
+
+/** "yyyy-MM-dd HH:mm" from a timestamp cell in either of the two formats above; blank stays blank. */
+function cancelledDateTimeText_(raw, displayText, tz) {
+  if (Object.prototype.toString.call(raw) === '[object Date]') return Utilities.formatDate(raw, tz, 'yyyy-MM-dd HH:mm');
+  var s = String(displayText || '').trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 16);
+  var parsed = parseThaiDateTimeCell_(null, s);
+  if (!parsed || !parsed.dateObj) return s;
+  var t = parsed.timeText.match(/^(\d{1,2}):(\d{2})/);
+  return Utilities.formatDate(parsed.dateObj, tz, 'yyyy-MM-dd') + (t ? ' ' + ('0' + t[1]).slice(-2) + ':' + t[2] : '');
+}
+
+/**
+ * `part` picks which slice of the payload to build (see PAYLOAD_PARTS_ in Code.js):
+ * 'core' (default) = everything except the three heavy parts below, 'returns',
+ * 'cancelled', 'workPerformance'. The heavy parts carry their own `todayDate`
+ * (calendar date in the spreadsheet's time zone), since the core's "today" is the
+ * latest day with production activity.
+ */
+function buildDashboardPayload_(part) {
+  part = part || 'core';
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = ss.getSpreadsheetTimeZone();
+  var calendarToday = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+  if (part === 'returns') {
+    var returnsOnly = loadReturnRowsFromDb_();
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      returns: returnsOnly.length ? { rows: returnsOnly } : null
+    };
+  }
+  if (part === 'cancelled') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      cancelledOrders: loadCancelledOrders_()
+    };
+  }
+  var isWp = part === 'workPerformance';
+  var isCore = part === 'core';
   var sheets = ss.getSheets();
 
   var employeesMap = {};
@@ -1762,7 +1939,6 @@ function buildDashboardPayload_() {
   var workPerformanceRaw = [];
   var workPerformanceMap = {};
   var stockMoveRaw = [];
-  var returnRows = loadReturnRowsFromDb_();
 
   sheets.forEach(function (sheet) {
     // Normalized so a tab name whose Thai combining marks were typed/pasted in a
@@ -1784,7 +1960,7 @@ function buildDashboardPayload_() {
     }
 
     var parsed = null;
-    if (peek.hasDateHeader) {
+    if (peek.hasDateHeader && isCore) {
       // Only a genuine date-block monthly tab pays for the full read
       // (getValues + getNumberFormats + getDisplayValues) that parseSheetTab_ needs.
       try {
@@ -1798,7 +1974,7 @@ function buildDashboardPayload_() {
       // The daily "รับเข้า + คลัง" work sheet has its own schema (not a monthly
       // production tab). The monthly summary variant is skipped for now. Name-gated
       // (no read needed to decide).
-      if (nm.indexOf('ตารางงาน') !== -1 && nm.indexOf('รับเข้า') !== -1 && nm.indexOf('รายเดือน') === -1) {
+      if (isCore && nm.indexOf('ตารางงาน') !== -1 && nm.indexOf('รับเข้า') !== -1 && nm.indexOf('รายเดือน') === -1) {
         try {
           var rw = parseReceivingWarehouseTab_(sheet, tz);
           // Merge across monthly tabs (ก.ค. + ส.ค. + …) instead of letting the last overwrite.
@@ -1818,6 +1994,7 @@ function buildDashboardPayload_() {
       // column contains "คำสั่งซื้อ" as a substring, so the order-report tab's looser
       // ['วันที่', 'คำสั่งซื้อ'] content check would otherwise wrongly claim this tab first.
       if (headerSampleHas_(peek.headerSample, ['โอเปอเรเตอร์', 'พิมพ์ใบปะหน้า'])) {
+        if (!isWp) return; // heavy part: only the workPerformance payload reads it
         try {
           var wpRows = parseWorkPerformanceSheet_(sheet, tz);
           if (wpRows.length) workPerformanceRaw = workPerformanceRaw.concat(wpRows);
@@ -1825,6 +2002,7 @@ function buildDashboardPayload_() {
         return;
       }
       if (headerSampleHas_(peek.headerSample, ['โอเปอเรเตอร์', 'ชื่อ', 'แผนก'])) {
+        if (!isWp) return;
         try {
           var wpMap = parseWorkPerformanceMappingSheet_(sheet);
           Object.keys(wpMap).forEach(function (op) { workPerformanceMap[op] = wpMap[op]; });
@@ -1837,12 +2015,17 @@ function buildDashboardPayload_() {
       // top-level field) so the existing ผลงาน (BigSeller) page's per-operator
       // byDate/totals structure just gains one more field (stockMoveDocs).
       if (headerSampleHas_(peek.headerSample, ['ปัญชี', 'หมายเลขเอกสาร'])) {
+        if (!isWp) return;
         try {
           var smRows = parseStockMoveSheet_(sheet, tz);
           if (smRows.length) stockMoveRaw = stockMoveRaw.concat(smRows);
         } catch (e12) { /* ignore malformed stock-move sheet */ }
         return;
       }
+
+      // Everything below belongs to the core payload; the workPerformance part has
+      // nothing more to read from this tab.
+      if (!isCore) return;
 
       // The standalone BigSeller order-report export — TWO separate tabs, one per
       // sales channel ("รายงานคำสั่งซื้อ ออนไลน์" / "... ออฟไลน์"), each a flat
@@ -1967,6 +2150,14 @@ function buildDashboardPayload_() {
     });
   });
 
+  if (isWp) {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      workPerformance: buildWorkPerformancePayload_(workPerformanceRaw, workPerformanceMap, stockMoveRaw)
+    };
+  }
+
   var dates = Object.keys(dateSet).sort();
   if (dates.length === 0) throw new Error('No date columns found in any sheet tab');
 
@@ -2065,9 +2256,7 @@ function buildDashboardPayload_() {
     orderReport: orderReportDays.length ? { days: orderReportDays } : null,
     storeReport: storeReportRows.length ? { rows: storeReportRows } : null,
     workIssues: workIssues,
-    offlineShopSales: offlineShopSales,
-    workPerformance: buildWorkPerformancePayload_(workPerformanceRaw, workPerformanceMap, stockMoveRaw),
-    returns: returnRows.length ? { rows: returnRows } : null
+    offlineShopSales: offlineShopSales
   };
 }
 

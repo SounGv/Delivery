@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { ChevronRight, PackageX, Clock, AlertTriangle, Banknote, Scale, PackageSearch } from "lucide-react"
-import { useDashboardQuery } from "@/api/queries"
+import { useReturnsQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -94,7 +94,7 @@ const refundBtnLabel = (r: ReturnRow) => (isPendingRefundButton(r) ? "ต้อ�
  * lib/returns-selectors.ts for what each derived flag means — the alert codes
  * come from that project's own rules, passed through rather than recomputed. */
 export function Returns() {
-  const { data, isLoading, isError, error } = useDashboardQuery()
+  const { data, isLoading, isError, error } = useReturnsQuery()
   const [platform, setPlatform] = useState(ALL)
   const [store, setStore] = useState(ALL)
   const [statusFilter, setStatusFilter] = useState(ALL)

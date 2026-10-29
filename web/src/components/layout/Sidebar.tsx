@@ -12,6 +12,7 @@ import {
   BarChart3,
   ClipboardCheck,
   PackageX,
+  Ban,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSettings } from "@/lib/settingsContext"
@@ -49,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
       { key: "returns", label: "คืนสินค้า", icon: PackageX, enabled: true },
+      { key: "cancelled", label: "สินค้ายกเลิก", icon: Ban, enabled: true },
     ],
   },
   {

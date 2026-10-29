@@ -1,4 +1,5 @@
-import type { Category, ReturnRow } from "@/api/types"
+import type { CancelledRow, Category, ReturnRow } from "@/api/types"
+import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 import { isPendingRefundButton } from "@/lib/returns-selectors"
 
@@ -25,6 +26,21 @@ export function returnsReport(rows: ReturnRow[], scopeLabel: string): ExportTabl
       r.afterSalesType, r.returnStatus, r.refundStatus, r.stockInStatus, r.returnShipping, r.returnCarrier, r.flag,
       isPendingRefundButton(r) ? "ต้องกดคืนเงิน" : "", r.requestTime, r.dueTime, r.carrierDeliveredAt, r.stockedInAt,
       r.daysSinceRequest ?? "", r.reason, r.stockInNote,
+    ]),
+  }
+}
+
+/** Every cancelled-order line in `rows` (the caller passes the FILTERED set). */
+export function cancelledReport(rows: CancelledRow[], kindLabel: string, todayIso: string): ExportTable {
+  return {
+    filename: `cancelled_${kindLabel}_${today()}.csv`,
+    headers: [
+      "วันที่", "ช่องทาง", "หมายเลขคำสั่งซื้อ", "SKU", "จำนวน", "หมายเลขแทร็คกิ้ง", "หมายเลขพัสดุ (BigSeller)", "ผู้พิมพ์ใบปะหน้า", "เวลาที่พิมพ์",
+      "ตัดสต็อก", "สถานะ", "ค้างมาแล้ว (วัน)", "สแกน/กรอกหมายเลข", "ชื่อคนเก็บ",
+    ],
+    rows: rows.map((r) => [
+      r.date, r.channel, r.orderNo, r.sku, r.qty, r.tracking, r.bsParcel, r.printer, r.printedAt,
+      r.stockDeducted ? "ตัดสต็อกแล้ว" : "ยังไม่ตัดสต็อก", r.status, r.status === "รอตรวจสอบ" ? daysBetween(r.date, todayIso) : "", r.scanned, r.picker,
     ]),
   }
 }
