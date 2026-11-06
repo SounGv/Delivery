@@ -25,6 +25,11 @@ import type { TeamId } from "@/api/types"
  * (they have their own cross-team department dropdown), so they're given a
  * matching `defaultDepartment` instead.
  */
+// The BigSeller "อันดับผลงาน" tab is closed by request (the "ผลงานพนักงาน (BigSeller)"
+// sheet tab it read from was removed; per-person output now comes from the monthly
+// tabs). Flip to true to bring it back — the component is left in place.
+const SHOW_BIGSELLER_RANKING_TAB = false
+
 function TeamDepartmentPage({ team }: { team: TeamId }) {
   const { selectedTeam, setSelectedTeam } = useSettings()
   const deptLabel = TEAM_LABELS[team]
@@ -52,7 +57,9 @@ function TeamDepartmentPage({ team }: { team: TeamId }) {
           { key: "employees", label: "พนักงาน", icon: Users, render: () => <Employees /> },
           { key: "attendance", label: "เข้า-ออกงาน", icon: UserCheck, render: () => <Attendance defaultDepartment={deptLabel} /> },
           { key: "ranking", label: "ผลงาน", icon: Gauge, render: () => <WorkforcePlanning /> },
-          { key: "bigseller-ranking", label: "อันดับผลงาน", icon: Trophy, render: () => <BigSellerRankingSection team={team} /> },
+          ...(SHOW_BIGSELLER_RANKING_TAB
+            ? [{ key: "bigseller-ranking", label: "อันดับผลงาน", icon: Trophy, render: () => <BigSellerRankingSection team={team} /> }]
+            : []),
           { key: "kpi", label: "KPI", icon: Gauge, render: () => <KpiEvaluation /> },
           { key: "productivity", label: "Productivity", icon: LineChart, render: () => <Productivity /> },
           { key: "ot", label: "OT & HR", icon: Timer, render: () => <OtHr defaultDepartment={deptLabel} /> },
