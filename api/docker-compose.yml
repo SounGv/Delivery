@@ -1,0 +1,12 @@
+services:
+  dashboard-cache:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - dashboard-cache-data:/data
+    ports:
+      - "127.0.0.1:8000:8000" # Caddy on the droplet proxies the public hostname to this port
+
+volumes:
+  dashboard-cache-data:
