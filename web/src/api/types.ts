@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "returns" | "workPerformance" | "cancelled" | "focus"
+export type PayloadPartPath = "core" | "returns" | "workPerformance" | "cancelled" | "focus" | "restock"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -346,6 +346,47 @@ export interface BacklogReport {
 
 export interface FocusPart extends PayloadPartMeta {
   focus: BacklogReport
+}
+
+/** One SKU line of the gv-returns-sync workbook's "cn-restock" tab: a return/bounce that
+ * is not fully stocked in yet. Headers and wording are the sheet's own. */
+export interface RestockRow {
+  platform: string
+  store: string
+  packageNo: string
+  orderNo: string
+  productName: string
+  sku: string
+  qty: number
+  refundAmount: number
+  /** "สถานะคำสั่งซื้อ", e.g. "ยกเลิกแล้ว" / "เสร็จเรียบร้อย" / "รอคืนสินค้า". */
+  orderStatus: string
+  /** "สถานะหลังการขาย", e.g. "ปิดคำขอ" / "ยอมรับการคืนสินค้า"; "" when none. */
+  afterSalesStatus: string
+  /** "ยังไม่ Stock-In" / "Stock-In บางส่วน" / "ไม่ Stock-In". */
+  stockInStatus: string
+  stockInQty: number
+  returnTracking: string
+  /** "yyyy-MM-dd HH:mm", "" when unknown. */
+  requestedAt: string
+  arrivedAt: string
+  stockInNote: string
+  receiptStatus: string
+  /** "ที่มา" column of the sheet. */
+  origin: string
+  owner: string
+  returnStatus: string
+}
+
+export interface RestockReport {
+  rows: RestockRow[]
+  /** Set (and `rows` empty) when the tab cannot be found. */
+  missingTab: string
+  error: string
+}
+
+export interface RestockPart extends PayloadPartMeta {
+  restock: RestockReport
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)

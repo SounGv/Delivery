@@ -12,6 +12,7 @@ const CACHE_API_ENDPOINTS: Record<PayloadPartPath, string> = {
   workPerformance: "work-performance",
   cancelled: "cancelled",
   focus: "focus",
+  restock: "restock",
 }
 
 async function fetchJson<T>(url: string, label: string, signal?: AbortSignal): Promise<T> {

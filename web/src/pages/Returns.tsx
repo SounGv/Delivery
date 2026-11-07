@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { ChevronRight, PackageX, Clock, AlertTriangle, Banknote, Scale, PackageSearch } from "lucide-react"
-import { useReturnsQuery } from "@/api/queries"
+import { useRestockQuery, useReturnsQuery } from "@/api/queries"
+import { RestockView } from "@/pages/ReturnsRestock"
+import { Tabs } from "@/components/ui/Tabs"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -93,7 +95,7 @@ const refundBtnLabel = (r: ReturnRow) => (isPendingRefundButton(r) ? "ต้อ�
  * BigSeller-Inventory sync project (Shopee/TikTok/Lazada). See
  * lib/returns-selectors.ts for what each derived flag means — the alert codes
  * come from that project's own rules, passed through rather than recomputed. */
-export function Returns() {
+function ReturnsHistoryView() {
   const { data, isLoading, isError, error } = useReturnsQuery()
   const [platform, setPlatform] = useState(ALL)
   const [store, setStore] = useState(ALL)
@@ -466,6 +468,36 @@ export function Returns() {
         </p>
       </div>
     </div>
+  )
+}
+
+/** "สินค้าตีกลับ": two views of the same topic. The first is the gv-returns-sync workbook's
+ * own count (its cn-restock tab — what the team works from, cancelled orders and abnormal
+ * bounces included); the second is every return case in this workbook's DB_RETURN_CURRENT,
+ * history included. The two sources cut the data differently, so their counts differ. */
+export function Returns() {
+  const { data: restockData } = useRestockQuery()
+  const { data: returnsData } = useReturnsQuery()
+  const restockCount = restockData?.restock?.rows.length
+  const historyCount = returnsData?.returns?.rows.length
+  const withCount = (label: string, count: number | undefined) => (count === undefined ? label : `${label} (${num(count)})`)
+  return (
+    <Tabs
+      items={[
+        {
+          key: "restock",
+          label: withCount("ค้างตามชีต gv-returns-sync", restockCount),
+          icon: PackageSearch,
+          render: () => <RestockView key="restock" />,
+        },
+        {
+          key: "history",
+          label: withCount("ข้อมูลทั้งหมดจากชีตทีม", historyCount),
+          icon: PackageX,
+          render: () => <ReturnsHistoryView key="history" />,
+        },
+      ]}
+    />
   )
 }
 

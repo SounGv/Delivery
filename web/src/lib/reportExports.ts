@@ -1,4 +1,4 @@
-import type { BacklogRow, CancelledRow, Category, ReturnRow } from "@/api/types"
+import type { BacklogRow, CancelledRow, Category, RestockRow, ReturnRow } from "@/api/types"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 import { isPendingRefundButton } from "@/lib/returns-selectors"
@@ -41,6 +41,23 @@ export function cancelledReport(rows: CancelledRow[], kindLabel: string, todayIs
     rows: rows.map((r) => [
       r.date, r.channel, r.orderNo, r.sku, r.qty, r.tracking, r.bsParcel, r.printer, r.printedAt,
       r.stockDeducted ? "ตัดสต็อกแล้ว" : "ยังไม่ตัดสต็อก", r.status, r.status === "รอตรวจสอบ" ? daysBetween(r.date, todayIso) : "", r.scanned, r.picker,
+    ]),
+  }
+}
+
+/** Every cn-restock line in `rows` (the caller passes the FILTERED set), headed like the sheet. */
+export function restockReport(rows: RestockRow[]): ExportTable {
+  return {
+    filename: `cn-restock_${today()}.csv`,
+    headers: [
+      "แพลตฟอร์ม", "ร้านค้า BigSeller", "หมายเลขพัสดุ", "หมายเลขคำสั่งซื้อ", "ชื่อสินค้า", "SKU Merchant", "จำนวน", "ยอดคืนเงิน",
+      "สถานะคำสั่งซื้อ", "สถานะหลังการขาย", "สถานะ Stock-In", "จำนวน Stock-In", "หมายเลขแทร็คกิ้งคืนสินค้า", "เวลายื่นบริการหลังการขาย",
+      "เวลาถึงคลัง", "หมายเหตุ Stock-In", "สถานะการรับ", "ที่มา", "ฝ่ายที่ดูแล", "สถานะคืนสินค้า",
+    ],
+    rows: rows.map((r) => [
+      r.platform, r.store, r.packageNo, r.orderNo, r.productName, r.sku, r.qty, r.refundAmount,
+      r.orderStatus, r.afterSalesStatus, r.stockInStatus, r.stockInQty, r.returnTracking, r.requestedAt,
+      r.arrivedAt, r.stockInNote, r.receiptStatus, r.origin, r.owner, r.returnStatus,
     ]),
   }
 }
