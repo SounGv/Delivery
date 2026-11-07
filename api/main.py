@@ -35,6 +35,7 @@ PART_ENDPOINTS = {
     "work-performance": "workPerformance",
     "cancelled": "cancelled",
     "focus": "focus",
+    "restock": "restock",
 }
 
 RETRY_SECONDS_WHEN_EMPTY = 60

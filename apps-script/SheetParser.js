@@ -2109,6 +2109,105 @@ function focusDateIso_(raw, displayText, tz) {
 }
 
 /**
+ * "สินค้าตีกลับ" as the gv-returns-sync workbook counts it: the "cn-restock" tab, one row
+ * per SKU of every return/bounce that is not fully stocked in yet. Unlike the returns
+ * page's own source (DB_RETURN_CURRENT in this workbook) it also holds cancelled orders
+ * and abnormal bounces, which is why the two counts differ (416 vs 304 rows on 2026-11-07).
+ * Columns are matched by header text. Read-only; a missing tab or unreadable file is
+ * reported in the result and never breaks the payload.
+ */
+var CN_RESTOCK_TAB_ = 'cn-restock';
+
+function loadCnRestock_() {
+  var result = { rows: [], missingTab: '', error: '' };
+  try {
+    var ss = SpreadsheetApp.openById(CANCELLED_SOURCE_ID_);
+    var sheet = ss.getSheetByName(CN_RESTOCK_TAB_);
+    if (!sheet) { result.missingTab = CN_RESTOCK_TAB_; return result; }
+    var tz = ss.getSpreadsheetTimeZone();
+    var lastRow = sheet.getLastRow();
+    var lastCol = Math.min(sheet.getLastColumn(), 24);
+    if (lastRow < 2 || lastCol < 1) return result;
+    var range = sheet.getRange(1, 1, lastRow, lastCol);
+    var values = range.getValues();
+    var display = range.getDisplayValues();
+
+    var col = {};
+    display[0].forEach(function (h, c) {
+      var name = String(h == null ? '' : h).trim();
+      if (name.normalize) name = name.normalize('NFC');
+      if (name === 'แพลตฟอร์ม') col.platform = c;
+      else if (name.indexOf('ร้านค้า') === 0) col.store = c;
+      else if (name === 'หมายเลขพัสดุ') col.packageNo = c;
+      else if (name === 'หมายเลขคำสั่งซื้อ') col.orderNo = c;
+      else if (name === 'ชื่อสินค้า') col.productName = c;
+      else if (name.indexOf('SKU') === 0) col.sku = c;
+      else if (name === 'จำนวน') col.qty = c;
+      else if (name === 'ยอดคืนเงิน') col.refundAmount = c;
+      else if (name === 'สถานะคำสั่งซื้อ') col.orderStatus = c;
+      else if (name === 'สถานะหลังการขาย') col.afterSalesStatus = c;
+      else if (name === 'สถานะ Stock-In') col.stockInStatus = c;
+      else if (name === 'จำนวน Stock-In') col.stockInQty = c;
+      else if (name.indexOf('หมายเลขแทร็คกิ้ง') === 0) col.returnTracking = c;
+      else if (name.indexOf('เวลายื่น') === 0) col.requestedAt = c;
+      else if (name === 'เวลาถึงคลัง') col.arrivedAt = c;
+      else if (name.indexOf('หมายเหตุ Stock-In') === 0) col.stockInNote = c;
+      else if (name === 'สถานะการรับ') col.receiptStatus = c;
+      else if (name === 'ที่มา') col.origin = c;
+      else if (name === 'ฝ่ายที่ดูแล') col.owner = c;
+      else if (name === 'สถานะคืนสินค้า') col.returnStatus = c;
+    });
+    if (col.orderNo === undefined || col.packageNo === undefined) {
+      throw new Error('tab "' + CN_RESTOCK_TAB_ + '": header columns not found');
+    }
+
+    var text = function (r, key) {
+      return col[key] === undefined ? '' : String(display[r][col[key]] == null ? '' : display[r][col[key]]).trim();
+    };
+    var number = function (s) {
+      var n = parseFloat(String(s).replace(/[,\s]/g, ''));
+      return isFinite(n) ? n : 0;
+    };
+    var when = function (r, key) {
+      return col[key] === undefined ? '' : cancelledDateTimeText_(values[r][col[key]], text(r, key), tz);
+    };
+    for (var i = 1; i < lastRow; i++) {
+      var packageNo = text(i, 'packageNo');
+      var orderNo = text(i, 'orderNo');
+      if (!packageNo && !orderNo) continue;
+      result.rows.push({
+        platform: text(i, 'platform'),
+        store: text(i, 'store'),
+        packageNo: packageNo,
+        orderNo: orderNo,
+        productName: text(i, 'productName'),
+        sku: text(i, 'sku'),
+        qty: number(text(i, 'qty')),
+        refundAmount: number(text(i, 'refundAmount')),
+        orderStatus: text(i, 'orderStatus'),
+        afterSalesStatus: text(i, 'afterSalesStatus'),
+        stockInStatus: text(i, 'stockInStatus'),
+        stockInQty: number(text(i, 'stockInQty')),
+        returnTracking: text(i, 'returnTracking'),
+        requestedAt: when(i, 'requestedAt'),
+        arrivedAt: when(i, 'arrivedAt'),
+        stockInNote: text(i, 'stockInNote'),
+        receiptStatus: text(i, 'receiptStatus'),
+        origin: text(i, 'origin'),
+        owner: text(i, 'owner'),
+        returnStatus: text(i, 'returnStatus')
+      });
+    }
+    return result;
+  } catch (err) {
+    Logger.log('cn-restock unreadable: ' + err);
+    result.rows = [];
+    result.error = String(err && err.message ? err.message : err);
+    return result;
+  }
+}
+
+/**
  * `part` picks which slice of the payload to build (see PAYLOAD_PARTS_ in Code.js):
  * 'core' (default) = everything except the three heavy parts below, 'returns',
  * 'cancelled', 'workPerformance'. The heavy parts carry their own `todayDate`
@@ -2141,6 +2240,13 @@ function buildDashboardPayload_(part) {
       generatedAt: new Date().toISOString(),
       todayDate: calendarToday,
       focus: loadFocusBacklog_()
+    };
+  }
+  if (part === 'restock') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      restock: loadCnRestock_()
     };
   }
   var isWp = part === 'workPerformance';
