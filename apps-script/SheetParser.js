@@ -1917,6 +1917,198 @@ function cancelledDateTimeText_(raw, displayText, tz) {
 }
 
 /**
+ * "งานค้าง" page: the "โฟกัสทีม-งานค้าง" tab of the gv-returns-sync workbook, the page
+ * that team opens every day. It is all formulas (a row disappears by itself once its
+ * case is handled), so this only reads, in the two blocks the sheet lays out:
+ *  - the summary: one row per queue (columns C:H) plus the due-date alert counts (K:L)
+ *  - the detail table: one row per package line, located by its header row
+ * Columns are matched by header text and the tab by title prefix, because the team
+ * renames tabs (the cancelled-orders tab was). A missing tab or an unreadable file is
+ * reported in the result and never breaks the payload.
+ */
+var FOCUS_TAB_PREFIX_ = 'โฟกัสทีม';
+
+function loadFocusBacklog_() {
+  var result = { queues: [], totalValue: null, alerts: [], rows: [], missingTab: '', error: '' };
+  try {
+    var ss = SpreadsheetApp.openById(CANCELLED_SOURCE_ID_);
+    var sheets = ss.getSheets();
+    var sheet = null;
+    for (var i = 0; i < sheets.length && !sheet; i++) {
+      var title = String(sheets[i].getName());
+      if (title.normalize) title = title.normalize('NFC');
+      if (title.indexOf(FOCUS_TAB_PREFIX_) === 0) sheet = sheets[i];
+    }
+    if (!sheet) { result.missingTab = FOCUS_TAB_PREFIX_ + '-งานค้าง'; return result; }
+    var parsed = parseFocusSheet_(sheet, ss.getSpreadsheetTimeZone());
+    attachFocusQueueMeanings_(sheets, parsed);
+    return parsed;
+  } catch (err) {
+    Logger.log('focus backlog unreadable: ' + err);
+    result.error = String(err && err.message ? err.message : err);
+    return result;
+  }
+}
+
+/**
+ * Each queue's plain-language meaning, read from the workbook's own "วิธีใช้" tab (the
+ * block under the heading "6 คิวในหน้าโฟกัส": queue name in column A, meaning in B), so the
+ * page explains a queue in the team's own words and follows them if they reword it.
+ * Matched by queue number. Best-effort: no such tab/block just leaves `meaning` empty.
+ */
+function attachFocusQueueMeanings_(sheets, result) {
+  result.queues.forEach(function (q) { q.meaning = ''; });
+  try {
+    var help = null;
+    for (var i = 0; i < sheets.length && !help; i++) {
+      var title = String(sheets[i].getName());
+      if (title.normalize) title = title.normalize('NFC');
+      if (title.indexOf('วิธีใช้') === 0) help = sheets[i];
+    }
+    if (!help) return;
+    var rowCount = Math.min(help.getLastRow(), 80);
+    if (rowCount < 1) return;
+    var rows = help.getRange(1, 1, rowCount, 2).getDisplayValues();
+    var meaningByNo = {};
+    var inBlock = false;
+    for (var r = 0; r < rows.length; r++) {
+      var a = String(rows[r][0] || '').trim();
+      var b = String(rows[r][1] || '').trim();
+      if (a.indexOf('6 คิวในหน้าโฟกัส') === 0) { inBlock = true; continue; }
+      if (!inBlock) continue;
+      if (!a) break;
+      var no = parseInt(a, 10);
+      if (no) meaningByNo[no] = b;
+    }
+    result.queues.forEach(function (q) { q.meaning = meaningByNo[q.queueNo] || ''; });
+  } catch (err) {
+    Logger.log('focus queue meanings unreadable: ' + err);
+  }
+}
+
+function parseFocusSheet_(sheet, tz) {
+  var result = { queues: [], totalValue: null, alerts: [], rows: [], missingTab: '', error: '' };
+  var lastRow = sheet.getLastRow();
+  var lastCol = Math.min(sheet.getLastColumn(), 20);
+  if (lastRow < 2 || lastCol < 1) return result;
+  var range = sheet.getRange(1, 1, lastRow, lastCol);
+  var values = range.getValues();
+  var display = range.getDisplayValues();
+  var text = function (r, c) {
+    return c === undefined || c >= lastCol ? '' : String(display[r][c] == null ? '' : display[r][c]).trim();
+  };
+  var number = function (s) {
+    var n = parseFloat(String(s).replace(/[,\s]/g, ''));
+    return isFinite(n) ? n : null;
+  };
+
+  var summaryHeader = -1;
+  var detailHeader = -1;
+  for (var r = 0; r < Math.min(lastRow, 30); r++) {
+    if (summaryHeader === -1 && text(r, 2) === 'คิว' && text(r, 3).indexOf('ออเดอร์') === 0) summaryHeader = r;
+    if (detailHeader === -1 && text(r, 1) === 'คิว' && text(r, 0).indexOf('ค้างมาแล้ว') === 0) detailHeader = r;
+  }
+  if (detailHeader === -1) throw new Error('tab "' + sheet.getName() + '": detail header row not found');
+
+  if (summaryHeader !== -1) {
+    for (var s = summaryHeader + 1; s < detailHeader; s++) {
+      var queueName = text(s, 2);
+      if (queueName) {
+        result.queues.push({
+          queue: queueName,
+          queueNo: parseInt(queueName, 10) || 0,
+          orders: number(text(s, 3)) || 0,
+          lines: number(text(s, 4)) || 0,
+          oldestDays: number(text(s, 5)),
+          owner: text(s, 6),
+          valueBaht: number(text(s, 7))
+        });
+        if (result.totalValue === null) result.totalValue = number(text(s, 8));
+      }
+      var alertLabel = text(s, 10);
+      if (alertLabel) {
+        result.alerts.push({
+          label: alertLabel,
+          count: number(text(s, 11)) || 0,
+          nested: /^\s/.test(String(display[s][10] == null ? '' : display[s][10]))
+        });
+      }
+    }
+  }
+
+  var col = {};
+  display[detailHeader].forEach(function (h, c) {
+    var name = String(h == null ? '' : h).trim();
+    if (name.normalize) name = name.normalize('NFC');
+    if (name.indexOf('ค้างมาแล้ว') === 0) col.ageDays = c;
+    else if (name === 'คิว') col.queue = c;
+    else if (name === 'ช่องทาง') col.channel = c;
+    else if (name === 'package') col.packageNo = c;
+    else if (name === 'เลขออเดอร์') col.orderNo = c;
+    else if (name.indexOf('แทร็คกิ้ง') !== -1) col.tracking = c;
+    else if (name === 'SKU') col.sku = c;
+    else if (name === 'ชิ้น') col.qty = c;
+    else if (name.indexOf('วันที่เริ่มเรื่อง') === 0) col.startedOn = c;
+    else if (name === 'รายงานต้นทาง') col.source = c;
+    else if (name === 'สถานะก่อนยกเลิก') col.statusBeforeCancel = c;
+    else if (name === 'เหตุผลยกเลิก') col.cancelReason = c;
+    else if (name.indexOf('สถานะ Stock-In') === 0) col.stockInStatus = c;
+    else if (name === 'ฝ่ายที่ดูแล') col.owner = c;
+    else if (name === 'สถานะคืนสินค้า') col.returnStatus = c;
+    else if (name === 'กำหนดดำเนินการ') col.dueDate = c;
+    else if (name.indexOf('มูลค่า') === 0) col.valueBaht = c;
+    else if (name === 'เหลือเวลา') col.timeLeft = c;
+    else if (name === 'เตือน') col.alert = c;
+  });
+  if (col.queue === undefined) throw new Error('tab "' + sheet.getName() + '": queue column not found');
+
+  var cell = function (r, key) { return text(r, col[key]); };
+  for (var i = detailHeader + 1; i < lastRow; i++) {
+    var queue = cell(i, 'queue');
+    if (!queue) continue;
+    var ageText = cell(i, 'ageDays');
+    result.rows.push({
+      ageDays: /^\d+$/.test(ageText) ? Number(ageText) : null,
+      queue: queue,
+      queueNo: parseInt(queue, 10) || 0,
+      channel: cell(i, 'channel'),
+      packageNo: cell(i, 'packageNo'),
+      orderNo: cell(i, 'orderNo'),
+      tracking: cell(i, 'tracking'),
+      sku: cell(i, 'sku'),
+      qty: number(cell(i, 'qty')) || 0,
+      startedOn: focusDateIso_(col.startedOn === undefined ? '' : values[i][col.startedOn], cell(i, 'startedOn'), tz),
+      source: cell(i, 'source'),
+      statusBeforeCancel: cell(i, 'statusBeforeCancel'),
+      cancelReason: cell(i, 'cancelReason'),
+      stockInStatus: cell(i, 'stockInStatus'),
+      owner: cell(i, 'owner'),
+      returnStatus: cell(i, 'returnStatus'),
+      dueDate: focusDateIso_(col.dueDate === undefined ? '' : values[i][col.dueDate], cell(i, 'dueDate'), tz),
+      valueBaht: number(cell(i, 'valueBaht')),
+      timeLeft: cell(i, 'timeLeft'),
+      alert: cell(i, 'alert')
+    });
+  }
+  return result;
+}
+
+/**
+ * yyyy-MM-dd from the four shapes this tab mixes in one column: a real date, ISO text,
+ * "12 ต.ค. 2026 14:26" text, and a bare spreadsheet serial like "46332" (a date cell
+ * whose format was lost). Dashes and blanks give ''.
+ */
+function focusDateIso_(raw, displayText, tz) {
+  var s = String(displayText || '').trim();
+  if (/^\d{5}$/.test(s)) {
+    var serialMs = Date.UTC(1899, 11, 30) + Number(s) * 86400000;
+    return Utilities.formatDate(new Date(serialMs), 'UTC', 'yyyy-MM-dd');
+  }
+  if (!s || s === '-') return '';
+  return cancelledDateIso_(raw, displayText, tz);
+}
+
+/**
  * `part` picks which slice of the payload to build (see PAYLOAD_PARTS_ in Code.js):
  * 'core' (default) = everything except the three heavy parts below, 'returns',
  * 'cancelled', 'workPerformance'. The heavy parts carry their own `todayDate`
@@ -1942,6 +2134,13 @@ function buildDashboardPayload_(part) {
       generatedAt: new Date().toISOString(),
       todayDate: calendarToday,
       cancelledOrders: loadCancelledOrders_()
+    };
+  }
+  if (part === 'focus') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      focus: loadFocusBacklog_()
     };
   }
   var isWp = part === 'workPerformance';
