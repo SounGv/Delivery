@@ -9,6 +9,7 @@ import type {
   DashboardResponse,
   Employee,
   FocusPart,
+  RefundsPart,
   RestockPart,
   WorkPerformancePart,
 } from "./types"
@@ -28,6 +29,15 @@ export function useWorkPerformanceQuery() {
   return useQuery({
     queryKey: ["workPerformance"],
     queryFn: ({ signal }) => fetchPayloadPart<WorkPerformancePart>("workPerformance", signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+export function useRefundsQuery() {
+  return useQuery({
+    queryKey: ["refunds"],
+    queryFn: ({ signal }) => fetchPayloadPart<RefundsPart>("refunds", signal),
     placeholderData: keepPreviousData,
     refetchInterval: getRefreshIntervalMs(),
   })

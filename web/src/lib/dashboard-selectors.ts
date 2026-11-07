@@ -1,4 +1,4 @@
-import type { Category, DashboardResponse, Employee, EmployeeDailyEntry, TeamId } from "@/api/types"
+import type { Category, DashboardResponse, Employee, EmployeeDailyEntry, TeamId, WorkIssue } from "@/api/types"
 import { dateFromIso, isoDateOf } from "./format"
 import { hasNoPrimaryParcelTarget } from "./employeeRoles"
 import { classifyKpiStatus, type KpiStatus } from "./status"
@@ -714,4 +714,11 @@ export function buildFollowUpRows(data: DashboardResponse, targetPerPerson: numb
     if (riskDiff !== 0) return riskDiff
     return b.consecutiveDaysBelow - a.consecutiveDaysBelow
   })
+}
+
+const RESOLVED_ISSUE_STATUSES = new Set(["เสร็จสิ้น", "แก้ไขแล้ว", "ปิดงาน"])
+
+/** Work issues ("ปัญหารอแก้") whose status is not one of the closed ones. */
+export function countOpenWorkIssues(issues: WorkIssue[] | undefined): number {
+  return (issues ?? []).filter((i) => !RESOLVED_ISSUE_STATUSES.has((i.status ?? "").trim())).length
 }

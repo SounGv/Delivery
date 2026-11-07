@@ -19,6 +19,7 @@ import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
 import { EmployeeDetailProvider } from "@/lib/employeeDetailStore"
+import { NavigateContext } from "@/lib/navigation"
 import { EmployeeDetailDrawer } from "@/components/employees/EmployeeDetailDrawer"
 
 // Canonical routes match the sidebar exactly (nav is now organized BY DEPARTMENT —
@@ -81,7 +82,9 @@ function App() {
         activePage={page}
         onNavigate={setPage}
       >
-        <PageComponent />
+        <NavigateContext.Provider value={setPage}>
+          <PageComponent />
+        </NavigateContext.Provider>
       </AppShell>
       <EmployeeDetailDrawer />
     </EmployeeDetailProvider>

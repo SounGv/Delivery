@@ -1,9 +1,21 @@
 import { lazy, Suspense, useMemo, useState } from "react"
-import { Wallet, ShoppingCart, Receipt, Coins, RotateCcw, TicketPercent, TrendingUp, CalendarDays } from "lucide-react"
+import {
+  Wallet,
+  ShoppingCart,
+  Receipt,
+  Coins,
+  RotateCcw,
+  TicketPercent,
+  TrendingUp,
+  TrendingDown,
+  Trophy,
+  CalendarDays,
+  CalendarRange,
+  ChevronDown,
+} from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
-import { KpiCard } from "@/components/kpi/KpiCard"
+import { StatTile, filterSelectClass } from "@/components/returns/ReturnsUi"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { DateRangePicker } from "@/components/reports/DateRangePicker"
@@ -37,16 +49,31 @@ function ChartFallback({ height = 300 }: { height?: number }) {
 
 const money = (n: number) => `฿${n.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`
 
-/** Abbreviates values ≥ 1M as "฿12.3M" — the full-digit form (9-figure baht
- * amounts are routine here) overflows a KpiCard's fixed width and gets
- * clipped by its `truncate` class; the exact figure is still one glance away
- * in ExtraStatsPanel/the subtitle line below each card. */
-const compactMoney = (n: number) => (Math.abs(n) >= 1_000_000 ? `฿${(n / 1_000_000).toFixed(1)}M` : money(n))
+/** A page section: a clear heading and one line saying what the numbers cover. */
+function SectionHeading({ title, caption }: { title: string; caption?: string }) {
+  return (
+    <div className="px-1 pt-2">
+      <h2 className="text-xl font-extrabold text-foreground">{title}</h2>
+      {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
+    </div>
+  )
+}
 
 function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]; tone: "top" | "bottom" }) {
+  const Icon = tone === "top" ? Trophy : TrendingDown
   return (
-    <div className="glass-panel overflow-x-auto rounded-2xl p-4">
-      <h3 className="mb-2.5 text-base font-semibold text-foreground">{title}</h3>
+    <div className="glass-panel relative overflow-x-auto rounded-2xl p-4 pl-5">
+      <span className={`absolute inset-y-0 left-0 w-1.5 ${tone === "top" ? "bg-emerald-500" : "bg-rose-500"}`} aria-hidden />
+      <h3 className="mb-2.5 flex items-center gap-2 text-base font-bold text-foreground">
+        <span
+          className={`flex size-8 items-center justify-center rounded-full ${
+            tone === "top" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+          }`}
+        >
+          <Icon className="size-4" />
+        </span>
+        {title}
+      </h3>
       <table className="w-full min-w-[480px] text-left text-base">
         <thead>
           <tr className="border-b border-border text-sm text-muted-foreground">
@@ -98,10 +125,15 @@ function ExtraStatsPanel({ totals }: { totals: OrderReportTotals }) {
   const discountAmount = hasOrigPriceData ? totals.totalOrigPrice - totals.totalProductSales : 0
   const discountPct = hasOrigPriceData ? (discountAmount / totals.totalOrigPrice) * 100 : 0
   return (
-    <div className="glass-panel rounded-2xl p-4">
-      <h3 className="mb-1.5 text-base font-semibold text-foreground">รายละเอียดเพิ่มเติมจากชีต</h3>
-      <p className="mb-3.5 text-sm text-muted-foreground">ทุกคอลัมน์ในชีตรายงานคำสั่งซื้อ ที่ไม่ได้อยู่ในการ์ด KPI หลักด้านบน</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <details className="glass-panel group rounded-2xl p-4">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+        <span>
+          <span className="block text-base font-extrabold text-foreground">รายละเอียดเพิ่มเติมจากชีต</span>
+          <span className="block text-sm text-muted-foreground">ทุกคอลัมน์ในชีตรายงานคำสั่งซื้อ ที่ไม่ได้อยู่ในการ์ดหลักด้านบน — กดเพื่อดู</span>
+        </span>
+        <ChevronDown className="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatChip label="จำนวนพัสดุ" value={`${totals.totalParcels.toLocaleString("th-TH")} พัสดุ`} />
         <StatChip label="รายได้รวม" value={money(totals.totalRevenue)} />
         <StatChip label="เงินอุดหนุนจากผู้ขาย" value={money(totals.totalSellerSubsidy)} />
@@ -111,7 +143,7 @@ function ExtraStatsPanel({ totals }: { totals: OrderReportTotals }) {
           label="ส่วนลดสินค้ารวม"
           value={hasOrigPriceData ? `${money(discountAmount)} (${discountPct.toFixed(1)}%)` : "ไม่มีข้อมูล"}
         />
-        <StatChip label={`ยอดขาย (col "ยอดขาย")`} value={money(totals.totalSales)} />
+        <StatChip label="ยอดขาย (ตามคอลัมน์ในชีต)" value={money(totals.totalSales)} />
         <StatChip label="ยอดคืนเงินรวม" value={money(totals.totalRefundAmount)} tone="rose" />
         <StatChip
           label="คำสั่งซื้อ/ลูกค้าที่คืนเงิน"
@@ -125,7 +157,7 @@ function ExtraStatsPanel({ totals }: { totals: OrderReportTotals }) {
           tone="rose"
         />
       </div>
-    </div>
+    </details>
   )
 }
 
@@ -184,21 +216,30 @@ export function SalesSummary() {
     )
   }
 
+  const avgPerDay = totals.totalEffSales / (totals.nDays || 1)
+  const netSales = totals.totalEffSales - totals.totalRefundAmount
+  const netPct = (netSales / (totals.totalEffSales || 1)) * 100
+
   return (
     <div className="space-y-4">
       <div className="glass-panel flex flex-wrap items-center gap-3 rounded-2xl p-4">
         <div className="flex min-w-0 items-center gap-2 sm:mr-auto">
-          <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground sm:hidden">สรุปยอดขาย BigSeller · {uniqueDateCount} วัน</span>
-          <span className="hidden text-sm text-muted-foreground sm:inline">
-            สรุปยอดขาย BigSeller · ข้อมูลทั้งหมด {formatFullDateLabel(minDate)} &ndash; {formatFullDateLabel(maxDate)} ({uniqueDateCount} วัน) จากแท็บ "รายงานคำสั่งซื้อ ออนไลน์/ออฟไลน์"
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <CalendarDays className="size-4" />
           </span>
+          <div className="min-w-0">
+            <p className="text-base font-extrabold text-foreground">สรุปยอดขาย BigSeller</p>
+            <p className="text-xs text-muted-foreground">
+              ข้อมูลทั้งหมด {formatFullDateLabel(minDate)} &ndash; {formatFullDateLabel(maxDate)} ({uniqueDateCount} วัน) · แท็บ "รายงานคำสั่งซื้อ ออนไลน์/ออฟไลน์"
+            </p>
+          </div>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <select
             value={channel}
             onChange={(e) => setChannel(e.target.value as ChannelFilter)}
-            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-base font-semibold text-foreground shadow-sm outline-none hover:bg-muted sm:flex-none"
+            aria-label="ช่องทาง"
+            className={`${filterSelectClass} flex-1 sm:flex-none`}
           >
             {(Object.keys(CHANNEL_FILTER_LABELS) as ChannelFilter[]).map((c) => (
               <option key={c} value={c} className="bg-popover text-popover-foreground">
@@ -220,150 +261,164 @@ export function SalesSummary() {
         </div>
       </div>
 
-      {channel === "all" && <ChannelComparisonPanel days={daysInRange} />}
-
-      <StoreReportPanel rows={storeReportRows} />
-
       {days.length === 0 ? (
         <div className="glass-panel rounded-2xl p-8 text-center text-sm text-muted-foreground">
           ไม่มีข้อมูลในช่วงวันที่ที่เลือก — ลองเลือกช่วงวันที่อื่น
         </div>
       ) : (
-      <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
-        <KpiCard
-          title="ยอดขายรวม (มีผล)"
-          value={totals.totalEffSales}
-          icon={Wallet}
-          gradient="bg-gradient-to-br from-brand-600 to-brand-700"
-          formatValue={compactMoney}
-          subtitle={`เฉลี่ย ${money(totals.totalEffSales / (totals.nDays || 1))}/วัน`}
-        />
-        <KpiCard
-          title="คำสั่งซื้อที่มีผล"
-          value={totals.totalEffOrders}
-          icon={ShoppingCart}
-          gradient="bg-gradient-to-br from-emerald-glow to-brand-600"
-          suffix="ออเดอร์"
-          subtitle={`จากทั้งหมด ${totals.totalOrders.toLocaleString("th-TH")} ออเดอร์`}
-        />
-        <KpiCard
-          title="AOV เฉลี่ย"
-          value={totals.weightedAov}
-          icon={Receipt}
-          gradient="bg-gradient-to-br from-sky-500 to-brand-600"
-          formatValue={(n) => `฿${n.toFixed(2)}`}
-          subtitle="ต่อคำสั่งซื้อ 1 รายการ"
-        />
-        <KpiCard
-          title="ยอดขายสุทธิ (หลังหักคืนเงิน)"
-          value={totals.totalEffSales - totals.totalRefundAmount}
-          icon={Coins}
-          gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
-          formatValue={compactMoney}
-          subtitle={`${(((totals.totalEffSales - totals.totalRefundAmount) / (totals.totalEffSales || 1)) * 100).toFixed(1)}% ของยอดขายมีผล · คืนเงิน ${money(totals.totalRefundAmount)}`}
-        />
-        <KpiCard
-          title="อัตราคืนเงินเฉลี่ย"
-          value={totals.avgRefundRate}
-          icon={RotateCcw}
-          gradient="bg-gradient-to-br from-amber-500 to-amber-600"
-          formatValue={(n) => n.toFixed(2)}
-          suffix="%"
-          subtitle={`เฉลี่ยต่อวัน (${totals.nDays} วัน)`}
-        />
-        <KpiCard
-          title="ยอดใช้โค้ดส่วนลด"
-          value={totals.totalDiscountCode}
-          icon={TicketPercent}
-          gradient="bg-gradient-to-br from-brand-500 to-brand-700"
-          formatValue={compactMoney}
-          subtitle={`${((totals.totalDiscountCode / (totals.totalEffSales || 1)) * 100).toFixed(1)}% ของยอดขายรวม`}
-        />
-      </div>
+        <>
+          <SectionHeading
+            title="ภาพรวมยอดขาย"
+            caption={`${channel === "all" ? "ออนไลน์ + ออฟไลน์" : CHANNEL_FILTER_LABELS[channel]} · ${formatFullDateLabel(effectiveStart)} – ${formatFullDateLabel(effectiveEnd)} (${totals.nDays} วัน)`}
+          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
+            <StatTile
+              tone="ok"
+              icon={Wallet}
+              label="ยอดขายรวม (มีผล)"
+              value={money(totals.totalEffSales)}
+              sub={`เฉลี่ย ${money(avgPerDay)}/วัน`}
+            />
+            <StatTile
+              tone="neutral"
+              icon={ShoppingCart}
+              label="คำสั่งซื้อที่มีผล"
+              value={
+                <>
+                  {totals.totalEffOrders.toLocaleString("th-TH")} <span className="text-sm font-semibold text-muted-foreground">ออเดอร์</span>
+                </>
+              }
+              sub={`จากทั้งหมด ${totals.totalOrders.toLocaleString("th-TH")} ออเดอร์`}
+            />
+            <StatTile tone="info" icon={Receipt} label="AOV เฉลี่ย" value={`฿${totals.weightedAov.toFixed(2)}`} sub="ต่อคำสั่งซื้อ 1 รายการ" />
+            <StatTile
+              tone="ok"
+              icon={Coins}
+              label="ยอดขายสุทธิ (หลังหักคืนเงิน)"
+              value={money(netSales)}
+              sub={`${netPct.toFixed(1)}% ของยอดขายมีผล · คืนเงิน ${money(totals.totalRefundAmount)}`}
+            />
+            <StatTile
+              tone="warn"
+              icon={RotateCcw}
+              label="อัตราคืนเงินเฉลี่ย"
+              value={`${totals.avgRefundRate.toFixed(2)}%`}
+              sub={`เฉลี่ยต่อวัน (${totals.nDays} วัน)`}
+            />
+            <StatTile
+              tone="neutral"
+              icon={TicketPercent}
+              label="ยอดใช้โค้ดส่วนลด"
+              value={money(totals.totalDiscountCode)}
+              sub={`${((totals.totalDiscountCode / (totals.totalEffSales || 1)) * 100).toFixed(1)}% ของยอดขายรวม`}
+            />
+          </div>
 
-      <ExtraStatsPanel totals={totals} />
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 lg:col-span-7">
+              <Suspense fallback={<ChartFallback height={320} />}>
+                <SalesTrendChart days={days} />
+              </Suspense>
+            </div>
+            <div className="col-span-12 lg:col-span-5">
+              <Suspense fallback={<ChartFallback height={320} />}>
+                <SalesWeekdayChart days={days} />
+              </Suspense>
+            </div>
+          </div>
+        </>
+      )}
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-7">
-          <Suspense fallback={<ChartFallback height={320} />}>
-            <SalesTrendChart days={days} />
-          </Suspense>
-        </div>
-        <div className="col-span-12 lg:col-span-5">
-          <Suspense fallback={<ChartFallback height={320} />}>
-            <SalesWeekdayChart days={days} />
-          </Suspense>
-        </div>
-        <div className="col-span-12 lg:col-span-6">
-          <Suspense fallback={<ChartFallback height={300} />}>
-            <SalesWeeklyChart days={days} />
-          </Suspense>
-        </div>
-        <div className="col-span-12 lg:col-span-6">
-          <Suspense fallback={<ChartFallback height={300} />}>
-            <AovTrendChart days={days} />
-          </Suspense>
-        </div>
-        <div className="col-span-12">
-          <Suspense fallback={<ChartFallback height={320} />}>
-            <MonthlyTrendChart days={days} />
-          </Suspense>
-        </div>
-      </div>
+      {channel === "all" && (
+        <>
+          <SectionHeading title="เทียบออนไลน์ vs ออฟไลน์" caption="ตามช่วงวันที่ที่เลือก ไม่ขึ้นกับตัวกรองช่องทาง" />
+          <ChannelComparisonPanel days={daysInRange} />
+        </>
+      )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <DayTable title="Top 5 วันที่ขายดีที่สุด" rows={top} tone="top" />
-        <DayTable title="Bottom 5 วันที่ขายน้อยที่สุด" rows={bottom} tone="bottom" />
-      </div>
+      {storeReportRows.length > 0 && (
+        <>
+          <SectionHeading title="ยอดขายแยกร้านค้า/ช่องทาง" caption="ข้อมูลรายเดือนจากรายงานร้านค้า BigSeller — ไม่ขึ้นกับช่วงวันที่ด้านบน" />
+          <StoreReportPanel rows={storeReportRows} />
+        </>
+      )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="glass-panel rounded-2xl p-4">
-          <Badge variant="outline" className="mb-2.5 border-emerald-glow/40 text-emerald-glow">
-            <TrendingUp className="mr-1 size-3" /> PEAK DAY
-          </Badge>
-          <h3 className="mb-2 text-base font-semibold text-foreground">
-            {peak ? `${formatFullDateLabel(peak.date)} ทำยอดสูงสุด` : "-"}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {peak &&
-              `ยอดขาย ${money(peak.effSales)} จาก ${peak.effOrders.toLocaleString("th-TH")} ออเดอร์ (AOV ${money(peak.aov)}) สูงกว่าค่าเฉลี่ยรายวัน (${money(
-                totals.totalEffSales / (totals.nDays || 1)
-              )}) ${(peak.effSales / (totals.totalEffSales / (totals.nDays || 1))).toFixed(1)} เท่า`}
+      {days.length > 0 && (
+        <>
+          <SectionHeading title="แนวโน้มและวันเด่น" caption="ดูว่ายอดขายเปลี่ยนไปอย่างไรตามสัปดาห์ เดือน และค่า AOV" />
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 lg:col-span-6">
+              <Suspense fallback={<ChartFallback height={300} />}>
+                <SalesWeeklyChart days={days} />
+              </Suspense>
+            </div>
+            <div className="col-span-12 lg:col-span-6">
+              <Suspense fallback={<ChartFallback height={300} />}>
+                <AovTrendChart days={days} />
+              </Suspense>
+            </div>
+            <div className="col-span-12">
+              <Suspense fallback={<ChartFallback height={320} />}>
+                <MonthlyTrendChart days={days} />
+              </Suspense>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <DayTable title="5 วันที่ขายดีที่สุด" rows={top} tone="top" />
+            <DayTable title="5 วันที่ขายน้อยที่สุด" rows={bottom} tone="bottom" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="glass-panel relative overflow-hidden rounded-2xl p-4 pl-5">
+              <span className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500" aria-hidden />
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-emerald-700 dark:text-emerald-300">
+                <TrendingUp className="size-4" /> วันที่ขายสูงสุด
+              </p>
+              <h3 className="mb-2 text-base font-bold text-foreground">
+                {peak ? `${formatFullDateLabel(peak.date)} ทำยอดสูงสุด` : "-"}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {peak &&
+                  `ยอดขาย ${money(peak.effSales)} จาก ${peak.effOrders.toLocaleString("th-TH")} ออเดอร์ (AOV ${money(peak.aov)}) สูงกว่าค่าเฉลี่ยรายวัน (${money(
+                    avgPerDay
+                  )}) ${(peak.effSales / avgPerDay).toFixed(1)} เท่า`}
+              </p>
+            </div>
+            <div className="glass-panel relative overflow-hidden rounded-2xl p-4 pl-5">
+              <span className="absolute inset-y-0 left-0 w-1.5 bg-sky-500" aria-hidden />
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-sky-700 dark:text-sky-300">
+                <Coins className="size-4" /> ยอดขายสุทธิ
+              </p>
+              <h3 className="mb-2 text-base font-bold text-foreground">ยอดขายสุทธิคิดเป็น {netPct.toFixed(1)}% ของยอดขายมีผล</h3>
+              <p className="text-sm text-muted-foreground">
+                ยอดขายมีผล {money(totals.totalEffSales)} หักยอดคืนเงิน {money(totals.totalRefundAmount)} เหลือยอดขายสุทธิ {money(netSales)} ตลอดช่วง{" "}
+                {totals.nDays} วัน
+              </p>
+            </div>
+            <div className="glass-panel relative overflow-hidden rounded-2xl p-4 pl-5">
+              <span className="absolute inset-y-0 left-0 w-1.5 bg-border" aria-hidden />
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-muted-foreground">
+                <CalendarRange className="size-4" /> รูปแบบรายสัปดาห์
+              </p>
+              <h3 className="mb-2 text-base font-bold text-foreground">
+                วัน{WEEKDAY_LABELS_TH_FULL[bestWdIdx]}ขายดีสุด วัน{WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ขายน้อยสุด
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {hasWeekdayComparison
+                  ? `ยอดขายเฉลี่ยวัน${WEEKDAY_LABELS_TH_FULL[bestWdIdx]}สูงกว่าวัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ประมาณ ${weekdayUpliftPct!.toFixed(0)}% — ใช้จัดโปรโมชัน/สต็อกให้สอดคล้องกับพฤติกรรมลูกค้ารายสัปดาห์`
+                  : `วัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ในช่วงนี้ยังไม่มียอดขาย — ข้อมูลไม่พอสำหรับเทียบเป็น % ลองเลือกช่วงวันที่ให้ยาวขึ้น`}
+              </p>
+            </div>
+          </div>
+
+          <ExtraStatsPanel totals={totals} />
+
+          <p className="px-1 text-xs leading-relaxed text-muted-foreground">
+            ที่มาข้อมูล: ชีต "รายงานคำสั่งซื้อ ออนไลน์" และ "รายงานคำสั่งซื้อ ออฟไลน์" (BigSeller export) · เลือกช่องทางได้จากตัวกรองด้านบน · ข้อจำกัด: ไม่แยกตาม SKU,
+            และ AOV/อัตราคืนเงินคำนวณแบบถ่วงน้ำหนัก (ยอดขายรวม/ออเดอร์รวม) ไม่ใช่ค่าเฉลี่ยอย่างง่ายของแต่ละวัน
           </p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4">
-          <Badge variant="secondary" className="mb-2.5">
-            <Coins className="mr-1 size-3" /> NET SALES
-          </Badge>
-          <h3 className="mb-2 text-base font-semibold text-foreground">
-            ยอดขายสุทธิคิดเป็น {(((totals.totalEffSales - totals.totalRefundAmount) / (totals.totalEffSales || 1)) * 100).toFixed(1)}% ของยอดขายมีผล
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            ยอดขายมีผล {money(totals.totalEffSales)} หักยอดคืนเงิน {money(totals.totalRefundAmount)} เหลือยอดขายสุทธิ{" "}
-            {money(totals.totalEffSales - totals.totalRefundAmount)} ตลอดช่วง {totals.nDays} วัน
-          </p>
-        </div>
-        <div className="glass-panel rounded-2xl p-4">
-          <Badge variant="secondary" className="mb-2.5">
-            PATTERN
-          </Badge>
-          <h3 className="mb-2 text-base font-semibold text-foreground">
-            วัน{WEEKDAY_LABELS_TH_FULL[bestWdIdx]}ขายดีสุด วัน{WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ขายน้อยสุด
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {hasWeekdayComparison
-              ? `ยอดขายเฉลี่ยวัน${WEEKDAY_LABELS_TH_FULL[bestWdIdx]}สูงกว่าวัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ประมาณ ${weekdayUpliftPct!.toFixed(0)}% — ใช้จัดโปรโมชัน/สต็อกให้สอดคล้องกับพฤติกรรมลูกค้ารายสัปดาห์`
-              : `วัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ในช่วงนี้ยังไม่มียอดขาย — ข้อมูลไม่พอสำหรับเทียบเป็น % ลองเลือกช่วงวันที่ให้ยาวขึ้น`}
-          </p>
-        </div>
-      </div>
-
-      <p className="px-1 text-xs leading-relaxed text-muted-foreground">
-        ที่มาข้อมูล: ชีต "รายงานคำสั่งซื้อ ออนไลน์" และ "รายงานคำสั่งซื้อ ออฟไลน์" (BigSeller export) · เลือกช่องทางได้จากตัวกรองด้านบน · ข้อจำกัด: ไม่แยกตาม SKU,
-        และ AOV/อัตราคืนเงินคำนวณแบบถ่วงน้ำหนัก (ยอดขายรวม/ออเดอร์รวม) ไม่ใช่ค่าเฉลี่ยอย่างง่ายของแต่ละวัน
-      </p>
-      </>
+        </>
       )}
     </div>
   )

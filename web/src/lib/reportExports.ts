@@ -1,4 +1,5 @@
-import type { BacklogRow, CancelledRow, Category, RestockRow } from "@/api/types"
+import type { BacklogRow, CancelledRow, Category, RefundCase, RestockRow } from "@/api/types"
+import { carrierFromTracking, isRefundPaid } from "@/lib/refund-selectors"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
 
@@ -23,6 +24,25 @@ export function cancelledReport(rows: CancelledRow[], kindLabel: string, todayIs
       r.date, r.channel, r.orderNo, r.sku, r.qty, r.tracking, r.bsParcel, r.printer, r.printedAt,
       r.stockDeducted ? "ตัดสต็อกแล้ว" : "ยังไม่ตัดสต็อก", r.status, r.status === "รอตรวจสอบ" ? daysBetween(r.date, todayIso) : "", r.scanned, r.picker,
     ]),
+  }
+}
+
+/** Every lost/bounced line in `rows` (the caller passes the FILTERED set) with the refund verdict,
+ * the return tracking number and the carrier read from it (blank when unknown). */
+export function refundCasesReport(rows: RefundCase[], trackingOf: (row: RefundCase) => string): ExportTable {
+  return {
+    filename: `lost-refund_${today()}.csv`,
+    headers: [
+      "สถานะเงินคืน", "ผลเคส (ชีต)", "ช่องทางขาย", "ร้านค้า", "หมายเลขคำสั่งซื้อ", "เลขพัสดุ (BigSeller)", "เลขพัสดุคืน", "ขนส่ง (ดูจากเลขพัสดุคืน)",
+      "SKU", "จำนวน", "สถานะคืนของ (จากแพลตฟอร์ม)", "สถานะรับเข้าคลัง", "ราคาขาย (฿)", "เงินที่ได้คืน (฿)", "ข้อความที่ทีมคลังพิมพ์", "ป้ายสีที่ติดไว้", "รู้ได้จาก",
+    ],
+    rows: rows.map((r) => {
+      const tracking = trackingOf(r)
+      return [
+        isRefundPaid(r) ? "ได้เงินคืนแล้ว" : "ยังไม่ได้เงินคืน", r.caseResult, r.channel, r.store, r.orderNo, r.packageNo, tracking, carrierFromTracking(tracking),
+        r.sku, r.qty, r.platformStatus, r.stockInStatus, r.sellPrice ?? "", r.refunded ?? "", r.teamNote, r.colorLabel, r.knownFrom,
+      ]
+    }),
   }
 }
 

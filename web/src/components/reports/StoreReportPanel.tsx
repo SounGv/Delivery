@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react"
-import { Store } from "lucide-react"
 import {
   computeStoreReportTotals,
   distinctStorePeriods,
@@ -35,9 +34,9 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
   return (
     <div className="glass-panel overflow-x-auto rounded-2xl p-4">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-          <Store className="size-5" /> ยอดขายแยกร้านค้า/ช่องทาง
-        </h3>
+        <p className="text-sm text-muted-foreground">
+          ช่วง {period.periodStart} – {period.periodEnd} · {periodRows.length} ร้านค้า/ช่องทาง
+        </p>
         <div className="flex flex-wrap gap-2">
           {stores.length > 1 && (
             <select
@@ -70,8 +69,8 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
           )}
         </div>
       </div>
-      <p className="mb-4 text-sm text-muted-foreground">
-        ช่วง {period.periodStart} – {period.periodEnd} · รวม {periodRows.length} ร้านค้า/ช่องทาง · ยอดขายรวม {money(totals.totalSales)}
+      <p className="mb-4 text-2xl font-extrabold tabular-nums text-foreground">
+        {money(totals.totalSales)} <span className="text-sm font-semibold text-muted-foreground">ยอดขายรวมของช่วงนี้</span>
       </p>
 
       <table className="w-full min-w-[760px] text-left text-base">
@@ -89,7 +88,15 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         <tbody>
           {periodRows.map((r) => (
             <tr key={r.store} className="border-b border-white/5 last:border-0">
-              <td className="py-2.5 text-foreground">{r.store}</td>
+              <td className="py-2.5 pr-3 text-foreground">
+                <span className="block font-semibold">{r.store}</span>
+                <span className="mt-1 flex items-center gap-2">
+                  <span className="block h-1.5 w-28 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <span className="block h-full rounded-full bg-primary" style={{ width: `${totals.totalSales > 0 ? Math.max(0, Math.min(100, (r.sales / totals.totalSales) * 100)) : 0}%` }} />
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{totals.totalSales > 0 ? ((r.sales / totals.totalSales) * 100).toFixed(1) : "0.0"}%</span>
+                </span>
+              </td>
               <td className="py-2.5 text-right tabular-nums font-medium">{money(r.sales)}</td>
               <td className="py-2.5 text-right tabular-nums text-muted-foreground">{money(r.effSales)}</td>
               <td className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>

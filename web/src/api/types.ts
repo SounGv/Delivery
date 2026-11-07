@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock"
+export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -382,6 +382,55 @@ export interface RestockReport {
 
 export interface RestockPart extends PayloadPartMeta {
   restock: RestockReport
+}
+
+/** One row of the small summary table at the top of the gv-returns-sync tab
+ * "ได้เงินคืนแล้ว-พัสดุหาย" ("ได้เงินคืนแล้ว (ปิดเคส)", "รอเงินคืนจากขนส่ง", "รวมทั้งหมด"). */
+export interface RefundSummaryRow {
+  label: string
+  orders: number
+  items: number
+  /** เงินที่ได้คืน (฿): the amounts the team typed, so it can be 0 even for a closed case. */
+  refunded: number
+  sellPrice: number
+}
+
+/** One lost/bounced parcel line and the sheet's verdict on whether the money came back. */
+export interface RefundCase {
+  /** BigSeller package number (BSUJR…), not the return tracking number. */
+  packageNo: string
+  orderNo: string
+  channel: string
+  store: string
+  sku: string
+  qty: number
+  /** "สถานะคืนของ (จากแพลตฟอร์ม)", e.g. "สูญหาย" / "คืนสินค้าแล้ว". */
+  platformStatus: string
+  /** "สถานะรับเข้าคลัง (ทีมคลังกด)". */
+  stockInStatus: string
+  sellPrice: number | null
+  /** The text the warehouse typed in BigSeller. */
+  teamNote: string
+  /** The colour label stuck on the order in BigSeller. */
+  colorLabel: string
+  /** "ได้เงินคืนแล้ว" (case closed) or "รอเงินคืนจากขนส่ง" (claim open, no money yet). */
+  caseResult: string
+  /** "รู้ได้จาก": the typed note, the colour label, or both. */
+  knownFrom: string
+  /** Amount typed after the note, when the team wrote one. */
+  refunded: number | null
+}
+
+export interface RefundsReport {
+  summary: RefundSummaryRow[]
+  rows: RefundCase[]
+  /** Set (and the rest empty) when the tab cannot be found. */
+  missingTab: string
+  error: string
+}
+
+export interface RefundsPart extends PayloadPartMeta {
+  refunds: RefundsReport
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)

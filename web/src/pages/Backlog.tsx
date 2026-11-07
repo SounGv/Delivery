@@ -1,18 +1,40 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, ArchiveRestore, Banknote, Hourglass, ListChecks, PackageCheck, PackageX, Truck } from "lucide-react"
+import {
+  AlertTriangle,
+  ArchiveRestore,
+  Banknote,
+  CheckCircle2,
+  Clock,
+  Hourglass,
+  Layers,
+  ListChecks,
+  MinusCircle,
+  PackageCheck,
+  PackageX,
+  Truck,
+} from "lucide-react"
 import { useFocusQuery } from "@/api/queries"
-import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { ExportButton } from "@/components/common/ExportButton"
-import { Tabs } from "@/components/ui/Tabs"
+import {
+  FilterField,
+  ListToolbar,
+  Pager,
+  ReturnRowCard,
+  StatTile,
+  StatusPill,
+  StatusTile,
+  chipClass,
+  filterSelectClass,
+  type Tone,
+} from "@/components/returns/ReturnsUi"
 import { backlogReport } from "@/lib/reportExports"
-import { cn } from "@/lib/utils"
-import { ageBand, distinctTexts, sortByAge, sumValueBaht, type AgeBand } from "@/lib/backlog-selectors"
-import type { BacklogAlert, BacklogQueueSummary, BacklogRow } from "@/api/types"
+import { ageBand, alertCount, distinctTexts, sortByAge, sumValueBaht, type AgeBand } from "@/lib/backlog-selectors"
+import type { BacklogQueueSummary, BacklogRow } from "@/api/types"
 
 const ALL = "__all__"
-const PAGE_SIZE = 50
+const PAGE_SIZE = 30
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number | null) => (n === null ? "-" : n.toLocaleString("th-TH", { maximumFractionDigits: 0 }))
 
@@ -26,32 +48,31 @@ const QUEUE_ICONS: Record<number, React.ComponentType<{ className?: string }>> =
   6: Banknote,
 }
 
-const BAND_CLASS: Record<AgeBand, string> = {
-  none: "bg-muted text-muted-foreground",
-  ok: "bg-emerald-glow/15 text-emerald-glow",
-  warn: "bg-amber-500/15 text-amber-500",
-  bad: "bg-destructive/15 text-destructive",
+/** The sheet's age colouring mapped onto the shared status colours: red = chase first. */
+const BAND_TONE: Record<AgeBand, Tone> = { none: "neutral", ok: "ok", warn: "warn", bad: "danger" }
+const BAND_ICON: Record<Tone, React.ComponentType<{ className?: string }>> = {
+  ok: CheckCircle2,
+  warn: Clock,
+  danger: AlertTriangle,
+  info: Clock,
+  neutral: MinusCircle,
 }
 
-function AgeChip({ days }: { days: number | null }) {
-  return (
-    <span
-      className={cn(
-        "inline-block min-w-10 whitespace-nowrap rounded-full px-2 py-0.5 text-center text-xs font-bold tabular-nums",
-        BAND_CLASS[ageBand(days)]
-      )}
-    >
-      {days === null ? "-" : `${num(days)} วัน`}
-    </span>
-  )
+/** Colour of one deadline-alert line, read from the sheet's own wording. */
+function alertTone(label: string): Tone {
+  if (label.includes("เลยกำหนด") || label.includes("เกิน")) return "danger"
+  if (label.includes("วันนี้") || label.includes("1-2")) return "warn"
+  if (label.includes("ไม่มีกำหนด")) return "neutral"
+  return "info"
 }
 
 /** "งานค้าง": the team's daily to-do page from the gv-returns-sync workbook — cancelled and
- * returned parcels that still need someone. One tab per queue, named exactly as the sheet
+ * returned parcels that still need someone. One queue at a time, named exactly as the sheet
  * names it and explained in the sheet's own words. Read-only: the sheet drops a line by itself
  * once the case is handled, so there is nothing to tick here. */
 export function Backlog() {
   const { data, isLoading, isError, error } = useFocusQuery()
+  const [queueKey, setQueueKey] = useState("all")
   const report = data?.focus ?? null
   const rows = useMemo(() => sortByAge(report?.rows ?? []), [report])
 
@@ -64,6 +85,9 @@ export function Backlog() {
   const oldest = queues.reduce((max, q) => Math.max(max, q.oldestDays ?? 0), 0)
   const overdue = alertCount(sheetAlerts, "เลยกำหนด")
   const dueToday = alertCount(sheetAlerts, "ครบกำหนดวันนี้")
+
+  const selected = queues.find((q) => `queue-${q.queueNo}` === queueKey)
+  const selectedRows = selected ? rows.filter((r) => r.queueNo === selected.queueNo) : rows
 
   return (
     <div className="space-y-4">
@@ -83,87 +107,92 @@ export function Backlog() {
         </div>
       )}
 
-      <p className="px-1 text-xs text-muted-foreground">
-        งานยกเลิก/ตีกลับ/ของคืนที่ยังค้าง แยกเป็นคิวตามแท็บ "โฟกัสทีม-งานค้าง" ของชีต gv-returns-sync · แถวจะหายเองเมื่อจัดการเสร็จ (ไม่มีช่องให้กรอกในหน้านี้)
-      </p>
+      <div>
+        <h2 className="text-xl font-extrabold text-foreground">งานค้างที่ต้องตาม</h2>
+        <p className="text-xs text-muted-foreground">
+          งานยกเลิก/ตีกลับ/ของคืนที่ยังค้าง แยกเป็นคิวตามแท็บ "โฟกัสทีม-งานค้าง" ของชีต gv-returns-sync · แถวจะหายเองเมื่อจัดการเสร็จ (ไม่มีช่องให้กรอกในหน้านี้)
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
-          title="มูลค่าค้างรวม"
-          value={report?.totalValue ?? null}
-          icon={Banknote}
-          gradient="bg-gradient-to-br from-brand-500 to-brand-700"
-          suffix="บาท"
-          formatValue={(n) => baht(n)}
-        />
-        <KpiCard
-          title="ออเดอร์ที่ค้าง"
-          value={totalOrders}
+        <StatTile tone="neutral" icon={Banknote} label="มูลค่าค้างรวม" value={<>{baht(report?.totalValue ?? null)} <span className="text-sm font-semibold text-muted-foreground">บาท</span></>} />
+        <StatTile
+          tone="info"
           icon={ListChecks}
-          gradient="bg-gradient-to-br from-sky-500 to-brand-600"
-          suffix="ออเดอร์"
-          subtitle={`${num(report?.rows.length ?? 0)} แถว (SKU)`}
+          label="ออเดอร์ที่ค้าง"
+          value={<>{num(totalOrders)} <span className="text-sm font-semibold text-muted-foreground">ออเดอร์</span></>}
+          sub={`${num(report?.rows.length ?? 0)} แถว (SKU)`}
         />
-        <KpiCard
-          title="เลยกำหนดแล้ว"
-          value={overdue}
+        <StatTile
+          tone="danger"
           icon={AlertTriangle}
-          gradient="bg-gradient-to-br from-rose-500 to-destructive"
-          suffix="รายการ"
-          subtitle={`ครบกำหนดวันนี้ ${num(dueToday)}`}
+          label="เลยกำหนดแล้ว"
+          value={<>{num(overdue)} <span className="text-sm font-semibold text-muted-foreground">รายการ</span></>}
+          sub={`ครบกำหนดวันนี้ ${num(dueToday)}`}
         />
-        <KpiCard
-          title="ค้างนานสุด"
-          value={oldest}
+        <StatTile
+          tone="warn"
           icon={Hourglass}
-          gradient="bg-gradient-to-br from-amber-500 to-rose-500"
-          suffix="วัน"
+          label="ค้างนานสุด"
+          value={<>{num(oldest)} <span className="text-sm font-semibold text-muted-foreground">วัน</span></>}
         />
       </div>
 
       {sheetAlerts.length > 0 && (
-        <div className="glass-panel flex flex-wrap items-center gap-2 rounded-2xl p-3">
-          <span className="text-xs font-semibold text-muted-foreground">เตือนกำหนดดำเนินการ:</span>
-          {sheetAlerts.map((a) => (
-            <span
-              key={a.label}
-              className={cn(
-                "rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground",
-                a.nested && "ml-2 text-muted-foreground"
-              )}
-            >
-              {a.label} <b className="tabular-nums">{num(a.count)}</b>
-            </span>
-          ))}
+        <div className="glass-panel space-y-2.5 rounded-2xl p-4">
+          <p className="text-sm font-extrabold text-foreground">เตือนกำหนดดำเนินการ</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {sheetAlerts.map((a) => {
+              const tone = alertTone(a.label)
+              return (
+                <StatusPill key={a.label} tone={tone} icon={BAND_ICON[tone]} small={a.nested}>
+                  {a.nested ? "└ " : ""}
+                  {a.label} <b className="tabular-nums">{num(a.count)}</b>
+                </StatusPill>
+              )
+            })}
+          </div>
         </div>
       )}
 
-      <Tabs
-        items={[
-          {
-            key: "all",
-            label: `ทุกคิว (${num(rows.length)})`,
-            icon: ListChecks,
-            render: () => <BacklogView key="all" rows={rows} />,
-          },
-          ...queues.map((q) => {
-            const queueRows = rows.filter((r) => r.queueNo === q.queueNo)
-            return {
-              key: `queue-${q.queueNo}`,
-              label: `${q.queue} (${num(queueRows.length)})`,
-              icon: QUEUE_ICONS[q.queueNo] ?? ListChecks,
-              render: () => <BacklogView key={`queue-${q.queueNo}`} rows={queueRows} summary={q} />,
-            }
-          }),
-        ]}
-      />
+      <div>
+        <h2 className="text-lg font-extrabold text-foreground">เลือกคิวงาน</h2>
+        <p className="text-xs text-muted-foreground">สีบอกความเร่งด่วน ดูจากเรื่องที่ค้างนานสุดในคิว: แดง = เกิน 14 วัน · เหลือง = 4-14 วัน · เขียว = 0-3 วัน · กดการ์ดเพื่อดูรายการในคิว</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatusTile
+          tone="neutral"
+          icon={Layers}
+          label="ทุกคิว"
+          count={rows.length}
+          unit="แถว"
+          sub={`${num(totalOrders)} ออเดอร์ · ค้างนานสุด ${num(oldest)} วัน`}
+          active={queueKey === "all"}
+          onClick={() => setQueueKey("all")}
+        />
+        {queues.map((q) => {
+          const tone = BAND_TONE[ageBand(q.oldestDays)]
+          const key = `queue-${q.queueNo}`
+          return (
+            <StatusTile
+              key={key}
+              tone={tone}
+              icon={QUEUE_ICONS[q.queueNo] ?? ListChecks}
+              label={q.queue}
+              count={rows.filter((r) => r.queueNo === q.queueNo).length}
+              unit="แถว"
+              sub={`${num(q.orders)} ออเดอร์ · ${q.oldestDays === null ? "ไม่มีวันที่เริ่มเรื่อง" : `ค้างนานสุด ${num(q.oldestDays)} วัน`}`}
+              active={queueKey === key}
+              onClick={() => setQueueKey(key)}
+            />
+          )
+        })}
+      </div>
+
+      <BacklogView key={queueKey} rows={selectedRows} summary={selected} />
     </div>
   )
-}
-
-function alertCount(alerts: BacklogAlert[], needle: string): number {
-  const found = alerts.find((a) => !a.nested && a.label.includes(needle))
-  return found?.count ?? 0
 }
 
 function BacklogView({ rows, summary }: { rows: BacklogRow[]; summary?: BacklogQueueSummary }) {
@@ -197,201 +226,172 @@ function BacklogView({ rows, summary }: { rows: BacklogRow[]; summary?: BacklogQ
   const pageStart = (pageSafe - 1) * PAGE_SIZE
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE)
 
-  const activeFilterCount = [channel !== ALL, owner !== ALL, alert !== ALL, !!query].filter(Boolean).length
-  const clearFilters = () => {
+  const activeCount = [channel !== ALL, owner !== ALL, alert !== ALL, !!query].filter(Boolean).length
+  const clear = () => {
     setChannel(ALL)
     setOwner(ALL)
     setAlert(ALL)
     setSearch("")
   }
-  const selectCls =
-    "rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
-  const pillCls = (active: boolean) =>
-    cn(
-      "rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
-      active ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-muted"
-    )
 
   return (
     <div className="space-y-4">
       {summary && (
         <div className="glass-panel rounded-2xl p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-extrabold text-foreground">{summary.queue}</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">ค้างนานสุด</span>
-              <AgeChip days={summary.oldestDays} />
+            <h3 className="text-lg font-extrabold text-foreground">{summary.queue}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill tone="neutral" small>
+                ฝ่ายที่ดูแล: {summary.owner || "-"}
+              </StatusPill>
+              <StatusPill tone={BAND_TONE[ageBand(summary.oldestDays)]} icon={BAND_ICON[BAND_TONE[ageBand(summary.oldestDays)]]}>
+                {summary.oldestDays === null ? "ไม่มีวันที่เริ่มเรื่อง" : `ค้างนานสุด ${num(summary.oldestDays)} วัน`}
+              </StatusPill>
             </div>
           </div>
-          {summary.meaning && <p className="mt-1 text-sm text-muted-foreground">{summary.meaning}</p>}
+          {summary.meaning && <p className="mt-1.5 text-sm text-muted-foreground">{summary.meaning}</p>}
           <p className="mt-2 text-xs text-muted-foreground">
             <b className="tabular-nums text-foreground">{num(summary.orders)}</b> ออเดอร์ · <b className="tabular-nums text-foreground">{num(summary.lines)}</b> แถว ·
-            มูลค่าค้าง <b className="tabular-nums text-foreground">{baht(summary.valueBaht)}</b> บาท · ฝ่ายที่ดูแล: {summary.owner || "-"}
+            มูลค่าค้าง <b className="tabular-nums text-foreground">{baht(summary.valueBaht)}</b> บาท
           </p>
         </div>
       )}
 
-      <div className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">
-        <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground">ช่องทาง</label>
-          <div className="flex flex-wrap gap-1.5">
-            <button type="button" onClick={() => setChannel(ALL)} className={pillCls(channel === ALL)}>
-              ทั้งหมด
+      <ListToolbar
+        search={search}
+        onSearch={setSearch}
+        placeholder="ค้นหา ออเดอร์ / package / แทร็คกิ้ง / SKU"
+        chips={
+          <>
+            <button type="button" onClick={() => setChannel(ALL)} className={chipClass(channel === ALL)}>
+              ทุกช่องทาง
             </button>
             {channels.map((c) => (
-              <button key={c} type="button" onClick={() => setChannel(c)} className={pillCls(channel === c)}>
+              <button key={c} type="button" onClick={() => setChannel(c)} className={chipClass(channel === c)}>
                 {c}
               </button>
             ))}
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground">ฝ่ายที่ดูแล</label>
-          <select value={owner} onChange={(e) => setOwner(e.target.value)} className={selectCls}>
-            <option value={ALL} className="bg-popover text-popover-foreground">ทั้งหมด</option>
-            {owners.map((o) => (
-              <option key={o} value={o} className="bg-popover text-popover-foreground">{o}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] text-muted-foreground">เตือน</label>
-          <select value={alert} onChange={(e) => setAlert(e.target.value)} className={selectCls}>
-            <option value={ALL} className="bg-popover text-popover-foreground">ทั้งหมด</option>
-            {alerts.map((a) => (
-              <option key={a} value={a} className="bg-popover text-popover-foreground">{a}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+          </>
+        }
+        moreFilters={
+          <>
+            <FilterField label="ฝ่ายที่ดูแล">
+              <select value={owner} onChange={(e) => setOwner(e.target.value)} className={filterSelectClass}>
+                <option value={ALL}>ทั้งหมด</option>
+                {owners.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="เตือน">
+              <select value={alert} onChange={(e) => setAlert(e.target.value)} className={filterSelectClass}>
+                <option value={ALL}>ทั้งหมด</option>
+                {alerts.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </FilterField>
+          </>
+        }
+        activeCount={activeCount}
+        onClear={clear}
+        actions={<ExportButton disabled={filtered.length === 0} label={`ส่งออก ${num(filtered.length)} รายการ`} build={() => backlogReport(filtered)} />}
+      />
 
-      <div className="glass-panel overflow-x-auto rounded-2xl p-4">
-        <div className="section-title mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-extrabold tracking-wide text-foreground">รายการงานค้าง{summary ? ` · ${summary.queue}` : ""}</h3>
-            <p className="text-[11px] text-muted-foreground">
-              แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ (ทั้งหมด {num(rows.length)}) · มูลค่าที่แสดง {baht(sumValueBaht(filtered))} บาท · เรียงจากค้างนานสุด
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="search"
-              aria-label="ค้นหาเลขออเดอร์ package แทร็คกิ้ง หรือ SKU"
-              placeholder="ค้นหา ออเดอร์ / package / แทร็คกิ้ง / SKU"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={cn(
-                "w-64 rounded-full border bg-background px-3 py-2 text-xs font-semibold text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground",
-                search ? "border-primary bg-primary/10" : "border-border"
-              )}
-            />
-            {activeFilterCount > 0 && (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="rounded-full border border-border px-3 py-2 text-xs font-bold text-coral-dark transition-colors hover:bg-muted"
-              >
-                ล้างตัวกรอง ({activeFilterCount})
-              </button>
-            )}
-            <ExportButton
-              disabled={filtered.length === 0}
-              label={`ส่งออก ${num(filtered.length)} รายการ`}
-              build={() => backlogReport(filtered)}
-            />
-          </div>
-        </div>
+      <p className="px-1 text-xs text-muted-foreground">
+        แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ (ทั้งหมด {num(rows.length)}) · มูลค่าที่แสดง{" "}
+        {baht(sumValueBaht(filtered))} บาท · เรียงจากค้างนานสุด · แถวจากรายงาน cn-restock ไม่มีวันที่เริ่มเรื่อง จึงไม่มีจำนวนวันค้าง
+      </p>
 
-        <table className="w-full min-w-[1150px] text-left text-sm [&_td]:px-2 [&_th]:px-2">
-          <thead>
-            <tr className="border-b border-border text-xs text-muted-foreground">
-              <th className="pb-2 font-medium">ค้างมาแล้ว</th>
-              <th className="pb-2 font-medium">คิว</th>
-              <th className="pb-2 font-medium">ช่องทาง</th>
-              <th className="pb-2 font-medium">ออเดอร์ / package</th>
-              <th className="pb-2 font-medium">SKU</th>
-              <th className="pb-2 text-right font-medium">ชิ้น</th>
-              <th className="pb-2 font-medium">สถานะคืน / Stock-In</th>
-              <th className="pb-2 font-medium">กำหนดดำเนินการ</th>
-              <th className="pb-2 text-right font-medium">มูลค่า (฿)</th>
-              <th className="pb-2 font-medium">ฝ่ายที่ดูแล</th>
-              <th className="pb-2 font-medium">เหตุผลยกเลิก</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((r, i) => (
-              <BacklogTableRow key={`${r.packageNo}-${r.sku}-${pageStart + i}`} row={r} />
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={11} className="py-8 text-center text-muted-foreground">
-                  {rows.length > 0 ? "ไม่มีรายการตามเงื่อนไขที่เลือก" : "ไม่มีงานค้างในคิวนี้"}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        {totalPages > 1 && (
-          <div className="mt-3 flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={pageSafe <= 1}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ก่อนหน้า
-            </button>
-            <span className="text-xs text-muted-foreground">หน้า {num(pageSafe)} จาก {num(totalPages)}</span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={pageSafe >= totalPages}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ถัดไป
-            </button>
+      <div className="space-y-2.5">
+        {pageRows.map((r, i) => (
+          <BacklogCard key={`${r.packageNo}-${r.sku}-${pageStart + i}`} row={r} />
+        ))}
+        {filtered.length === 0 && (
+          <div className="glass-panel rounded-2xl p-8 text-center text-sm text-muted-foreground">
+            {rows.length > 0 ? "ไม่มีรายการตามเงื่อนไขที่เลือก — ลองกด ล้างตัวกรอง" : "ไม่มีงานค้างในคิวนี้"}
           </div>
         )}
-
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          สีช่อง "ค้างมาแล้ว": <b className="text-emerald-glow">เขียว</b> = 0-3 วัน · <b className="text-amber-500">เหลือง</b> = 4-14 วัน ·{" "}
-          <b className="text-destructive">แดง</b> = เกิน 14 วัน ตามก่อน · แถวจากรายงาน cn-restock ไม่มีวันที่เริ่มเรื่อง จึงแสดง "-"
-        </p>
       </div>
+
+      <Pager page={pageSafe} totalPages={totalPages} onChange={setPage} />
     </div>
   )
 }
 
-function BacklogTableRow({ row: r }: { row: BacklogRow }) {
+function BacklogCard({ row: r }: { row: BacklogRow }) {
+  const tone = BAND_TONE[ageBand(r.ageDays)]
+  const alertToneOfRow = r.alert ? alertTone(r.alert) : "neutral"
+  const hasReturnStatus = !!r.returnStatus && r.returnStatus !== "-"
+  const hasTimeLeft = !!r.timeLeft && r.timeLeft !== "-"
   return (
-    <tr className="border-b border-white/5 align-top last:border-0 hover:bg-white/5">
-      <td className="py-2.5 whitespace-nowrap">
-        <AgeChip days={r.ageDays} />
-        {r.startedOn && <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">{r.startedOn}</div>}
-      </td>
-      <td className="py-2.5 text-xs text-foreground">{r.queue}</td>
-      <td className="py-2.5">
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-foreground">{r.channel || "-"}</span>
-      </td>
-      <td className="py-2.5">
-        <div className="font-medium text-foreground">{r.orderNo || "-"}</div>
-        <div className="text-[11px] text-muted-foreground">{r.packageNo || "-"}</div>
-      </td>
-      <td className="py-2.5 text-muted-foreground">{r.sku || "-"}</td>
-      <td className="py-2.5 text-right tabular-nums">{num(r.qty)}</td>
-      <td className="py-2.5 text-xs">
-        <div className="text-foreground">{r.returnStatus && r.returnStatus !== "-" ? r.returnStatus : "-"}</div>
-        <div className="text-muted-foreground">{r.stockInStatus || "-"}</div>
-      </td>
-      <td className="py-2.5 text-xs">
-        <div className="tabular-nums text-foreground">{r.dueDate || "-"}</div>
-        {r.timeLeft && r.timeLeft !== "-" && <div className="text-muted-foreground">{r.timeLeft}</div>}
-        {r.alert && <div className="font-semibold text-destructive">{r.alert}</div>}
-      </td>
-      <td className="py-2.5 text-right tabular-nums">{baht(r.valueBaht)}</td>
-      <td className="py-2.5 text-xs text-foreground">{r.owner || "-"}</td>
-      <td className="py-2.5 text-xs text-muted-foreground">{r.cancelReason && r.cancelReason !== "-" ? r.cancelReason : "-"}</td>
-    </tr>
+    <ReturnRowCard
+      tone={tone}
+      status={
+        <>
+          <StatusPill tone={tone} icon={BAND_ICON[tone]}>
+            {r.ageDays === null ? "ไม่มีวันที่เริ่มเรื่อง" : `ค้าง ${num(r.ageDays)} วัน`}
+          </StatusPill>
+          {r.alert && (
+            <StatusPill tone={alertToneOfRow} icon={BAND_ICON[alertToneOfRow]} small>
+              {r.alert}
+            </StatusPill>
+          )}
+          <p className="w-full text-[11px] text-muted-foreground">{r.queue}</p>
+        </>
+      }
+      item={
+        <>
+          <p className="text-sm font-semibold text-foreground">{r.sku || "-"}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{num(r.qty)} ชิ้น</p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="rounded-full bg-muted px-2 py-0.5 font-semibold text-foreground">{r.channel || "-"}</span>
+            {r.cancelReason && r.cancelReason !== "-" && <span className="text-muted-foreground">เหตุผลยกเลิก: {r.cancelReason}</span>}
+          </p>
+        </>
+      }
+      refs={
+        <dl className="space-y-0.5">
+          <div className="flex gap-1.5">
+            <dt className="w-14 shrink-0 text-muted-foreground">ออเดอร์</dt>
+            <dd className="break-all font-medium text-foreground">{r.orderNo || "-"}</dd>
+          </div>
+          <div className="flex gap-1.5">
+            <dt className="w-14 shrink-0 text-muted-foreground">พัสดุ</dt>
+            <dd className="break-all text-foreground">{r.packageNo || "-"}</dd>
+          </div>
+          <div className="flex gap-1.5">
+            <dt className="w-14 shrink-0 text-muted-foreground">แทร็คกิ้ง</dt>
+            <dd className="break-all text-foreground">{r.tracking || "-"}</dd>
+          </div>
+          <div className="flex gap-1.5">
+            <dt className="w-14 shrink-0 text-muted-foreground">สถานะ</dt>
+            <dd className="text-foreground">
+              {hasReturnStatus ? `${r.returnStatus} · ` : ""}
+              {r.stockInStatus || "-"}
+            </dd>
+          </div>
+        </dl>
+      }
+      dates={
+        <dl className="space-y-0.5">
+          <div>
+            <dt className="inline text-muted-foreground">เริ่มเรื่อง </dt>
+            <dd className="inline tabular-nums text-foreground">{r.startedOn || "-"}</dd>
+          </div>
+          <div>
+            <dt className="inline text-muted-foreground">กำหนด </dt>
+            <dd className="inline tabular-nums text-foreground">{r.dueDate || "-"}</dd>
+          </div>
+          {hasTimeLeft && <p className="font-semibold text-foreground">{r.timeLeft}</p>}
+        </dl>
+      }
+      money={
+        <>
+          <p className="text-base font-extrabold tabular-nums text-foreground">฿{baht(r.valueBaht)}</p>
+          <p className="mt-0.5 text-muted-foreground">{r.owner || "-"}</p>
+        </>
+      }
+    />
   )
 }

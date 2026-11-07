@@ -19,8 +19,8 @@ export function Tabs({ items, initialKey }: { items: TabItem[]; initialKey?: str
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel overflow-x-auto rounded-full p-1.5">
-        <div role="tablist" className="flex w-max min-w-full gap-1">
+      <div className="glass-panel overflow-x-auto rounded-2xl p-2">
+        <div role="tablist" className="flex w-max min-w-full gap-2">
           {items.map((item) => {
             const Icon = item.icon
             const isActive = item.key === active
@@ -32,11 +32,13 @@ export function Tabs({ items, initialKey }: { items: TabItem[]; initialKey?: str
                 aria-selected={isActive}
                 onClick={() => setActive(item.key)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition-all active:scale-95",
-                  isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  "flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-6 py-3 text-base font-extrabold transition-all active:scale-95",
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "border border-border text-foreground/70 hover:bg-muted hover:text-foreground"
                 )}
               >
-                {Icon && <Icon className="size-4" />}
+                {Icon && <Icon className="size-5" />}
                 {item.label}
               </button>
             )

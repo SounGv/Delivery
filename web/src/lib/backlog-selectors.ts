@@ -1,4 +1,4 @@
-import type { BacklogRow } from "@/api/types"
+import type { BacklogAlert, BacklogRow } from "@/api/types"
 
 export type AgeBand = "none" | "ok" | "warn" | "bad"
 
@@ -36,4 +36,10 @@ export function countByQueue(rows: BacklogRow[]): Map<number, number> {
 
 export function sumValueBaht(rows: BacklogRow[]): number {
   return rows.reduce((sum, r) => sum + (r.valueBaht ?? 0), 0)
+}
+
+/** Count on the sheet's top-level alert line whose label contains `needle` (e.g. "เลยกำหนด"); 0 when absent. */
+export function alertCount(alerts: BacklogAlert[], needle: string): number {
+  const found = alerts.find((a) => !a.nested && a.label.includes(needle))
+  return found?.count ?? 0
 }

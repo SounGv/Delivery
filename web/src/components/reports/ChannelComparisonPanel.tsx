@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { ArrowRightLeft } from "lucide-react"
+import { Monitor, Store, Coins } from "lucide-react"
 import {
   computeChannelComparison,
   monthlyChannelComparison,
@@ -17,7 +17,7 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: "eme
       <span
         className={
           tone === "emerald"
-            ? "font-semibold tabular-nums text-emerald-glow"
+            ? "font-semibold tabular-nums text-emerald-700 dark:text-emerald-300"
             : tone === "rose"
               ? "font-semibold tabular-nums text-destructive"
               : tone === "muted"
@@ -31,17 +31,37 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: "eme
   )
 }
 
-function ChannelColumn({ label, totals }: { label: string; totals: OrderReportTotals }) {
+function ChannelColumn({
+  label,
+  icon: Icon,
+  totals,
+  share,
+}: {
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  totals: OrderReportTotals
+  share: number
+}) {
   const net = totals.totalEffSales - totals.totalRefundAmount
   return (
-    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-      <p className="mb-2.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+    <div className="relative overflow-hidden rounded-xl border border-border bg-background/60 p-4 pl-5">
+      <span className="absolute inset-y-0 left-0 w-1.5 bg-primary" aria-hidden />
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Icon className="size-4" />
+        </span>
+        <p className="text-base font-extrabold text-foreground">{label}</p>
+        <span className="ml-auto rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">{share.toFixed(1)}% ของยอดขาย</span>
+      </div>
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Coins className="size-3.5" /> ยอดขายสุทธิ (หลังหักคืนเงิน)
+      </p>
+      <p className="mb-3 text-3xl font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">{money(net)}</p>
       <div className="space-y-2">
         <Row label="ยอดขาย" value={money(totals.totalEffSales)} />
-        <Row label="ยอดคืนเงิน" value={money(totals.totalRefundAmount)} tone="rose" />
-        <Row label="ยอดขายสุทธิ" value={money(net)} tone="emerald" />
         <Row label="ออเดอร์" value={`${totals.totalEffOrders.toLocaleString("th-TH")} ออเดอร์`} />
         <Row label="AOV" value={`฿${totals.weightedAov.toFixed(2)}`} />
+        <Row label="ยอดคืนเงิน" value={`− ${money(totals.totalRefundAmount)}`} tone="rose" />
         <Row
           label="ยกเลิก"
           value={`${totals.totalCancelledOrders.toLocaleString("th-TH")} ออเดอร์ (${money(totals.totalCancelledAmount)})`}
@@ -59,16 +79,24 @@ function ChannelColumn({ label, totals }: { label: string; totals: OrderReportTo
 export function ChannelComparisonPanel({ days }: { days: OrderReportDay[] }) {
   const comparison = useMemo(() => computeChannelComparison(days), [days])
   const monthly = useMemo(() => monthlyChannelComparison(days), [days])
+  const bothSales = comparison.online.totalEffSales + comparison.offline.totalEffSales
+  const onlineShare = bothSales > 0 ? (comparison.online.totalEffSales / bothSales) * 100 : 0
 
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <h3 className="mb-1.5 flex items-center gap-2 text-lg font-semibold text-foreground">
-        <ArrowRightLeft className="size-5" /> เทียบยอดขาย ออนไลน์ vs ออฟไลน์
-      </h3>
-      <p className="mb-4 text-sm text-muted-foreground">ตามช่วงวันที่ที่เลือกด้านบน ไม่ขึ้นกับตัวกรองช่องทาง</p>
+      <div className="mb-4">
+        <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+          <span>ออนไลน์ {onlineShare.toFixed(1)}%</span>
+          <span>ออฟไลน์ {(100 - onlineShare).toFixed(1)}%</span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={`สัดส่วนยอดขาย ออนไลน์ ${onlineShare.toFixed(1)}% ออฟไลน์ ${(100 - onlineShare).toFixed(1)}%`}>
+          <div className="bg-primary" style={{ width: `${onlineShare}%` }} />
+          <div className="bg-sky-500" style={{ width: `${100 - onlineShare}%` }} />
+        </div>
+      </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ChannelColumn label="ออนไลน์" totals={comparison.online} />
-        <ChannelColumn label="ออฟไลน์" totals={comparison.offline} />
+        <ChannelColumn label="ออนไลน์" icon={Monitor} totals={comparison.online} share={onlineShare} />
+        <ChannelColumn label="ออฟไลน์" icon={Store} totals={comparison.offline} share={100 - onlineShare} />
       </div>
 
       {monthly.length > 0 && (
