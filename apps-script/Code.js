@@ -22,14 +22,18 @@
  * a bump — they're only ever CACHE_TTL_SECONDS_ stale at most, an explicit and small
  * trade for going from tens-of-seconds to near-instant on every repeat load.
  */
-var CACHE_VERSION_ = 'v17';
+var CACHE_VERSION_ = 'v18';
 // Was 90s. The sheets this reads have grown a lot (55k+ row stock-move log, months
 // of order-report history, ...) so a real cache-miss rebuild now takes ~80s — too
 // close to a 90s TTL, meaning most real visits (more than 90s apart) paid that full
 // rebuild cost. Raised to 6 minutes and paired with warmDashboardCache_ (see below)
 // on a 5-minute time trigger (Apps Script only allows 1/5/10/15/30), so the cache
 // always gets refreshed with a full extra minute of slack before it could expire.
-var CACHE_TTL_SECONDS_ = 360;
+// Now 12 minutes, paired with a 10-minute trigger that only runs 07:00-22:00 (see
+// warmDashboardCache_): this script is owned by a consumer Google account, whose
+// triggers get ~90 min/day of runtime, and a 5-minute trigger over all four parts
+// would use ~6.8 h/day.
+var CACHE_TTL_SECONDS_ = 720;
 // Stay safely under CacheService's ~100KB-per-key limit when splitting the payload.
 var CACHE_CHUNK_SIZE_ = 90000;
 
@@ -98,15 +102,27 @@ function setCachedDashboardPayload_(part, payload) {
   cache.putAll(puts, CACHE_TTL_SECONDS_);
 }
 
+// Parts the warming trigger keeps fresh. workPerformance is left out on purpose: no
+// web page requests it any more and it is the slowest part (~48 s to rebuild), which
+// alone would push the trigger past the daily runtime quota. It is still built on
+// demand by doGet when something asks for it.
+var WARMED_PARTS_ = ['core', 'returns', 'cancelled'];
+var WARM_FROM_HOUR_ = 7;  // Asia/Bangkok, inclusive
+var WARM_TO_HOUR_ = 22;   // Asia/Bangkok, exclusive
+
 /**
- * Rebuilds every payload part and refreshes its cache proactively, so real
+ * Rebuilds the warmed payload parts and refreshes their cache proactively, so real
  * visitors (almost) never land on a cold cache and pay the rebuild cost
  * themselves. Wired to a time-driven trigger — see installCacheWarmingTrigger_
  * below; run that ONCE from the editor (Run button), not on every deploy.
  * One part failing does not stop the others.
  */
 function warmDashboardCache_() {
-  Object.keys(PAYLOAD_PARTS_).forEach(function (path) {
+  // Nobody enters data or looks at the dashboard overnight; skipping those runs keeps
+  // the trigger inside its daily runtime quota (~52 min/day at 10-minute spacing).
+  var hour = Number(Utilities.formatDate(new Date(), 'Asia/Bangkok', 'H'));
+  if (hour < WARM_FROM_HOUR_ || hour >= WARM_TO_HOUR_) return;
+  WARMED_PARTS_.forEach(function (path) {
     try {
       var part = PAYLOAD_PARTS_[path];
       setCachedDashboardPayload_(part, buildDashboardPayload_(part));
@@ -119,16 +135,26 @@ function warmDashboardCache_() {
 /**
  * One-time setup: run this once from the Apps Script editor (select it in the
  * function dropdown, click Run) to install a trigger that calls
- * warmDashboardCache_ every 5 minutes (Apps Script only allows 1/5/10/15/30) —
- * comfortably inside the 6-minute CACHE_TTL_SECONDS_ window, so the cache never
- * fully expires under normal traffic. Safe to re-run: it removes any existing
+ * warmDashboardCache_ every 10 minutes (Apps Script only allows 1/5/10/15/30) —
+ * inside the 12-minute CACHE_TTL_SECONDS_ window, so the cache does not expire
+ * between runs in working hours. Safe to re-run: it removes any existing
  * warmDashboardCache_ trigger first, so it never creates duplicates.
  */
 function installCacheWarmingTrigger_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'warmDashboardCache_') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('warmDashboardCache_').timeBased().everyMinutes(5).create();
+  ScriptApp.newTrigger('warmDashboardCache_').timeBased().everyMinutes(10).create();
+}
+
+/**
+ * Same as installCacheWarmingTrigger_, under a name the editor's Run menu will
+ * list: that menu hides every function whose name ends in an underscore, so the
+ * private version above cannot be picked there. Pick THIS one to install the
+ * trigger.
+ */
+function installCacheWarmingTrigger() {
+  installCacheWarmingTrigger_();
 }
 
 function doGet(e) {

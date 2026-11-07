@@ -1759,22 +1759,41 @@ function parseReturnsDbSheet_(sheet) {
  * failure (no access, tab renamed) is reported in `error` and never breaks the payload.
  */
 var CANCELLED_SOURCE_ID_ = '1--623uQvh5eKsGlZ_xjxzQabUJz1WL8pJq2jPQU-9tg';
+// The tabs are found by title prefix, not by exact name: the warehouse renamed the
+// "stock deducted" tab to "... (ตัดสต๊อกแล้ว )" (note the odd spelling and trailing
+// space), which an exact-name lookup silently missed. Whichever tab under the prefix
+// says "ยังไม่ตัด" is the not-deducted one; the other is the deducted one.
+var CANCELLED_TAB_PREFIX_ = 'รายงานยกเลิกคำสั่งซื้อรายวัน';
 var CANCELLED_TABS_ = [
-  { name: 'รายงานยกเลิกคำสั่งซื้อรายวัน', stockDeducted: true },
-  { name: 'รายงานยกเลิกคำสั่งซื้อรายวัน (ยังไม่ตัดสต็อก)', stockDeducted: false }
+  { label: 'รายงานยกเลิกคำสั่งซื้อรายวัน (ตัดสต็อกแล้ว)', stockDeducted: true },
+  { label: 'รายงานยกเลิกคำสั่งซื้อรายวัน (ยังไม่ตัดสต็อก)', stockDeducted: false }
 ];
-var CANCELLED_STATUS_RANK_ = { 'รอตรวจสอบ': 0, 'ไม่ตรง': 1, 'รับแล้ว': 2 };
+// 'ปิดงาน' = the warehouse closed the line out ("ปิดงาน (Stock-In แล้ว)" or
+// "ปิดงาน (ได้เงินคืนแล้ว)"); ranked highest so a repeated line keeps the closed row.
+var CANCELLED_STATUS_RANK_ = { 'รอตรวจสอบ': 0, 'ไม่ตรง': 1, 'รับแล้ว': 2, 'ปิดงาน': 3 };
+
+function findCancelledSheet_(sheets, stockDeducted) {
+  for (var i = 0; i < sheets.length; i++) {
+    var title = String(sheets[i].getName());
+    if (title.normalize) title = title.normalize('NFC');
+    if (title.indexOf(CANCELLED_TAB_PREFIX_) !== 0) continue;
+    var notDeductedTab = title.indexOf('ยังไม่ตัด') !== -1;
+    if (notDeductedTab === !stockDeducted) return sheets[i];
+  }
+  return null;
+}
 
 function loadCancelledOrders_() {
   try {
     var ss = SpreadsheetApp.openById(CANCELLED_SOURCE_ID_);
     var tz = ss.getSpreadsheetTimeZone();
+    var allSheets = ss.getSheets();
     var rows = [];
     var duplicatesDropped = 0;
     var missingTabs = [];
     CANCELLED_TABS_.forEach(function (tab) {
-      var sheet = ss.getSheetByName(tab.name);
-      if (!sheet) { missingTabs.push(tab.name); return; }
+      var sheet = findCancelledSheet_(allSheets, tab.stockDeducted);
+      if (!sheet) { missingTabs.push(tab.label); return; }
       var parsed = parseCancelledSheet_(sheet, tz, tab.stockDeducted);
       rows = rows.concat(parsed.rows);
       duplicatesDropped += parsed.duplicatesDropped;
@@ -1832,7 +1851,12 @@ function parseCancelledSheet_(sheet, tz, stockDeducted) {
     var tracking = textOf(i, 'tracking');
     var scanned = textOf(i, 'scanned');
     var status = textOf(i, 'status');
-    if (CANCELLED_STATUS_RANK_[status] === undefined) {
+    var closedReason = '';
+    if (status.indexOf('ปิดงาน') === 0) {
+      var reasonMatch = status.match(/\(([^)]*)\)/);
+      closedReason = reasonMatch ? reasonMatch[1].trim() : '';
+      status = 'ปิดงาน';
+    } else if (CANCELLED_STATUS_RANK_[status] === undefined) {
       status = !scanned ? 'รอตรวจสอบ' : (scanned === orderNo || scanned === tracking ? 'รับแล้ว' : 'ไม่ตรง');
     }
     var printedRaw = col.printedAt === undefined ? '' : values[i][col.printedAt];
@@ -1849,6 +1873,7 @@ function parseCancelledSheet_(sheet, tz, stockDeducted) {
       printer: textOf(i, 'printer').replace(/@.*$/, ''),
       printedAt: cancelledDateTimeText_(printedRaw, textOf(i, 'printedAt'), tz),
       status: status,
+      closedReason: closedReason,
       scanned: scanned,
       picker: textOf(i, 'picker')
     };
