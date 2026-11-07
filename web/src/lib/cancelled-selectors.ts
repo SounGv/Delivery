@@ -1,6 +1,6 @@
 import type { CancelledRow, CancelledStatus } from "@/api/types"
 
-export const CANCELLED_STATUSES: CancelledStatus[] = ["รอตรวจสอบ", "รับแล้ว", "ไม่ตรง"]
+export const CANCELLED_STATUSES: CancelledStatus[] = ["รอตรวจสอบ", "รับแล้ว", "ปิดงาน", "ไม่ตรง"]
 
 /** A line still "รอตรวจสอบ" after this many days is flagged — the parcel should
  * have been scanned back in by then. Placeholder default, adjustable in the page. */
@@ -33,19 +33,22 @@ export interface CancelledTotals {
   qty: number
   pending: number
   received: number
+  /** Lines the warehouse closed out ("ปิดงาน": Stock-In done, or refund received). */
+  closed: number
   mismatch: number
   stale: number
 }
 
 export function computeCancelledTotals(rows: CancelledRow[], todayIso: string, staleDays: number): CancelledTotals {
   const orders = new Set<string>()
-  const totals: CancelledTotals = { lines: 0, orders: 0, qty: 0, pending: 0, received: 0, mismatch: 0, stale: 0 }
+  const totals: CancelledTotals = { lines: 0, orders: 0, qty: 0, pending: 0, received: 0, closed: 0, mismatch: 0, stale: 0 }
   for (const r of rows) {
     totals.lines += 1
     totals.qty += r.qty
     if (r.orderNo) orders.add(r.orderNo)
     if (r.status === "รอตรวจสอบ") totals.pending += 1
     else if (r.status === "รับแล้ว") totals.received += 1
+    else if (r.status === "ปิดงาน") totals.closed += 1
     else totals.mismatch += 1
     if (isStaleCancelled(r, todayIso, staleDays)) totals.stale += 1
   }

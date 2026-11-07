@@ -34,8 +34,9 @@ const num = (n: number) => n.toLocaleString("th-TH")
 /** Cancelled-order scan log ("สินค้ายกเลิก"), kept apart from product returns. Two
  * kinds of cancellation live in two tabs of the gv-returns-sync workbook — stock
  * already deducted vs. not deducted — so each gets its own tab here. The status
- * (รอตรวจสอบ / รับแล้ว / ไม่ตรง) is the sheet's own, driven by what the warehouse
- * scans into the same row; this page only reads it. */
+ * (รอตรวจสอบ / รับแล้ว / ปิดงาน / ไม่ตรง) is the sheet's own — set by what the warehouse
+ * scans into the same row, or by BigSeller's Stock-In / the carrier refund for
+ * "ปิดงาน"; this page only reads it. */
 export function Cancelled() {
   const { data, isLoading, isError, error } = useCancelledQuery()
   const report = data?.cancelledOrders ?? null
@@ -102,19 +103,23 @@ export function Cancelled() {
   )
 }
 
-function StatusBadge({ status }: { status: CancelledStatus }) {
-  const Icon = status === "รับแล้ว" ? CheckCircle2 : status === "ไม่ตรง" ? XCircle : Clock
+function StatusBadge({ status, reason }: { status: CancelledStatus; reason?: string }) {
+  const Icon =
+    status === "รับแล้ว" ? CheckCircle2 : status === "ปิดงาน" ? PackageCheck : status === "ไม่ตรง" ? XCircle : Clock
   return (
     <span
+      title={status === "ปิดงาน" && reason ? reason : undefined}
       className={cn(
         "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold",
         status === "รับแล้ว" && "bg-emerald-glow/15 text-emerald-glow",
+        status === "ปิดงาน" && "bg-sky-500/15 text-sky-500",
         status === "ไม่ตรง" && "bg-destructive/15 text-destructive",
         status === "รอตรวจสอบ" && "bg-amber-500/15 text-amber-500"
       )}
     >
       <Icon className="size-3.5" />
       {status}
+      {status === "ปิดงาน" && reason ? ` · ${reason}` : ""}
     </span>
   )
 }
@@ -259,7 +264,7 @@ function CancelledView({
         </div>
       </div>
 
-      <p className="px-1 text-xs text-muted-foreground">{description} · ข้อมูลจากชีต gv-returns-sync (อัปเดตตามที่คลังสแกน)</p>
+      <p className="px-1 text-xs text-muted-foreground">{description} · ข้อมูลจากชีต gv-returns-sync (อัปเดตตามที่คลังสแกนและตาม Stock-In ใน BigSeller)</p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard
@@ -276,7 +281,7 @@ function CancelledView({
           icon={Clock}
           gradient="bg-gradient-to-br from-amber-500 to-rose-500"
           suffix="รายการ"
-          subtitle="ยังไม่ได้สแกนรับของกลับ"
+          subtitle="ยังไม่สแกนรับ และยังไม่ Stock-In"
         />
         <KpiCard
           title={`ค้างเกิน ${staleDays} วัน`}
@@ -286,7 +291,14 @@ function CancelledView({
           suffix="รายการ"
           subtitle="รอตรวจสอบนานเกินกำหนด"
         />
-        <KpiCard title="รับแล้ว" value={totals.received} icon={PackageCheck} gradient="bg-gradient-to-br from-emerald-glow to-brand-600" suffix="รายการ" />
+        <KpiCard
+          title="เสร็จสิ้นแล้ว"
+          value={totals.received + totals.closed}
+          icon={PackageCheck}
+          gradient="bg-gradient-to-br from-emerald-glow to-brand-600"
+          suffix="รายการ"
+          subtitle={`สแกนรับ ${num(totals.received)} · ปิดงาน ${num(totals.closed)}`}
+        />
         <KpiCard
           title="ไม่ตรง"
           value={totals.mismatch}
@@ -296,8 +308,8 @@ function CancelledView({
           subtitle="เลขที่สแกนไม่ตรงกับออเดอร์"
         />
         <KpiCard
-          title="% รับแล้ว"
-          value={totals.lines ? (totals.received / totals.lines) * 100 : null}
+          title="% เสร็จสิ้น"
+          value={totals.lines ? ((totals.received + totals.closed) / totals.lines) * 100 : null}
           icon={CheckCircle2}
           gradient="bg-gradient-to-br from-sky-500 to-brand-600"
           formatValue={(n) => `${n.toFixed(1)}%`}
@@ -417,7 +429,7 @@ function CancelledView({
                   <td className="py-2.5 text-xs text-muted-foreground">{r.printer || "-"}</td>
                   <td className="py-2.5">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusBadge status={r.status} />
+                      <StatusBadge status={r.status} reason={r.closedReason} />
                       {stale && <span className="whitespace-nowrap text-xs font-semibold text-destructive">ค้าง {num(waitingDays)} วัน</span>}
                     </div>
                   </td>
@@ -458,9 +470,10 @@ function CancelledView({
         )}
 
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          สถานะอ่านจากช่องสแกนของคลังในชีต: <b className="text-foreground">รอตรวจสอบ</b> = ยังไม่สแกนรับของกลับ ·{" "}
-          <b className="text-foreground">รับแล้ว</b> = เลขที่สแกนตรงกับเลขออเดอร์หรือแทร็คกิ้ง ·{" "}
-          <b className="text-foreground">ไม่ตรง</b> = สแกนแล้วแต่เลขไม่ตรง
+          สถานะอ่านจากชีต (ช่องสถานะ): <b className="text-foreground">รอตรวจสอบ</b> = ยังไม่มีใครสแกนรับของ และ BigSeller ยังไม่ขึ้น Stock-In ·{" "}
+          <b className="text-foreground">รับแล้ว</b> = ทีมคลังสแกนเลขพัสดุแล้ว ·{" "}
+          <b className="text-foreground">ปิดงาน</b> = BigSeller ขึ้น Stock-In ทั้งหมดแล้ว หรือได้เงินคืนจากขนส่งแล้ว ·{" "}
+          <b className="text-foreground">ไม่ตรง</b> = สแกนแล้วแต่เลขไม่ตรงกับออเดอร์ ให้ตรวจอีกครั้ง
           {duplicatesDropped > 0 && ` · รวมรายการซ้ำ (พัสดุ+ออเดอร์+SKU เดียวกัน) แล้ว ${num(duplicatesDropped)} แถว`}
         </p>
       </div>

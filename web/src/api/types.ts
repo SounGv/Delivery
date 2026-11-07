@@ -405,7 +405,7 @@ export interface ReturnsReport {
   rows: ReturnRow[]
 }
 
-export type CancelledStatus = "รอตรวจสอบ" | "รับแล้ว" | "ไม่ตรง"
+export type CancelledStatus = "รอตรวจสอบ" | "รับแล้ว" | "ไม่ตรง" | "ปิดงาน"
 
 /** One cancelled-order line (one SKU of one order) from the gv-returns-sync
  * workbook — see parseCancelledSheet_ in apps-script/SheetParser.js. `date` is
@@ -424,6 +424,9 @@ export interface CancelledRow {
   printer: string
   printedAt: string
   status: CancelledStatus
+  /** For "ปิดงาน": why the warehouse closed the line — the sheet's bracketed text,
+   * "Stock-In แล้ว" or "ได้เงินคืนแล้ว". Absent/empty for every other status. */
+  closedReason?: string
   /** What the warehouse scanned/typed for this line; blank = not scanned yet. */
   scanned: string
   /** Who received the parcel back (ชื่อคนเก็บ); blank until scanned. */
