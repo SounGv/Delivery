@@ -77,7 +77,7 @@ export function Cancelled() {
                 rows={deducted}
                 todayIso={data.todayDate}
                 kindLabel="ตัดสต็อกแล้ว"
-                description="ออเดอร์ที่ถูกยกเลิกหลังระบบตัดสต็อกไปแล้ว"
+                description="ออเดอร์ที่ยกเลิกหลังตัดสต็อก ต้องรับของคืนเข้าคลัง"
                 duplicatesDropped={report?.duplicatesDropped ?? 0}
               />
             ),
@@ -92,7 +92,7 @@ export function Cancelled() {
                 rows={notDeducted}
                 todayIso={data.todayDate}
                 kindLabel="ยังไม่ตัดสต็อก"
-                description="ออเดอร์ที่ถูกยกเลิกโดยระบบยังไม่ได้ตัดสต็อก"
+                description="ออเดอร์ที่ยกเลิกก่อนตัดสต็อก ต้องเก็บของกลับเข้าที่"
                 duplicatesDropped={report?.duplicatesDropped ?? 0}
               />
             ),
@@ -403,13 +403,13 @@ function CancelledView({
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="pb-2 font-medium">วันที่</th>
               <th className="pb-2 font-medium">ช่องทาง</th>
-              <th className="pb-2 font-medium">เลขคำสั่งซื้อ</th>
-              <th className="pb-2 font-medium">SKU</th>
+              <th className="pb-2 font-medium">หมายเลขคำสั่งซื้อ</th>
+              <th className="pb-2 font-medium">สินค้า (SKU)</th>
               <th className="pb-2 text-right font-medium">จำนวน</th>
-              <th className="pb-2 font-medium">แทร็คกิ้ง</th>
+              <th className="pb-2 font-medium">หมายเลขแทร็คกิ้ง</th>
               <th className="pb-2 font-medium">ผู้พิมพ์ใบปะหน้า</th>
               <th className="pb-2 font-medium">สถานะ</th>
-              <th className="pb-2 font-medium">ผู้เก็บ</th>
+              <th className="pb-2 font-medium">ชื่อคนเก็บ</th>
             </tr>
           </thead>
           <tbody>

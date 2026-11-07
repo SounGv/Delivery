@@ -208,7 +208,7 @@ export function Returns() {
         <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
           <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังไม่พบข้อมูลคืนสินค้าจากชีท "DB_RETURN_CURRENT"</p>
+            <p className="font-semibold text-foreground">ยังไม่พบข้อมูลสินค้าตีกลับจากชีท "DB_RETURN_CURRENT"</p>
             <p className="mt-1 text-xs text-muted-foreground">
               ระบบอ่านแท็บ DB_RETURN_CURRENT ในชีตทีมแบบ read-only แต่ยังไม่ได้ข้อมูล — ตรวจว่าแท็บยังอยู่และได้รัน sync:returns (โปรเจกต์ BigSeller-Inventory) แล้ว
             </p>
@@ -253,7 +253,7 @@ export function Returns() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <KpiCard title="คำขอคืนทั้งหมด" value={totals.count} icon={PackageX} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="รายการ" />
+        <KpiCard title="สินค้าตีกลับทั้งหมด" value={totals.count} icon={PackageX} gradient="bg-gradient-to-br from-brand-500 to-brand-700" suffix="รายการ" />
         <KpiCard
           title="รอกดคืนเงินในแพลตฟอร์ม"
           value={totals.pendingRefundButtonCount}
@@ -335,7 +335,7 @@ export function Returns() {
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">
         <div className="section-title mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-extrabold tracking-wide text-foreground">รายการคืนสินค้า</h3>
+            <h3 className="text-base font-extrabold tracking-wide text-foreground">รายการสินค้าตีกลับ</h3>
             <p className="text-[11px] text-muted-foreground">
               แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ
               (ทั้งหมด {num(rows.length)}) · คลิกแถวเพื่อดูรายละเอียดเพิ่มเติม
@@ -432,7 +432,7 @@ export function Returns() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={12} className="py-8 text-center text-muted-foreground">
-                  {hasData ? "ไม่มีรายการตามเงื่อนไขที่เลือก" : "ยังไม่มีข้อมูลคืนสินค้าจากชีท"}
+                  {hasData ? "ไม่มีรายการตามเงื่อนไขที่เลือก" : "ยังไม่มีข้อมูลสินค้าตีกลับจากชีท"}
                 </td>
               </tr>
             )}
