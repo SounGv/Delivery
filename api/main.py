@@ -35,6 +35,7 @@ PART_ENDPOINTS = {
     "cancelled": "cancelled",
     "focus": "focus",
     "restock": "restock",
+    "refunds": "refunds",
 }
 
 RETRY_SECONDS_WHEN_EMPTY = 60

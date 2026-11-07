@@ -2096,6 +2096,119 @@ function loadCnRestock_() {
 }
 
 /**
+ * Lost / bounced parcels and whether the money came back: the gv-returns-sync tab
+ * "ได้เงินคืนแล้ว-พัสดุหาย". The team records it in BigSeller (a typed note or a colour
+ * label) and the tab turns that into one "ผลเคส" per line — "ได้เงินคืนแล้ว" (case closed)
+ * or "รอเงินคืนจากขนส่ง" (claim open, no money yet). This only reads that result, in the
+ * two blocks the sheet lays out: a small summary table and the detail table, both found
+ * by their header rows. Read-only; a missing tab or unreadable file is reported in the
+ * result and never breaks the payload.
+ */
+var REFUND_TAB_PREFIX_ = 'ได้เงินคืนแล้ว';
+
+function loadRefundCases_() {
+  var result = { summary: [], rows: [], missingTab: '', error: '' };
+  try {
+    var ss = SpreadsheetApp.openById(CANCELLED_SOURCE_ID_);
+    var sheets = ss.getSheets();
+    var sheet = null;
+    for (var i = 0; i < sheets.length && !sheet; i++) {
+      var title = String(sheets[i].getName());
+      if (title.normalize) title = title.normalize('NFC');
+      if (title.indexOf(REFUND_TAB_PREFIX_) === 0) sheet = sheets[i];
+    }
+    if (!sheet) { result.missingTab = REFUND_TAB_PREFIX_ + '-พัสดุหาย'; return result; }
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = Math.min(sheet.getLastColumn(), 20);
+    if (lastRow < 2 || lastCol < 1) return result;
+    var display = sheet.getRange(1, 1, lastRow, lastCol).getDisplayValues();
+    var text = function (r, c) {
+      return c === undefined || c >= lastCol ? '' : String(display[r][c] == null ? '' : display[r][c]).trim();
+    };
+    var number = function (s) {
+      var n = parseFloat(String(s).replace(/[,\s]/g, ''));
+      return isFinite(n) ? n : null;
+    };
+
+    var summaryHeader = -1;
+    var detailHeader = -1;
+    for (var r = 0; r < Math.min(lastRow, 40); r++) {
+      if (summaryHeader === -1 && text(r, 0) === 'สรุป' && text(r, 1).indexOf('จำนวนออเดอร์') === 0) summaryHeader = r;
+      if (detailHeader === -1 && text(r, 0) === 'เลขพัสดุ' && text(r, 1) === 'เลขคำสั่งซื้อ') detailHeader = r;
+    }
+    if (detailHeader === -1) throw new Error('tab "' + sheet.getName() + '": detail header row not found');
+
+    if (summaryHeader !== -1) {
+      for (var s = summaryHeader + 1; s < detailHeader; s++) {
+        var label = text(s, 0);
+        if (!label) break;
+        result.summary.push({
+          label: label,
+          orders: number(text(s, 1)) || 0,
+          items: number(text(s, 2)) || 0,
+          refunded: number(text(s, 3)) || 0,
+          sellPrice: number(text(s, 4)) || 0
+        });
+      }
+    }
+
+    var col = {};
+    display[detailHeader].forEach(function (h, c) {
+      var name = String(h == null ? '' : h).trim();
+      if (name.normalize) name = name.normalize('NFC');
+      if (name === 'เลขพัสดุ') col.packageNo = c;
+      else if (name === 'เลขคำสั่งซื้อ') col.orderNo = c;
+      else if (name === 'ช่องทางขาย') col.channel = c;
+      else if (name === 'ร้านค้า') col.store = c;
+      else if (name.indexOf('รหัสสินค้า') === 0) col.sku = c;
+      else if (name === 'จำนวน') col.qty = c;
+      else if (name.indexOf('สถานะคืนของ') === 0) col.platformStatus = c;
+      else if (name.indexOf('สถานะรับเข้าคลัง') === 0) col.stockInStatus = c;
+      else if (name.indexOf('ราคาขาย') === 0) col.sellPrice = c;
+      else if (name.indexOf('ข้อความที่ทีมคลังพิมพ์') === 0) col.teamNote = c;
+      else if (name.indexOf('ป้ายสีที่ติดไว้') === 0) col.colorLabel = c;
+      else if (name === 'ผลเคส') col.caseResult = c;
+      else if (name === 'รู้ได้จาก') col.knownFrom = c;
+      else if (name.indexOf('เงินที่ได้คืน') === 0) col.refunded = c;
+    });
+    if (col.caseResult === undefined || col.orderNo === undefined) {
+      throw new Error('tab "' + sheet.getName() + '": case result column not found');
+    }
+
+    var cell = function (r2, key) { return text(r2, col[key]); };
+    for (var i2 = detailHeader + 1; i2 < lastRow; i2++) {
+      var packageNo = cell(i2, 'packageNo');
+      var orderNo = cell(i2, 'orderNo');
+      if (!packageNo && !orderNo) continue;
+      result.rows.push({
+        packageNo: packageNo,
+        orderNo: orderNo,
+        channel: cell(i2, 'channel'),
+        store: cell(i2, 'store'),
+        sku: cell(i2, 'sku'),
+        qty: number(cell(i2, 'qty')) || 0,
+        platformStatus: cell(i2, 'platformStatus'),
+        stockInStatus: cell(i2, 'stockInStatus'),
+        sellPrice: number(cell(i2, 'sellPrice')),
+        teamNote: cell(i2, 'teamNote'),
+        colorLabel: cell(i2, 'colorLabel'),
+        caseResult: cell(i2, 'caseResult'),
+        knownFrom: cell(i2, 'knownFrom'),
+        refunded: number(cell(i2, 'refunded'))
+      });
+    }
+    return result;
+  } catch (err) {
+    Logger.log('refund cases unreadable: ' + err);
+    result.rows = [];
+    result.summary = [];
+    result.error = String(err && err.message ? err.message : err);
+    return result;
+  }
+}
+
+/**
  * `part` picks which slice of the payload to build (see PAYLOAD_PARTS_ in Code.js):
  * 'core' (default) = everything except the separate parts below, 'cancelled',
  * 'workPerformance', 'focus', 'restock'. The separate parts carry their own `todayDate`
@@ -2127,6 +2240,13 @@ function buildDashboardPayload_(part) {
       generatedAt: new Date().toISOString(),
       todayDate: calendarToday,
       restock: loadCnRestock_()
+    };
+  }
+  if (part === 'refunds') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      refunds: loadRefundCases_()
     };
   }
   var isWp = part === 'workPerformance';

@@ -47,6 +47,7 @@ var CACHE_CHUNK_SIZE_ = 90000;
  *   ?path=cancelled       cancelled-order scan log   (gv-returns-sync workbook)
  *   ?path=focus           "งานค้าง": the 6 backlog queues (gv-returns-sync, tab โฟกัสทีม-งานค้าง)
  *   ?path=restock         "สินค้าตีกลับ" as gv-returns-sync counts it (tab cn-restock)
+ *   ?path=refunds         lost/bounced parcels + refund received or not (tab ได้เงินคืนแล้ว-พัสดุหาย)
  * Each part has its own cache key, so a slow heavy part never delays the core.
  *
  * ?path=dashboard is the legacy single payload (all four parts merged) kept only
@@ -58,7 +59,8 @@ var PAYLOAD_PARTS_ = {
   workPerformance: 'workPerformance',
   cancelled: 'cancelled',
   focus: 'focus',
-  restock: 'restock'
+  restock: 'restock',
+  refunds: 'refunds'
 };
 
 /** One part's payload: from cache, else built (and cached, best-effort). */
@@ -109,7 +111,7 @@ function setCachedDashboardPayload_(part, payload) {
 // web page requests it any more and it is the slowest part (~48 s to rebuild), which
 // alone would push the trigger past the daily runtime quota. It is still built on
 // demand by doGet when something asks for it.
-var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock'];
+var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock', 'refunds'];
 var WARM_FROM_HOUR_ = 7;  // Asia/Bangkok, inclusive
 var WARM_TO_HOUR_ = 22;   // Asia/Bangkok, exclusive
 
