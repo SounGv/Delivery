@@ -38,11 +38,11 @@ var CACHE_TTL_SECONDS_ = 720;
 var CACHE_CHUNK_SIZE_ = 90000;
 
 /**
- * The payload is served in four independently cached parts so a page only pays
+ * The payload is served in independently cached parts so a page only pays
  * for the data it shows (the single 6 MB payload made every page wait on the
- * 55k-row stock-move log and the returns DB):
+ * 55k-row stock-move log and the returns DB; the DB_RETURN_CURRENT part was removed
+ * once the returns page followed the gv-returns-sync count instead):
  *   ?path=core            production, sales, store report, issues, ...   (the light part)
- *   ?path=returns         product returns            (DB_RETURN_CURRENT)
  *   ?path=workPerformance BigSeller work performance + stock-move log
  *   ?path=cancelled       cancelled-order scan log   (gv-returns-sync workbook)
  *   ?path=focus           "งานค้าง": the 6 backlog queues (gv-returns-sync, tab โฟกัสทีม-งานค้าง)
@@ -55,7 +55,6 @@ var CACHE_CHUNK_SIZE_ = 90000;
  */
 var PAYLOAD_PARTS_ = {
   core: 'core',
-  returns: 'returns',
   workPerformance: 'workPerformance',
   cancelled: 'cancelled',
   focus: 'focus',
@@ -110,7 +109,7 @@ function setCachedDashboardPayload_(part, payload) {
 // web page requests it any more and it is the slowest part (~48 s to rebuild), which
 // alone would push the trigger past the daily runtime quota. It is still built on
 // demand by doGet when something asks for it.
-var WARMED_PARTS_ = ['core', 'returns', 'cancelled', 'focus', 'restock'];
+var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock'];
 var WARM_FROM_HOUR_ = 7;  // Asia/Bangkok, inclusive
 var WARM_TO_HOUR_ = 22;   // Asia/Bangkok, exclusive
 
@@ -167,7 +166,7 @@ function doGet(e) {
   try {
     if (path === 'dashboard') {
       output = payloadPart_('core');
-      ['returns', 'workPerformance', 'cancelled'].forEach(function (name) {
+      ['workPerformance', 'cancelled'].forEach(function (name) {
         var extra = payloadPart_(name);
         Object.keys(extra).forEach(function (k) {
           if (k !== 'generatedAt' && k !== 'todayDate') output[k] = extra[k];

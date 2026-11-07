@@ -31,7 +31,6 @@ logger = logging.getLogger("dashboard_cache")
 # Endpoint name served here -> the `?path=` value Apps Script understands.
 PART_ENDPOINTS = {
     "core": "core",
-    "returns": "returns",
     "work-performance": "workPerformance",
     "cancelled": "cancelled",
     "focus": "focus",

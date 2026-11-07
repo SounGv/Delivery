@@ -35,9 +35,10 @@ def test_refresh_stores_good_payload_and_keeps_it_when_next_refresh_fails(tmp_pa
 
 
 def test_error_shaped_payload_is_rejected(tmp_path):
-    cache = make_cache(tmp_path, {"returns": json.dumps({"error": "Unknown path"}).encode()})
-    assert asyncio.run(cache.refresh("returns")) is False
-    assert "returns" not in cache.payloads
+    cache = make_cache(tmp_path, {"restock": json.dumps({"error": "Unknown path"}).encode()})
+    assert asyncio.run(cache.refresh("restock")) is False
+    assert "restock" not in cache.payloads
+    assert "Unknown path" in cache.last_error["restock"]  # rejected for the error payload, not a lookup failure
 
 
 def test_restart_restores_parts_from_disk(tmp_path):

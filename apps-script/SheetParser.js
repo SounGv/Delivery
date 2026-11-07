@@ -1630,118 +1630,6 @@ function buildWorkPerformancePayload_(rawRows, mapping, stockMoveRaw) {
 }
 
 /**
- * Product-returns cases for the returns page. Source: the "DB_RETURN_CURRENT" tab
- * of THIS workbook, kept by the BigSeller-Inventory sync project
- * (`npm run sync:returns` with GOOGLE_SHEETS_RETURNS_ID pointing here). One row per (platform, shop, order,
- * after-sale id, SKU, line) in the project's own scope: คืนเงิน/คืนสินค้า,
- * คืนเงินเท่านั้น and เปลี่ยนสินค้า on Shopee/Lazada/TikTok.
- *
- * Columns are looked up by their English header names (the project's own, see its
- * FEATURE-returns-reconciliation-phase1.md §4.1), never by position. The alert
- * rules (`alertCode`/`alertText`) are the project's; this only decorates them
- * with an emoji for the table's status column.
- *
- * Read-only. Any failure (tab renamed, ...) returns [] so the rest of the
- * dashboard payload is unaffected.
- */
-var RETURNS_DB_TAB_ = 'DB_RETURN_CURRENT';
-// `logisticsProvider` carries these generic codes when the carrier name is unknown.
-var RETURN_CARRIER_PLACEHOLDERS_ = { other: true, others: true, standard: true };
-var RETURN_REFUND_STATUS_LABEL_ = {
-  REFUNDED: 'คืนเงินแล้ว',
-  ACCEPTED: 'คืนเงินแล้ว',
-  IN_PROGRESS: 'กำลังดำเนินการ',
-  DISPUTE: 'ข้อพิพาท',
-  CLOSED: 'ปิดคำขอ',
-  OTHER: 'อื่นๆ'
-};
-
-function loadReturnRowsFromDb_() {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RETURNS_DB_TAB_);
-    return sheet ? parseReturnsDbSheet_(sheet) : [];
-  } catch (err) {
-    Logger.log('returns DB unreadable: ' + err);
-    return [];
-  }
-}
-
-function parseReturnsDbSheet_(sheet) {
-  var range = sheet.getDataRange();
-  var values = range.getValues();
-  if (values.length < 2) return [];
-  var displayValues = range.getDisplayValues();
-
-  var col = {};
-  values[0].forEach(function (h, c) {
-    var name = String(h == null ? '' : h).trim();
-    if (name) col[name] = c;
-  });
-  if (col.shop === undefined || col.orderNumber === undefined || col.alertCode === undefined) return [];
-
-  var textOf = function (i, key) {
-    return col[key] === undefined ? '' : String(displayValues[i][col[key]] || '').trim();
-  };
-  var numOf = function (i, key) {
-    return col[key] === undefined ? null : numFromCell_(values[i][col[key]]);
-  };
-
-  var out = [];
-  for (var i = 1; i < values.length; i++) {
-    var shop = textOf(i, 'shop');
-    if (!shop) continue;
-
-    var returnStatus = textOf(i, 'returnStatus');
-    var stockInStatus = textOf(i, 'stockInStatus');
-    var refundState = textOf(i, 'refundState');
-    var alertCode = textOf(i, 'alertCode');
-    var alertText = textOf(i, 'alertText');
-
-    var flag = '';
-    if (returnStatus === 'สูญหาย') flag = '🔴 สูญหาย';
-    else if (alertCode === 'REFUNDED_NOT_STOCKED' || alertCode === 'REFUNDED_STOCKIN_OVERDUE') flag = '🔴 ' + (alertText || alertCode);
-    else if (alertCode) flag = '🟠 ' + (alertText || alertCode);
-    else if (returnStatus === 'อยู่ระหว่างคืนสินค้า' || returnStatus === 'รอคืนสินค้า') flag = '🔵 อยู่ระหว่างขนส่งขากลับ';
-    else if (stockInStatus === 'ยังไม่ Stock-In') flag = '🔵 รอ Stock-In';
-    else if (stockInStatus === 'Stock-In ทั้งหมด') flag = '🟢 ' + returnStatus;
-
-    var carrier = textOf(i, 'logisticsProvider');
-    if (RETURN_CARRIER_PLACEHOLDERS_[carrier.toLowerCase()]) carrier = '';
-
-    out.push({
-      store: shop,
-      platform: textOf(i, 'platform').toLowerCase(),
-      orderNo: textOf(i, 'orderNumber'),
-      afterSalesId: textOf(i, 'afterSaleId'),
-      afterSalesType: textOf(i, 'afterSaleType'),
-      returnStatus: returnStatus,
-      refundState: refundState,
-      refundStatus: RETURN_REFUND_STATUS_LABEL_[refundState] || '',
-      stockInStatus: stockInStatus,
-      returnTracking: textOf(i, 'returnTrackingNumber'),
-      returnShipping: textOf(i, 'returnShipmentStatus'),
-      returnCarrier: carrier,
-      refundAmount: numOf(i, 'refundAmount') || 0,
-      sku: textOf(i, 'merchantSku'),
-      qtyToReturn: numOf(i, 'quantity') || 0,
-      qtyStockedIn: numOf(i, 'quantityStockedIn') || 0,
-      requestTime: textOf(i, 'requestedAt'),
-      dueTime: textOf(i, 'dueAt'),
-      carrierDeliveredAt: textOf(i, 'carrierDeliveredAt'),
-      stockedInAt: textOf(i, 'stockedInAt'),
-      stockInNote: textOf(i, 'stockInNote'),
-      receivedWarehouse: textOf(i, 'receivedWarehouse'),
-      reason: textOf(i, 'returnReasonCode'),
-      alertCode: alertCode,
-      alertText: alertText,
-      daysSinceRequest: numOf(i, 'daysSinceRequest'),
-      flag: flag
-    });
-  }
-  return out;
-}
-
-/**
  * Cancelled-order scan log for the "สินค้ายกเลิก" page. Source: the "gv-returns-sync"
  * workbook (NOT this one) — the warehouse keys the received parcel's tracking/order
  * number into column K of the same row there, so the sheet stays where the staff
@@ -2209,8 +2097,8 @@ function loadCnRestock_() {
 
 /**
  * `part` picks which slice of the payload to build (see PAYLOAD_PARTS_ in Code.js):
- * 'core' (default) = everything except the three heavy parts below, 'returns',
- * 'cancelled', 'workPerformance'. The heavy parts carry their own `todayDate`
+ * 'core' (default) = everything except the separate parts below, 'cancelled',
+ * 'workPerformance', 'focus', 'restock'. The separate parts carry their own `todayDate`
  * (calendar date in the spreadsheet's time zone), since the core's "today" is the
  * latest day with production activity.
  */
@@ -2220,14 +2108,6 @@ function buildDashboardPayload_(part) {
   var tz = ss.getSpreadsheetTimeZone();
   var calendarToday = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
-  if (part === 'returns') {
-    var returnsOnly = loadReturnRowsFromDb_();
-    return {
-      generatedAt: new Date().toISOString(),
-      todayDate: calendarToday,
-      returns: returnsOnly.length ? { rows: returnsOnly } : null
-    };
-  }
   if (part === 'cancelled') {
     return {
       generatedAt: new Date().toISOString(),
