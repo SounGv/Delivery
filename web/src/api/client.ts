@@ -1,5 +1,5 @@
 import type { ApiErrorResponse, DashboardResponse, PayloadPartPath } from "./types"
-import { getApiUrlOverride } from "@/lib/settingsStorage"
+import { getApiUrlOverride, setApiUrlOverride } from "@/lib/settingsStorage"
 
 function isErrorResponse(data: unknown): data is ApiErrorResponse {
   return typeof data === "object" && data !== null && "error" in data
@@ -33,7 +33,8 @@ async function fetchJson<T>(url: string, label: string, signal?: AbortSignal): P
  * a URL typed into Settings always means "call this Apps Script directly". */
 export async function fetchPayloadPart<T>(path: PayloadPartPath, signal?: AbortSignal): Promise<T> {
   const appsScriptOverride = getApiUrlOverride()
-  const appsScriptUrl = appsScriptOverride || import.meta.env.VITE_APPS_SCRIPT_URL
+  const defaultAppsScriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL
+  const appsScriptUrl = appsScriptOverride || defaultAppsScriptUrl
   const cacheApiBase = appsScriptOverride ? undefined : import.meta.env.VITE_API_BASE_URL
 
   if (cacheApiBase) {
@@ -48,7 +49,23 @@ export async function fetchPayloadPart<T>(path: PayloadPartPath, signal?: AbortS
   if (!appsScriptUrl) {
     throw new Error("ยังไม่ได้ตั้งค่า Apps Script URL — ตั้งค่าได้ที่หน้า Settings")
   }
-  return fetchJson<T>(`${appsScriptUrl}?path=${path}`, "Apps Script", signal)
+  try {
+    return await fetchJson<T>(`${appsScriptUrl}?path=${path}`, "Apps Script", signal)
+  } catch (error) {
+    // A URL saved in Settings can point at an older Apps Script deployment that
+    // predates the split payload; it answers "Unknown path: core" and can never
+    // work with this build. Drop it and use the built-in URL rather than leaving
+    // that browser stuck on an error screen.
+    const savedUrlIsOutdated =
+      appsScriptOverride && defaultAppsScriptUrl && appsScriptOverride !== defaultAppsScriptUrl && isUnknownPathError(error)
+    if (!savedUrlIsOutdated) throw error
+    setApiUrlOverride(null)
+    return fetchJson<T>(`${defaultAppsScriptUrl}?path=${path}`, "Apps Script", signal)
+  }
+}
+
+function isUnknownPathError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("Unknown path")
 }
 
 export function fetchDashboard(signal?: AbortSignal): Promise<DashboardResponse> {
