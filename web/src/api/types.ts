@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "returns" | "workPerformance" | "cancelled"
+export type PayloadPartPath = "core" | "returns" | "workPerformance" | "cancelled" | "focus"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -278,6 +278,74 @@ export interface ReturnsPart extends PayloadPartMeta {
  * deducted / not deducted). */
 export interface CancelledPart extends PayloadPartMeta {
   cancelledOrders: CancelledOrdersReport
+}
+
+/** One of the six backlog queues, as summarised at the top of the sheet's
+ * "โฟกัสทีม-งานค้าง" tab (the page the team opens every day). */
+export interface BacklogQueueSummary {
+  /** Full queue name, e.g. "1 รอ Stock-In". */
+  queue: string
+  queueNo: number
+  orders: number
+  lines: number
+  oldestDays: number | null
+  /** Department that owns the queue ("ฝ่ายรับคืน", "ฝ่ายคลังเก็บ", …). */
+  owner: string
+  valueBaht: number | null
+  /** The team's own one-line meaning of the queue, from the sheet's "วิธีใช้" tab; "" if unavailable. */
+  meaning?: string
+}
+
+/** A due-date alert count from the sheet ("เลยกำหนดแล้ว", "ครบกำหนดวันนี้", …).
+ * `nested` is a sub-count the sheet indents under the line above it. */
+export interface BacklogAlert {
+  label: string
+  count: number
+  nested: boolean
+}
+
+/** One package line still waiting on someone. The sheet drops the row by itself
+ * once the case is handled. */
+export interface BacklogRow {
+  /** Days since the case started; null when the source has no start date (cn-restock rows). */
+  ageDays: number | null
+  queue: string
+  queueNo: number
+  channel: string
+  packageNo: string
+  orderNo: string
+  tracking: string
+  sku: string
+  qty: number
+  /** yyyy-MM-dd, "" when unknown. */
+  startedOn: string
+  source: string
+  statusBeforeCancel: string
+  cancelReason: string
+  stockInStatus: string
+  owner: string
+  returnStatus: string
+  /** yyyy-MM-dd, "" when the case has no deadline. */
+  dueDate: string
+  valueBaht: number | null
+  /** Sheet's own text, e.g. "เลย 88 วัน"; "-" when there is no deadline. */
+  timeLeft: string
+  /** Sheet's own alert text, e.g. "เลยกำหนด ตามด่วน"; "" when none. */
+  alert: string
+}
+
+export interface BacklogReport {
+  queues: BacklogQueueSummary[]
+  totalValue: number | null
+  alerts: BacklogAlert[]
+  rows: BacklogRow[]
+  /** Set (and the rest empty) when the tab cannot be found. */
+  missingTab: string
+  error: string
+}
+
+export interface FocusPart extends PayloadPartMeta {
+  focus: BacklogReport
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)

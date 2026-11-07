@@ -4,7 +4,7 @@ import { fetchDashboard, fetchPayloadPart } from "./client"
 import { getRefreshIntervalMs } from "@/lib/settingsStorage"
 import { useSettings } from "@/lib/settingsContext"
 import { computeTeamTotalsByDate, employeesForTeam } from "@/lib/dashboard-selectors"
-import type { CancelledPart, DashboardResponse, Employee, ReturnsPart, WorkPerformancePart } from "./types"
+import type { CancelledPart, DashboardResponse, Employee, FocusPart, ReturnsPart, WorkPerformancePart } from "./types"
 
 export function useDashboardQuery() {
   return useQuery({
@@ -30,6 +30,15 @@ export function useWorkPerformanceQuery() {
   return useQuery({
     queryKey: ["workPerformance"],
     queryFn: ({ signal }) => fetchPayloadPart<WorkPerformancePart>("workPerformance", signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+export function useFocusQuery() {
+  return useQuery({
+    queryKey: ["focus"],
+    queryFn: ({ signal }) => fetchPayloadPart<FocusPart>("focus", signal),
     placeholderData: keepPreviousData,
     refetchInterval: getRefreshIntervalMs(),
   })
