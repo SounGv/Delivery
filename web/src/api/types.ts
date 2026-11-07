@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "returns" | "workPerformance" | "cancelled" | "focus" | "restock"
+export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -267,11 +267,6 @@ interface PayloadPartMeta {
  * both the raw export tab and its name/department mapping tab exist. */
 export interface WorkPerformancePart extends PayloadPartMeta {
   workPerformance: WorkPerformance | null
-}
-
-/** Product-return cases from the "DB_RETURN_CURRENT" tab; `null` before it has any rows. */
-export interface ReturnsPart extends PayloadPartMeta {
-  returns: ReturnsReport | null
 }
 
 /** Cancelled-order scan log from the gv-returns-sync workbook (two tabs: stock
@@ -459,59 +454,6 @@ export interface WorkPerformance {
   /** BigSeller usernames found in the raw export but missing from the mapping
    * tab — surfaced instead of silently dropped, so a new account gets noticed. */
   unmapped: string[]
-}
-
-/** One after-sales/return case from the "DB_RETURN_CURRENT" tab kept by the
- * BigSeller-Inventory sync project (Shopee/TikTok/Lazada, คืนเงิน/คืนสินค้า,
- * คืนเงินเท่านั้น, เปลี่ยนสินค้า) — see parseReturnsDbSheet_ in
- * apps-script/SheetParser.js. Dates are literal text exactly as the sheet
- * displays them ("YYYY-MM-DD HH:mm"), not parsed dates — same convention as
- * StoreReportRow's periodStart/periodEnd. */
-export interface ReturnRow {
-  store: string
-  /** Lowercase, e.g. "shopee" / "tiktok" / "lazada". */
-  platform: string
-  orderNo: string
-  afterSalesId: string
-  afterSalesType: string
-  /** Return-parcel status, e.g. "คืนสินค้าแล้ว" / "อยู่ระหว่างคืนสินค้า" / "สูญหาย". */
-  returnStatus: string
-  /** The project's normalised refund state: REFUNDED / ACCEPTED / IN_PROGRESS / DISPUTE / CLOSED / OTHER. */
-  refundState: string
-  /** Thai label of refundState, e.g. "คืนเงินแล้ว". */
-  refundStatus: string
-  stockInStatus: string
-  /** Return-parcel tracking number. */
-  returnTracking: string
-  /** Return-shipment status text, e.g. "จัดส่งสำเร็จ". */
-  returnShipping: string
-  /** Carrier name for the return leg; blank when BigSeller only has a generic code. */
-  returnCarrier: string
-  refundAmount: number
-  sku: string
-  qtyToReturn: number
-  qtyStockedIn: number
-  requestTime: string
-  dueTime: string
-  /** When the carrier delivered the parcel to the warehouse (not when it was scanned). */
-  carrierDeliveredAt: string
-  /** When the warehouse scanned it in (Stock-In). */
-  stockedInAt: string
-  stockInNote: string
-  receivedWarehouse: string
-  /** Platform reason code/text, e.g. "CHANGE_MIND". */
-  reason: string
-  /** Alert code from the sync project: REFUNDED_NOT_STOCKED, REFUNDED_STOCKIN_OVERDUE, REFUNDED_STOCKIN_PARTIAL, DUE_SOON_NOT_STOCKED, or "". */
-  alertCode: string
-  alertText: string
-  /** Days since the request was filed (fractional), null when unknown. */
-  daysSinceRequest: number | null
-  /** Display status for the table, built from the alert/return/stock-in state, e.g. "🔴 สูญหาย". */
-  flag: string
-}
-
-export interface ReturnsReport {
-  rows: ReturnRow[]
 }
 
 export type CancelledStatus = "รอตรวจสอบ" | "รับแล้ว" | "ไม่ตรง" | "ปิดงาน"

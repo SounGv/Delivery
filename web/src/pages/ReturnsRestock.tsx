@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import {
   RESTOCK_STOCK_IN_STATUSES,
   distinctRestockTexts,
+  isRefundNoted,
   sortByRequestedAt,
   totalsByStockIn,
   totalsOf,
@@ -17,6 +18,10 @@ import {
 import type { RestockRow } from "@/api/types"
 
 const ALL = "__all__"
+const NOTE_REFUND = "__refund__"
+const NOTE_ANY = "__any__"
+const NOTE_NONE = "__none__"
+const LOST = "สูญหาย"
 const PAGE_SIZE = 50
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 0 })
@@ -42,15 +47,20 @@ export function RestockView() {
   const [store, setStore] = useState(ALL)
   const [stockIn, setStockIn] = useState(ALL)
   const [orderStatus, setOrderStatus] = useState(ALL)
+  const [returnStatus, setReturnStatus] = useState(ALL)
+  const [origin, setOrigin] = useState(ALL)
+  const [note, setNote] = useState(ALL)
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
 
-  useEffect(() => setPage(1), [platform, store, stockIn, orderStatus, search])
+  useEffect(() => setPage(1), [platform, store, stockIn, orderStatus, returnStatus, origin, note, search])
 
   const platforms = useMemo(() => distinctRestockTexts(rows, (r) => r.platform), [rows])
   const stores = useMemo(() => distinctRestockTexts(rows, (r) => r.store), [rows])
   const stockInStatuses = useMemo(() => distinctRestockTexts(rows, (r) => r.stockInStatus), [rows])
   const orderStatuses = useMemo(() => distinctRestockTexts(rows, (r) => r.orderStatus), [rows])
+  const returnStatuses = useMemo(() => distinctRestockTexts(rows, (r) => r.returnStatus), [rows])
+  const origins = useMemo(() => distinctRestockTexts(rows, (r) => r.origin), [rows])
   const query = search.trim().toLowerCase()
 
   const filtered = useMemo(
@@ -60,10 +70,19 @@ export function RestockView() {
         if (store !== ALL && r.store !== store) return false
         if (stockIn !== ALL && r.stockInStatus !== stockIn) return false
         if (orderStatus !== ALL && r.orderStatus !== orderStatus) return false
-        if (query && !`${r.orderNo} ${r.packageNo} ${r.returnTracking} ${r.sku} ${r.productName}`.toLowerCase().includes(query)) return false
+        if (returnStatus !== ALL && r.returnStatus !== returnStatus) return false
+        if (origin !== ALL && r.origin !== origin) return false
+        if (note === NOTE_REFUND && !isRefundNoted(r)) return false
+        if (note === NOTE_ANY && !r.stockInNote) return false
+        if (note === NOTE_NONE && r.stockInNote) return false
+        if (
+          query &&
+          !`${r.orderNo} ${r.packageNo} ${r.returnTracking} ${r.sku} ${r.productName} ${r.stockInNote}`.toLowerCase().includes(query)
+        )
+          return false
         return true
       }),
-    [rows, platform, store, stockIn, orderStatus, query]
+    [rows, platform, store, stockIn, orderStatus, returnStatus, origin, note, query]
   )
 
   if (isLoading) return <LoadingSkeletonGrid count={5} />
@@ -78,14 +97,30 @@ export function RestockView() {
   const pageStart = (pageSafe - 1) * PAGE_SIZE
   const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE)
 
-  const activeFilterCount = [platform !== ALL, store !== ALL, stockIn !== ALL, orderStatus !== ALL, !!query].filter(Boolean).length
+  const activeFilterCount = [
+    platform !== ALL,
+    store !== ALL,
+    stockIn !== ALL,
+    orderStatus !== ALL,
+    returnStatus !== ALL,
+    origin !== ALL,
+    note !== ALL,
+    !!query,
+  ].filter(Boolean).length
   const clearFilters = () => {
     setPlatform(ALL)
     setStore(ALL)
     setStockIn(ALL)
     setOrderStatus(ALL)
+    setReturnStatus(ALL)
+    setOrigin(ALL)
+    setNote(ALL)
     setSearch("")
   }
+  const lostRows = rows.filter((r) => r.returnStatus === LOST)
+  const lostTotals = totalsOf(lostRows)
+  const refundNotedRows = rows.filter(isRefundNoted)
+  const refundNotedTotals = totalsOf(refundNotedRows)
   const selectCls =
     "rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
   const pillCls = (active: boolean) =>
@@ -144,6 +179,31 @@ export function RestockView() {
         })}
       </div>
 
+      <div className="glass-panel flex flex-wrap items-center gap-2 rounded-2xl p-3">
+        <span className="text-xs font-semibold text-muted-foreground">ในรายการนี้ (กดเพื่อกรอง):</span>
+        <button
+          type="button"
+          onClick={() => setReturnStatus(returnStatus === LOST ? ALL : LOST)}
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+            returnStatus === LOST ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-muted"
+          )}
+        >
+          สถานะคืนสินค้า "สูญหาย" <b className="tabular-nums">{num(lostTotals.rows)}</b> แถว · {num(lostTotals.orders)} ออเดอร์
+        </button>
+        <button
+          type="button"
+          title='ตรวจจากข้อความที่ทีมพิมพ์ในช่อง "หมายเหตุ Stock-In" (มีคำว่า ได้เงิน / ได้รับเงิน) ไม่ใช่คอลัมน์สถานะ'
+          onClick={() => setNote(note === NOTE_REFUND ? ALL : NOTE_REFUND)}
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+            note === NOTE_REFUND ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-muted"
+          )}
+        >
+          หมายเหตุว่าได้เงินแล้ว <b className="tabular-nums">{num(refundNotedTotals.rows)}</b> แถว · {num(refundNotedTotals.orders)} ออเดอร์
+        </button>
+      </div>
+
       <div className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">
         <div>
           <label className="mb-1 block text-[11px] text-muted-foreground">แพลตฟอร์ม</label>
@@ -185,6 +245,33 @@ export function RestockView() {
             ))}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground">สถานะคืนสินค้า</label>
+          <select value={returnStatus} onChange={(e) => setReturnStatus(e.target.value)} className={selectCls}>
+            <option value={ALL} className="bg-popover text-popover-foreground">ทั้งหมด</option>
+            {returnStatuses.map((s) => (
+              <option key={s} value={s} className="bg-popover text-popover-foreground">{s}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground">ที่มา</label>
+          <select value={origin} onChange={(e) => setOrigin(e.target.value)} className={selectCls}>
+            <option value={ALL} className="bg-popover text-popover-foreground">ทั้งหมด</option>
+            {origins.map((s) => (
+              <option key={s} value={s} className="bg-popover text-popover-foreground">{s}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] text-muted-foreground">หมายเหตุ Stock-In</label>
+          <select value={note} onChange={(e) => setNote(e.target.value)} className={selectCls}>
+            <option value={ALL} className="bg-popover text-popover-foreground">ทั้งหมด</option>
+            <option value={NOTE_REFUND} className="bg-popover text-popover-foreground">หมายเหตุว่าได้เงินแล้ว</option>
+            <option value={NOTE_ANY} className="bg-popover text-popover-foreground">มีหมายเหตุ</option>
+            <option value={NOTE_NONE} className="bg-popover text-popover-foreground">ไม่มีหมายเหตุ</option>
+          </select>
+        </div>
       </div>
 
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">
@@ -224,7 +311,7 @@ export function RestockView() {
           </div>
         </div>
 
-        <table className="w-full min-w-[1150px] text-left text-sm [&_td]:px-2 [&_th]:px-2">
+        <table className="w-full min-w-[1450px] text-left text-sm [&_td]:px-2 [&_th]:px-2">
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="pb-2 font-medium">เวลายื่นบริการหลังการขาย</th>
@@ -237,6 +324,8 @@ export function RestockView() {
               <th className="pb-2 font-medium">สถานะ Stock-In</th>
               <th className="pb-2 font-medium">สถานะคืนสินค้า</th>
               <th className="pb-2 font-medium">ฝ่ายที่ดูแล</th>
+              <th className="pb-2 font-medium">ที่มา</th>
+              <th className="pb-2 font-medium">หมายเหตุ Stock-In</th>
             </tr>
           </thead>
           <tbody>
@@ -245,7 +334,7 @@ export function RestockView() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                <td colSpan={12} className="py-8 text-center text-muted-foreground">
                   {rows.length > 0 ? "ไม่มีรายการตามเงื่อนไขที่เลือก" : "ไม่มีรายการค้าง"}
                 </td>
               </tr>
@@ -305,9 +394,12 @@ function RestockTableRow({ row: r }: { row: RestockRow }) {
       <td className="py-2.5 text-xs">
         <div className="text-foreground">{r.stockInStatus || "-"}</div>
         <div className="text-muted-foreground">Stock-In แล้ว {num(r.stockInQty)} ชิ้น</div>
+        {r.arrivedAt && <div className="text-[11px] tabular-nums text-muted-foreground">ถึงคลัง {r.arrivedAt}</div>}
       </td>
       <td className="py-2.5 text-xs text-foreground">{r.returnStatus && r.returnStatus !== "-" ? r.returnStatus : "-"}</td>
       <td className="py-2.5 text-xs text-foreground">{r.owner || "-"}</td>
+      <td className="py-2.5 text-xs text-foreground">{r.origin || "-"}</td>
+      <td className="max-w-[220px] whitespace-pre-line py-2.5 text-xs text-foreground">{r.stockInNote || "-"}</td>
     </tr>
   )
 }

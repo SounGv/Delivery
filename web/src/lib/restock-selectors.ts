@@ -38,6 +38,14 @@ export function totalsByStockIn(rows: RestockRow[]): Map<string, RestockTotals> 
   return out
 }
 
+/** True when the team's free-typed "หมายเหตุ Stock-In" says the refund was received
+ * ("ได้เงินแล้ว", "ได้เงินคืนแล้ว", "ได้รับเงินคืนแล้ว / 219", including the typo
+ * "ไ้ดรับเงินคืนแล้ว" seen in the sheet). It is a text match on a hand-typed note, not a
+ * status column, so treat the count as "the note says so". */
+export function isRefundNoted(row: RestockRow): boolean {
+  return /ได้เงิน|ได้รับเงิน|ไ้ดรับเงิน/.test(row.stockInNote)
+}
+
 /** Oldest request first (it has waited longest); lines with no request time go last. */
 export function sortByRequestedAt(rows: RestockRow[]): RestockRow[] {
   return [...rows].sort((a, b) => {

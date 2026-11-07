@@ -1,7 +1,6 @@
-import type { BacklogRow, CancelledRow, Category, RestockRow, ReturnRow } from "@/api/types"
+import type { BacklogRow, CancelledRow, Category, RestockRow } from "@/api/types"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
-import { isPendingRefundButton } from "@/lib/returns-selectors"
 
 /** A report ready to be saved as CSV: file name + header row + body rows. */
 export interface ExportTable {
@@ -11,24 +10,6 @@ export interface ExportTable {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
-
-/** Every return case in `rows` (the caller passes the FILTERED set, not just the visible page). */
-export function returnsReport(rows: ReturnRow[], scopeLabel: string): ExportTable {
-  return {
-    filename: `returns_${scopeLabel}_${today()}.csv`,
-    headers: [
-      "ร้าน", "แพลตฟอร์ม", "เลขคำสั่งซื้อ", "ID คำสั่งซื้อหลังการขาย", "เลขพัสดุคืน", "SKU", "จำนวนต้องคืน", "Stock-In แล้ว", "ยอดคืนเงิน",
-      "ประเภทหลังการขาย", "สถานะการคืนสินค้า", "สถานะคืนเงิน", "สถานะ Stock-In", "ขนส่งขากลับ (สถานะ)", "ขนส่งขากลับ (ชื่อขนส่ง)", "สถานะแจ้งเตือน",
-      "รอกดคืนเงิน", "เวลาขอคืน", "เวลาครบกำหนด", "ขนส่งส่งถึงคลัง", "คลังสแกน Stock-In", "ขอคืนมาแล้ว (วัน)", "สาเหตุ", "หมายเหตุ Stock-In",
-    ],
-    rows: rows.map((r) => [
-      r.store, r.platform, r.orderNo, r.afterSalesId, r.returnTracking, r.sku, r.qtyToReturn, r.qtyStockedIn, r.refundAmount,
-      r.afterSalesType, r.returnStatus, r.refundStatus, r.stockInStatus, r.returnShipping, r.returnCarrier, r.flag,
-      isPendingRefundButton(r) ? "ต้องกดคืนเงิน" : "", r.requestTime, r.dueTime, r.carrierDeliveredAt, r.stockedInAt,
-      r.daysSinceRequest ?? "", r.reason, r.stockInNote,
-    ]),
-  }
-}
 
 /** Every cancelled-order line in `rows` (the caller passes the FILTERED set). */
 export function cancelledReport(rows: CancelledRow[], kindLabel: string, todayIso: string): ExportTable {

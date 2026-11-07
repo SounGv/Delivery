@@ -10,7 +10,6 @@ import type {
   Employee,
   FocusPart,
   RestockPart,
-  ReturnsPart,
   WorkPerformancePart,
 } from "./types"
 
@@ -23,17 +22,8 @@ export function useDashboardQuery() {
   })
 }
 
-// The three heavy payload slices. Each is its own query so a page that doesn't
-// show it never downloads it, and it is fetched once and shared between components.
-export function useReturnsQuery() {
-  return useQuery({
-    queryKey: ["returns"],
-    queryFn: ({ signal }) => fetchPayloadPart<ReturnsPart>("returns", signal),
-    placeholderData: keepPreviousData,
-    refetchInterval: getRefreshIntervalMs(),
-  })
-}
-
+// The heavy payload slices. Each is its own query so a page that doesn't show it
+// never downloads it, and it is fetched once and shared between components.
 export function useWorkPerformanceQuery() {
   return useQuery({
     queryKey: ["workPerformance"],

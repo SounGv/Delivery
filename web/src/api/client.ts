@@ -8,7 +8,6 @@ function isErrorResponse(data: unknown): data is ApiErrorResponse {
 // Endpoint names of the cache service in api/ (api/main.py PART_ENDPOINTS).
 const CACHE_API_ENDPOINTS: Record<PayloadPartPath, string> = {
   core: "core",
-  returns: "returns",
   workPerformance: "work-performance",
   cancelled: "cancelled",
   focus: "focus",
