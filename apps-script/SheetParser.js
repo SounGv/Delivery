@@ -1713,10 +1713,10 @@ function loadStockValueByWarehouse_() {
   try {
     var ss = SpreadsheetApp.openById(STOCK_VALUE_SOURCE_ID_);
     var sheet = ss.getSheetByName(STOCK_VALUE_TAB_);
-    if (!sheet) return { bySku: [], byWarehouse: [], error: 'tab "' + STOCK_VALUE_TAB_ + '" not found' };
+    if (!sheet) return { bySku: [], byWarehouse: [], reference: [], error: 'tab "' + STOCK_VALUE_TAB_ + '" not found' };
 
     var lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { bySku: [], byWarehouse: [], error: '' };
+    if (lastRow < 2) return { bySku: [], byWarehouse: [], reference: [], error: '' };
 
     var values = sheet.getRange(1, 1, lastRow, 8).getValues();
     var bySku = [];
@@ -1737,10 +1737,45 @@ function loadStockValueByWarehouse_() {
       if (wh) byWarehouse.push({ warehouse: wh, totalValue: Number(row[7]) || 0 });
     }
 
-    return { bySku: bySku, byWarehouse: byWarehouse, error: '' };
+    return { bySku: bySku, byWarehouse: byWarehouse, reference: loadStockValueReference_(ss), error: '' };
   } catch (err) {
     Logger.log('stock value unreadable: ' + err);
-    return { bySku: [], byWarehouse: [], error: String(err && err.message ? err.message : err) };
+    return { bySku: [], byWarehouse: [], reference: [], error: String(err && err.message ? err.message : err) };
+  }
+}
+
+/**
+ * BigSeller's own figures per warehouse (DB_STOCK_VALUE_BIGSELLER, written by the BigSeller-Inventory
+ * sync:stock-value-reference job): on-hand cost (qty x BigSeller's weighted-average cost, so SKUs it has no cost for
+ * count as 0) and the cost of goods in transit INTO that warehouse. The dashboard shows them next to its own
+ * DB_SKU_COST based value as a note, and the in-transit goods as their own cards. A missing or unreadable tab only
+ * drops this extra, never the stock value itself.
+ */
+var STOCK_VALUE_REFERENCE_TAB_ = 'DB_STOCK_VALUE_BIGSELLER';
+
+function loadStockValueReference_(ss) {
+  try {
+    var sheet = ss.getSheetByName(STOCK_VALUE_REFERENCE_TAB_);
+    if (!sheet || sheet.getLastRow() < 2) return [];
+    var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+    var out = [];
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      var wh = String(row[0] || '').trim();
+      if (!wh) continue;
+      out.push({
+        warehouse: wh,
+        onHandUnits: Number(row[1]) || 0,
+        bigsellerOnHandCost: Number(row[2]) || 0,
+        inTransitUnits: Number(row[3]) || 0,
+        bigsellerInTransitCost: Number(row[4]) || 0,
+        sourceUpdatedAt: String(row[6] || '')
+      });
+    }
+    return out;
+  } catch (err) {
+    Logger.log('stock value reference unreadable: ' + err);
+    return [];
   }
 }
 
