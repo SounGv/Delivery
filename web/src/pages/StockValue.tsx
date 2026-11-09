@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
-import { Coins, Layers, Search } from "lucide-react"
+import { Coins, Info, Layers, Search, Truck } from "lucide-react"
 import { useStockValueQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
-import { ListToolbar, Pager, StatusTile, chipClass } from "@/components/returns/ReturnsUi"
+import { ListToolbar, Pager, StatTile, StatusPill, StatusTile, chipClass } from "@/components/returns/ReturnsUi"
 import { stockValueReport } from "@/lib/reportExports"
 import { ALL_WAREHOUSES, distinctWarehouses, filterStockValueRows, sortByValueDesc } from "@/lib/stock-value-selectors"
 
@@ -26,6 +26,12 @@ export function StockValue() {
   const report = data?.stockValue ?? null
   const rows = useMemo(() => sortByValueDesc(report?.bySku ?? []), [report])
   const byWarehouse = report?.byWarehouse ?? []
+  const reference = report?.reference ?? []
+  const referenceOf = (name: string) => reference.find((r) => r.warehouse === name)
+  const inTransit = reference.filter((r) => r.inTransitUnits > 0)
+  const inTransitCost = inTransit.reduce((sum, r) => sum + r.bigsellerInTransitCost, 0)
+  const inTransitUnits = inTransit.reduce((sum, r) => sum + r.inTransitUnits, 0)
+  const referenceAsOf = reference[0]?.sourceUpdatedAt ?? ""
 
   const [warehouse, setWarehouse] = useState(ALL_WAREHOUSES)
   const [search, setSearch] = useState("")
@@ -76,6 +82,80 @@ export function StockValue() {
           />
         ))}
       </div>
+
+      {byWarehouse.some((w) => referenceOf(w.warehouse)) && (
+        <div className="glass-panel rounded-2xl p-5">
+          <h3 className="flex items-center gap-2 text-base font-extrabold text-foreground">
+            <Info className="size-5 text-primary" /> หมายเหตุ: ส่วนต่างจากมูลค่าที่ BigSeller คำนวณ
+          </h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            เว็บคิด จำนวน × ราคาต้นทุนจากไฟล์ SKU Merchant · BigSeller คิด จำนวน × ต้นทุนเฉลี่ยถ่วงน้ำหนักของมันเอง (SKU ที่ BigSeller ไม่มีต้นทุนนับเป็น 0)
+            ตัวเลขสองฝั่งจึงไม่เท่ากัน ยังไม่ได้ตัดสินว่าฝั่งไหนตรงกับบัญชี{referenceAsOf ? ` · ข้อมูล BigSeller ณ ${new Date(referenceAsOf).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}` : ""}
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="pb-2 font-medium">คลัง</th>
+                  <th className="pb-2 text-right font-medium">มูลค่าในเว็บ (฿)</th>
+                  <th className="pb-2 text-right font-medium">BigSeller คำนวณ (฿)</th>
+                  <th className="pb-2 text-right font-medium">ส่วนต่าง (฿)</th>
+                  <th className="pb-2 text-right font-medium">ต่าง (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byWarehouse.map((w) => {
+                  const ref = referenceOf(w.warehouse)
+                  if (!ref) return null
+                  const diff = w.totalValue - ref.bigsellerOnHandCost
+                  const pct = ref.bigsellerOnHandCost > 0 ? (diff / ref.bigsellerOnHandCost) * 100 : null
+                  return (
+                    <tr key={w.warehouse} className="border-b border-white/5 last:border-0">
+                      <td className="py-2 font-medium text-foreground">{w.warehouse}</td>
+                      <td className="py-2 text-right tabular-nums">{baht(w.totalValue)}</td>
+                      <td className="py-2 text-right tabular-nums">{baht(ref.bigsellerOnHandCost)}</td>
+                      <td className="py-2 text-right font-semibold tabular-nums">{diff > 0 ? "+" : ""}{baht(diff)}</td>
+                      <td className="py-2 text-right tabular-nums">
+                        {pct === null ? "—" : Math.abs(pct) < 5 ? <StatusPill tone="ok" small>{pct.toFixed(1)}%</StatusPill> : <StatusPill tone="warn" small>{pct > 0 ? "+" : ""}{pct.toFixed(0)}%</StatusPill>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {inTransit.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-base font-extrabold text-foreground">สินค้าระหว่างทาง (โอนระหว่างคลัง ยังไม่รับเข้า)</h3>
+            <p className="text-xs text-muted-foreground">
+              แยกตามคลังปลายทาง · ไม่รวมอยู่ในสต็อกคงเหลือด้านบน · มูลค่าเป็นต้นทุนของ BigSeller โดยตรง (ฐานราคาต่างจากการ์ดคลังด้านบน)
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <StatTile
+              tone="warn"
+              icon={Truck}
+              label="ระหว่างทางทั้งหมด"
+              value={<>{baht(inTransitCost)} <span className="text-sm font-semibold text-muted-foreground">บาท</span></>}
+              sub={`${num(inTransitUnits)} ชิ้น · ไปยัง ${num(inTransit.length)} คลัง`}
+            />
+            {[...inTransit].sort((a, b) => b.bigsellerInTransitCost - a.bigsellerInTransitCost).map((r) => (
+              <StatTile
+                key={r.warehouse}
+                tone="info"
+                icon={Truck}
+                label={`ระหว่างทาง → ${r.warehouse}`}
+                value={<>{baht(r.bigsellerInTransitCost)} <span className="text-sm font-semibold text-muted-foreground">บาท</span></>}
+                sub={`${num(r.inTransitUnits)} ชิ้น`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <ListToolbar
         search={search}

@@ -564,9 +564,25 @@ export interface StockValueByWarehouse {
   totalValue: number
 }
 
+/** BigSeller's own figures for one warehouse (sheet DB_STOCK_VALUE_BIGSELLER). Costs are BigSeller's weighted-average
+ * cost, not the SKU Merchant price the page values stock with, so they differ — the page shows the difference as a note. */
+export interface StockValueReference {
+  warehouse: string
+  onHandUnits: number
+  /** BigSeller's cost of the on-hand units; SKUs it has no cost for count as 0. */
+  bigsellerOnHandCost: number
+  /** Units on transfers heading INTO this warehouse (not part of on-hand). */
+  inTransitUnits: number
+  bigsellerInTransitCost: number
+  /** ISO time of the BigSeller export these figures came from. */
+  sourceUpdatedAt: string
+}
+
 export interface StockValueReport {
   bySku: StockValueRow[]
   byWarehouse: StockValueByWarehouse[]
+  /** Absent on payloads from before the reference tab existed. */
+  reference?: StockValueReference[]
   /** Non-empty when the source spreadsheet could not be read at all. */
   error: string
 }
