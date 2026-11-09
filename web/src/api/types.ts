@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds"
+export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds" | "stockValue"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -273,6 +273,14 @@ export interface WorkPerformancePart extends PayloadPartMeta {
  * deducted / not deducted). */
 export interface CancelledPart extends PayloadPartMeta {
   cancelledOrders: CancelledOrdersReport
+}
+
+/** มูลค่าสต็อกแต่ละคลัง — read from the BigSeller-Inventory project's own
+ * spreadsheet (a different, external one — see STOCK_VALUE_SOURCE_ID_ in
+ * apps-script/SheetParser.js), not this workbook. Value is COST value (qty ×
+ * ราคาต้นทุน), not retail/selling price. */
+export interface StockValuePart extends PayloadPartMeta {
+  stockValue: StockValueReport
 }
 
 /** One of the six backlog queues, as summarised at the top of the sheet's
@@ -540,6 +548,26 @@ export interface CancelledOrdersReport {
   /** Source tabs that could not be found. */
   missingTabs: string[]
   /** Non-empty when the source workbook could not be read at all. */
+  error: string
+}
+
+export interface StockValueRow {
+  sku: string
+  warehouse: string
+  qty: number
+  costPrice: number
+  stockValue: number
+}
+
+export interface StockValueByWarehouse {
+  warehouse: string
+  totalValue: number
+}
+
+export interface StockValueReport {
+  bySku: StockValueRow[]
+  byWarehouse: StockValueByWarehouse[]
+  /** Non-empty when the source spreadsheet could not be read at all. */
   error: string
 }
 

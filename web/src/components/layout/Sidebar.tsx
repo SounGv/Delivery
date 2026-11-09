@@ -14,6 +14,7 @@ import {
   PackageX,
   Ban,
   ListChecks,
+  Coins,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSettings } from "@/lib/settingsContext"
@@ -53,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "returns", label: "สินค้าตีกลับ", icon: PackageX, enabled: true },
       { key: "cancelled", label: "สินค้ายกเลิก", icon: Ban, enabled: true },
       { key: "backlog", label: "งานค้าง", icon: ListChecks, enabled: true },
+      { key: "stock-value", label: "มูลค่าสต็อก", icon: Coins, enabled: true },
     ],
   },
   {

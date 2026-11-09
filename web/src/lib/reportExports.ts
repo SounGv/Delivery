@@ -1,4 +1,4 @@
-import type { BacklogRow, CancelledRow, Category, RefundCase, RestockRow } from "@/api/types"
+import type { BacklogRow, CancelledRow, Category, RefundCase, RestockRow, StockValueRow } from "@/api/types"
 import { carrierFromTracking, isRefundPaid } from "@/lib/refund-selectors"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
@@ -47,6 +47,15 @@ export function refundCasesReport(rows: RefundCase[], trackingOf: (row: RefundCa
 }
 
 /** Every cn-restock line in `rows` (the caller passes the FILTERED set), headed like the sheet. */
+/** Every SKU/warehouse line in `rows` (the caller passes the FILTERED set). */
+export function stockValueReport(rows: StockValueRow[]): ExportTable {
+  return {
+    filename: `stock-value_${today()}.csv`,
+    headers: ["SKU", "คลัง", "จำนวน", "ราคาต้นทุน", "มูลค่า"],
+    rows: rows.map((r) => [r.sku, r.warehouse, r.qty, r.costPrice, r.stockValue]),
+  }
+}
+
 export function restockReport(rows: RestockRow[]): ExportTable {
   return {
     filename: `cn-restock_${today()}.csv`,

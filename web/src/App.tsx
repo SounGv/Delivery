@@ -15,6 +15,7 @@ import { WorkIssues } from "@/pages/WorkIssues"
 import { Returns } from "@/pages/Returns"
 import { Cancelled } from "@/pages/Cancelled"
 import { Backlog } from "@/pages/Backlog"
+import { StockValue } from "@/pages/StockValue"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
@@ -45,6 +46,7 @@ const PAGES: Record<string, React.ComponentType> = {
   returns: Returns,
   cancelled: Cancelled,
   backlog: Backlog,
+  "stock-value": StockValue,
   settings: Settings,
   // legacy aliases -> original standalone pages (no longer in the main nav)
   "receiving-warehouse": ReceivingWarehouse,

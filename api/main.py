@@ -36,6 +36,7 @@ PART_ENDPOINTS = {
     "focus": "focus",
     "restock": "restock",
     "refunds": "refunds",
+    "stock-value": "stockValue",
 }
 
 RETRY_SECONDS_WHEN_EMPTY = 60

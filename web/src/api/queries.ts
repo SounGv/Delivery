@@ -11,6 +11,7 @@ import type {
   FocusPart,
   RefundsPart,
   RestockPart,
+  StockValuePart,
   WorkPerformancePart,
 } from "./types"
 
@@ -65,6 +66,15 @@ export function useCancelledQuery() {
   return useQuery({
     queryKey: ["cancelled"],
     queryFn: ({ signal }) => fetchPayloadPart<CancelledPart>("cancelled", signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+export function useStockValueQuery() {
+  return useQuery({
+    queryKey: ["stockValue"],
+    queryFn: ({ signal }) => fetchPayloadPart<StockValuePart>("stockValue", signal),
     placeholderData: keepPreviousData,
     refetchInterval: getRefreshIntervalMs(),
   })

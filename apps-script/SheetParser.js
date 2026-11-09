@@ -1693,6 +1693,57 @@ function loadCancelledOrders_() {
   }
 }
 
+/**
+ * Stock value per warehouse (มูลค่าสต็อกแต่ละคลัง) — sku-level qty × unit cost,
+ * already computed by STOCK_VALUE_BY_WAREHOUSE's own in-sheet formulas in the
+ * BigSeller-Inventory project's spreadsheet (same one holding
+ * DB_SKU_INVENTORY/DB_SKU_INVENTORY_DECOY/DB_SKU_COST). This bound
+ * spreadsheet has no inventory data of its own, so this reads that sheet
+ * from a DIFFERENT, external spreadsheet — same cross-spreadsheet pattern as
+ * CANCELLED_SOURCE_ID_ above.
+ *
+ * Detail columns A:E = sku, warehouse, qty, costPrice, stockValue; summary
+ * columns G:H = warehouse, totalValue (a QUERY ... group by formula already
+ * in the sheet) — both read in one range fetch since they sit side by side.
+ */
+var STOCK_VALUE_SOURCE_ID_ = '1UM5uP1FdgDfEHh9IYFQ9qS7kpVvjuyXRwRMs8guWDRo';
+var STOCK_VALUE_TAB_ = 'STOCK_VALUE_BY_WAREHOUSE';
+
+function loadStockValueByWarehouse_() {
+  try {
+    var ss = SpreadsheetApp.openById(STOCK_VALUE_SOURCE_ID_);
+    var sheet = ss.getSheetByName(STOCK_VALUE_TAB_);
+    if (!sheet) return { bySku: [], byWarehouse: [], error: 'tab "' + STOCK_VALUE_TAB_ + '" not found' };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { bySku: [], byWarehouse: [], error: '' };
+
+    var values = sheet.getRange(1, 1, lastRow, 8).getValues();
+    var bySku = [];
+    var byWarehouse = [];
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      var sku = String(row[0] || '').trim();
+      if (sku) {
+        bySku.push({
+          sku: sku,
+          warehouse: String(row[1] || '').trim(),
+          qty: Number(row[2]) || 0,
+          costPrice: Number(row[3]) || 0,
+          stockValue: Number(row[4]) || 0
+        });
+      }
+      var wh = String(row[6] || '').trim();
+      if (wh) byWarehouse.push({ warehouse: wh, totalValue: Number(row[7]) || 0 });
+    }
+
+    return { bySku: bySku, byWarehouse: byWarehouse, error: '' };
+  } catch (err) {
+    Logger.log('stock value unreadable: ' + err);
+    return { bySku: [], byWarehouse: [], error: String(err && err.message ? err.message : err) };
+  }
+}
+
 function parseCancelledSheet_(sheet, tz, stockDeducted) {
   var lastRow = sheet.getLastRow();
   var lastCol = Math.min(sheet.getLastColumn(), 14);
@@ -2247,6 +2298,13 @@ function buildDashboardPayload_(part) {
       generatedAt: new Date().toISOString(),
       todayDate: calendarToday,
       refunds: loadRefundCases_()
+    };
+  }
+  if (part === 'stockValue') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      stockValue: loadStockValueByWarehouse_()
     };
   }
   var isWp = part === 'workPerformance';

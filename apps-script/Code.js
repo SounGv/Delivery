@@ -48,6 +48,9 @@ var CACHE_CHUNK_SIZE_ = 90000;
  *   ?path=focus           "งานค้าง": the 6 backlog queues (gv-returns-sync, tab โฟกัสทีม-งานค้าง)
  *   ?path=restock         "สินค้าตีกลับ" as gv-returns-sync counts it (tab cn-restock)
  *   ?path=refunds         lost/bounced parcels + refund received or not (tab ได้เงินคืนแล้ว-พัสดุหาย)
+ *   ?path=stockValue      มูลค่าสต็อกแต่ละคลัง — reads STOCK_VALUE_BY_WAREHOUSE from the
+ *                         BigSeller-Inventory spreadsheet (cross-spreadsheet read, see
+ *                         STOCK_VALUE_SOURCE_ID_ in SheetParser.js)
  * Each part has its own cache key, so a slow heavy part never delays the core.
  *
  * ?path=dashboard is the legacy single payload (all four parts merged) kept only
@@ -60,7 +63,8 @@ var PAYLOAD_PARTS_ = {
   cancelled: 'cancelled',
   focus: 'focus',
   restock: 'restock',
-  refunds: 'refunds'
+  refunds: 'refunds',
+  stockValue: 'stockValue'
 };
 
 /** One part's payload: from cache, else built (and cached, best-effort). */
