@@ -15,7 +15,12 @@ const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 0
 /** มูลค่าสต็อกแต่ละคลัง — สต็อกคงเหลือ × ราคาต้นทุน (ไม่ใช่ราคาขาย) ต่อ SKU ต่อคลัง, รวม
  * เป็นยอดต่อคลังที่การ์ดด้านบน. อ่านข้อมูลจากสเปรดชีตของโปรเจกต์ BigSeller-Inventory
  * (คนละไฟล์จาก gv-returns-sync/คลัง+รับเข้า ที่หน้าอื่นในแอปนี้ใช้) ที่คำนวณจำนวน×ราคาไว้
- * เสร็จแล้วด้วยสูตรในชีต — หน้านี้แค่แสดงผล ไม่คำนวณซ้ำ. Read-only. */
+ * เสร็จแล้วด้วยสูตรในชีต — หน้านี้แค่แสดงผล ไม่คำนวณซ้ำ. Read-only.
+ *
+ * Needs VITE_APPS_SCRIPT_URL to point at the deployment carrying
+ * STOCK_VALUE_SOURCE_ID_/loadStockValueByWarehouse_ (apps-script/SheetParser.js)
+ * — confirmed 2026-11-09 that the GitHub Actions secret had drifted to an
+ * older, separate deployment the local clasp project couldn't even see. */
 export function StockValue() {
   const { data, isLoading, isError, error } = useStockValueQuery()
   const report = data?.stockValue ?? null
