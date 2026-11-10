@@ -1,11 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react"
 import {
-  Wallet,
-  ShoppingCart,
-  Receipt,
   Coins,
-  RotateCcw,
-  TicketPercent,
   TrendingUp,
   TrendingDown,
   Trophy,
@@ -14,7 +9,8 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
-import { StatTile, filterSelectClass } from "@/components/returns/ReturnsUi"
+import { filterSelectClass } from "@/components/returns/ReturnsUi"
+import { SalesHero } from "@/components/reports/SalesHero"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -30,6 +26,7 @@ import {
   peakDay,
   weekdayAverages,
   applyChannelFilter,
+  computeChannelComparison,
   CHANNEL_FILTER_LABELS,
   WEEKDAY_LABELS_TH_FULL,
   type ChannelFilter,
@@ -53,14 +50,51 @@ const money = (n: number) => `฿${n.toLocaleString("th-TH", { maximumFractionDi
 function SectionHeading({ title, caption }: { title: string; caption?: string }) {
   return (
     <div className="px-1 pt-2">
-      <h2 className="text-xl font-extrabold text-foreground">{title}</h2>
+      <h2 className="page-heading text-xl font-extrabold text-foreground">{title}</h2>
       {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
+    </div>
+  )
+}
+
+/** A highlight card: icon chip, one big figure, a headline and one explanatory line. */
+function InsightCard({
+  icon: Icon,
+  accent,
+  eyebrow,
+  big,
+  title,
+  text,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  accent: string
+  eyebrow: string
+  big: string
+  title: string
+  text: string
+}) {
+  return (
+    <div className="glass-panel relative overflow-hidden rounded-2xl p-5 shadow-[0_18px_40px_-24px_rgba(43,168,162,0.6)]">
+      <span className="absolute inset-x-0 top-0 h-1.5" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}33)` }} aria-hidden />
+      <span className="pointer-events-none absolute -right-6 -top-8 size-28 rounded-full opacity-25 blur-2xl" style={{ background: accent }} aria-hidden />
+      <p className="relative flex items-center gap-2 text-sm font-extrabold text-foreground">
+        <span
+          className="flex size-9 items-center justify-center rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_6px_12px_-6px_rgba(0,0,0,0.35)]"
+          style={{ background: `linear-gradient(145deg, ${accent}33, ${accent}1a)`, color: accent }}
+        >
+          <Icon className="size-5" />
+        </span>
+        {eyebrow}
+      </p>
+      <p className="relative mt-3 text-3xl font-extrabold tabular-nums text-foreground">{big}</p>
+      <h3 className="relative mt-0.5 text-base font-bold text-foreground">{title}</h3>
+      <p className="relative mt-1.5 text-sm text-muted-foreground">{text}</p>
     </div>
   )
 }
 
 function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]; tone: "top" | "bottom" }) {
   const Icon = tone === "top" ? Trophy : TrendingDown
+  const maxSales = Math.max(1, ...rows.map((r) => r.effSales))
   return (
     <div className="glass-panel relative overflow-x-auto rounded-2xl p-4 pl-5">
       <span className={`absolute inset-y-0 left-0 w-1.5 ${tone === "top" ? "bg-emerald-500" : "bg-rose-500"}`} aria-hidden />
@@ -91,9 +125,30 @@ function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]
             return (
               <tr key={d.date} className="border-b border-white/5 last:border-0">
                 <td className={highlight ? (tone === "top" ? "py-2.5 font-semibold text-emerald-glow" : "py-2.5 font-semibold text-destructive") : "py-2.5 text-foreground"}>
-                  {formatFullDateLabel(d.date)}
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold shadow-sm ${
+                        i === 0
+                          ? tone === "top"
+                            ? "bg-gradient-to-br from-gold-light to-gold text-[#5c4300]"
+                            : "bg-gradient-to-br from-rose-300 to-rose-500 text-white"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    {formatFullDateLabel(d.date)}
+                  </span>
                 </td>
-                <td className="py-2.5 text-right tabular-nums">{d.effSales.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</td>
+                <td className="py-2.5 text-right tabular-nums">
+                  {d.effSales.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
+                  <span className="ml-auto mt-1 block h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                    <span
+                      className={`block h-full rounded-full ${tone === "top" ? "bg-gradient-to-r from-emerald-300 to-emerald-500" : "bg-gradient-to-r from-rose-300 to-rose-500"}`}
+                      style={{ width: `${(d.effSales / maxSales) * 100}%` }}
+                    />
+                  </span>
+                </td>
                 <td className="py-2.5 text-right tabular-nums text-muted-foreground">{d.effOrders.toLocaleString("th-TH")}</td>
                 <td className="py-2.5 text-right tabular-nums text-muted-foreground">{d.aov.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</td>
                 <td className="py-2.5 text-right tabular-nums text-muted-foreground">{cancelRate.toFixed(1)}%</td>
@@ -192,6 +247,7 @@ export function SalesSummary() {
   )
   const days = useMemo(() => applyChannelFilter(daysInRange, channel), [daysInRange, channel])
   const totals = useMemo(() => computeOrderReportTotals(days), [days])
+  const channelSplit = useMemo(() => computeChannelComparison(daysInRange), [daysInRange])
   const { top, bottom } = useMemo(() => topBottomDays(days, 5), [days])
   const peak = useMemo(() => peakDay(days), [days])
   const averages = useMemo(() => weekdayAverages(days), [days])
@@ -271,48 +327,16 @@ export function SalesSummary() {
             title="ภาพรวมยอดขาย"
             caption={`${channel === "all" ? "ออนไลน์ + ออฟไลน์" : CHANNEL_FILTER_LABELS[channel]} · ${formatFullDateLabel(effectiveStart)} – ${formatFullDateLabel(effectiveEnd)} (${totals.nDays} วัน)`}
           />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
-            <StatTile
-              tone="ok"
-              icon={Wallet}
-              label="ยอดขายรวม (มีผล)"
-              value={money(totals.totalEffSales)}
-              sub={`เฉลี่ย ${money(avgPerDay)}/วัน`}
-            />
-            <StatTile
-              tone="neutral"
-              icon={ShoppingCart}
-              label="คำสั่งซื้อที่มีผล"
-              value={
-                <>
-                  {totals.totalEffOrders.toLocaleString("th-TH")} <span className="text-sm font-semibold text-muted-foreground">ออเดอร์</span>
-                </>
-              }
-              sub={`จากทั้งหมด ${totals.totalOrders.toLocaleString("th-TH")} ออเดอร์`}
-            />
-            <StatTile tone="info" icon={Receipt} label="AOV เฉลี่ย" value={`฿${totals.weightedAov.toFixed(2)}`} sub="ต่อคำสั่งซื้อ 1 รายการ" />
-            <StatTile
-              tone="ok"
-              icon={Coins}
-              label="ยอดขายสุทธิ (หลังหักคืนเงิน)"
-              value={money(netSales)}
-              sub={`${netPct.toFixed(1)}% ของยอดขายมีผล · คืนเงิน ${money(totals.totalRefundAmount)}`}
-            />
-            <StatTile
-              tone="warn"
-              icon={RotateCcw}
-              label="อัตราคืนเงินเฉลี่ย"
-              value={`${totals.avgRefundRate.toFixed(2)}%`}
-              sub={`เฉลี่ยต่อวัน (${totals.nDays} วัน)`}
-            />
-            <StatTile
-              tone="neutral"
-              icon={TicketPercent}
-              label="ยอดใช้โค้ดส่วนลด"
-              value={money(totals.totalDiscountCode)}
-              sub={`${((totals.totalDiscountCode / (totals.totalEffSales || 1)) * 100).toFixed(1)}% ของยอดขายรวม`}
-            />
-          </div>
+          <SalesHero
+            totals={totals}
+            netSales={netSales}
+            netPct={netPct}
+            avgPerDay={avgPerDay}
+            onlineSales={channelSplit.online.totalEffSales}
+            offlineSales={channelSplit.offline.totalEffSales}
+            channelLabel={channel === "all" ? "ออนไลน์ + ออฟไลน์" : CHANNEL_FILTER_LABELS[channel]}
+            rangeLabel={`${formatFullDateLabel(effectiveStart)} – ${formatFullDateLabel(effectiveEnd)}`}
+          />
 
           <div className="grid grid-cols-12 gap-4">
             <div className="col-span-12 lg:col-span-7">
@@ -370,46 +394,38 @@ export function SalesSummary() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="glass-panel relative overflow-hidden rounded-2xl p-4 pl-5">
-              <span className="absolute inset-y-0 left-0 w-1.5 bg-emerald-500" aria-hidden />
-              <p className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-emerald-700 dark:text-emerald-300">
-                <TrendingUp className="size-4" /> วันที่ขายสูงสุด
-              </p>
-              <h3 className="mb-2 text-base font-bold text-foreground">
-                {peak ? `${formatFullDateLabel(peak.date)} ทำยอดสูงสุด` : "-"}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {peak &&
-                  `ยอดขาย ${money(peak.effSales)} จาก ${peak.effOrders.toLocaleString("th-TH")} ออเดอร์ (AOV ${money(peak.aov)}) สูงกว่าค่าเฉลี่ยรายวัน (${money(
-                    avgPerDay
-                  )}) ${(peak.effSales / avgPerDay).toFixed(1)} เท่า`}
-              </p>
-            </div>
-            <div className="glass-panel relative overflow-hidden rounded-2xl p-4 pl-5">
-              <span className="absolute inset-y-0 left-0 w-1.5 bg-sky-500" aria-hidden />
-              <p className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-sky-700 dark:text-sky-300">
-                <Coins className="size-4" /> ยอดขายสุทธิ
-              </p>
-              <h3 className="mb-2 text-base font-bold text-foreground">ยอดขายสุทธิคิดเป็น {netPct.toFixed(1)}% ของยอดขายมีผล</h3>
-              <p className="text-sm text-muted-foreground">
-                ยอดขายมีผล {money(totals.totalEffSales)} หักยอดคืนเงิน {money(totals.totalRefundAmount)} เหลือยอดขายสุทธิ {money(netSales)} ตลอดช่วง{" "}
-                {totals.nDays} วัน
-              </p>
-            </div>
-            <div className="glass-panel relative overflow-hidden rounded-2xl p-4 pl-5">
-              <span className="absolute inset-y-0 left-0 w-1.5 bg-border" aria-hidden />
-              <p className="mb-2 flex items-center gap-1.5 text-sm font-extrabold text-muted-foreground">
-                <CalendarRange className="size-4" /> รูปแบบรายสัปดาห์
-              </p>
-              <h3 className="mb-2 text-base font-bold text-foreground">
-                วัน{WEEKDAY_LABELS_TH_FULL[bestWdIdx]}ขายดีสุด วัน{WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ขายน้อยสุด
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {hasWeekdayComparison
+            <InsightCard
+              icon={TrendingUp}
+              accent="#27ae60"
+              eyebrow="วันที่ขายสูงสุด"
+              big={peak ? money(peak.effSales) : "-"}
+              title={peak ? formatFullDateLabel(peak.date) : "-"}
+              text={
+                peak
+                  ? `จาก ${peak.effOrders.toLocaleString("th-TH")} ออเดอร์ (AOV ${money(peak.aov)}) สูงกว่าค่าเฉลี่ยรายวัน (${money(avgPerDay)}) ${(peak.effSales / avgPerDay).toFixed(1)} เท่า`
+                  : ""
+              }
+            />
+            <InsightCard
+              icon={Coins}
+              accent="#5dade2"
+              eyebrow="ยอดขายสุทธิ"
+              big={`${netPct.toFixed(1)}%`}
+              title="ของยอดขายมีผล"
+              text={`ยอดขายมีผล ${money(totals.totalEffSales)} หักยอดคืนเงิน ${money(totals.totalRefundAmount)} เหลือยอดขายสุทธิ ${money(netSales)} ตลอดช่วง ${totals.nDays} วัน`}
+            />
+            <InsightCard
+              icon={CalendarRange}
+              accent="#2ba8a2"
+              eyebrow="รูปแบบรายสัปดาห์"
+              big={`วัน${WEEKDAY_LABELS_TH_FULL[bestWdIdx]}`}
+              title={`ขายดีสุด · วัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ขายน้อยสุด`}
+              text={
+                hasWeekdayComparison
                   ? `ยอดขายเฉลี่ยวัน${WEEKDAY_LABELS_TH_FULL[bestWdIdx]}สูงกว่าวัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ประมาณ ${weekdayUpliftPct!.toFixed(0)}% — ใช้จัดโปรโมชัน/สต็อกให้สอดคล้องกับพฤติกรรมลูกค้ารายสัปดาห์`
-                  : `วัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ในช่วงนี้ยังไม่มียอดขาย — ข้อมูลไม่พอสำหรับเทียบเป็น % ลองเลือกช่วงวันที่ให้ยาวขึ้น`}
-              </p>
-            </div>
+                  : `วัน${WEEKDAY_LABELS_TH_FULL[worstWdIdx]}ในช่วงนี้ยังไม่มียอดขาย — ข้อมูลไม่พอสำหรับเทียบเป็น % ลองเลือกช่วงวันที่ให้ยาวขึ้น`
+              }
+            />
           </div>
 
           <ExtraStatsPanel totals={totals} />
