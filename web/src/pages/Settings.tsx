@@ -96,7 +96,7 @@ export function Settings() {
 
   return (
     <div className="grid grid-cols-1 gap-4 max-sm:[&_button]:min-h-10 max-sm:[&_input]:min-h-10 lg:grid-cols-2">
-      <SettingsSection title="Google Apps Script URL" description="ที่อยู่ Web App ที่ deploy ไว้บนชีทของทีม">
+      <SettingsSection title="ที่อยู่ข้อมูล (Google Apps Script URL)" description="ที่อยู่ Web App ที่ใช้ดึงข้อมูลจากชีตของทีม">
         <input
           aria-label="Google Apps Script URL"
           value={urlInput}
@@ -111,7 +111,7 @@ export function Settings() {
         {saved && <p className="mt-2 text-xs text-emerald-glow">บันทึกแล้ว กำลังโหลดหน้าใหม่...</p>}
       </SettingsSection>
 
-      <SettingsSection title="Refresh Interval" description="ความถี่ในการดึงข้อมูลใหม่จาก Google Sheets · ข้อมูลฝั่งเซิร์ฟเวอร์ปรับใหม่ทุกไม่กี่นาที ตั้งถี่กว่านี้ไม่ทำให้ข้อมูลใหม่ขึ้นเร็วกว่าเดิม มูลค่าสต็อกดึงใหม่ทุก 15 นาที">
+      <SettingsSection title="ความถี่ในการดึงข้อมูลใหม่" description="ข้อมูลฝั่งเซิร์ฟเวอร์ปรับใหม่ทุกไม่กี่นาที ตั้งถี่กว่านี้ไม่ทำให้ข้อมูลใหม่ขึ้นเร็วกว่าเดิม · มูลค่าสต็อกดึงใหม่ทุก 15 นาที">
         <div className="flex flex-wrap gap-2">
           {REFRESH_OPTIONS.map((opt) => (
             <button
@@ -131,18 +131,18 @@ export function Settings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Theme" description="โหมดสีของแดชบอร์ด">
+      <SettingsSection title="ธีมสี" description="โหมดสีของแดชบอร์ด">
         <div className="flex gap-2">
           <Button size="sm" variant={theme === "dark" ? "default" : "outline"} onClick={() => theme !== "dark" && toggleTheme()}>
-            <Moon className="size-4" /> Dark
+            <Moon className="size-4" /> มืด
           </Button>
           <Button size="sm" variant={theme === "light" ? "default" : "outline"} onClick={() => theme !== "light" && toggleTheme()}>
-            <Sun className="size-4" /> Light
+            <Sun className="size-4" /> สว่าง
           </Button>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Company Logo" description="แสดงแทนไอคอนคลังในแถบเมนูด้านซ้าย">
+      <SettingsSection title="โลโก้บริษัท" description="แสดงแทนไอคอนคลังในแถบเมนูด้านซ้าย">
         <div className="flex items-center gap-4">
           <div className="flex size-14 items-center justify-center overflow-hidden rounded-xl border border-border bg-white/5">
             {logoDataUrl ? (
@@ -165,7 +165,7 @@ export function Settings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Target KPI" description="กำหนดเป้าจำนวนสินค้าต่อคนเอง แทนค่าจากชีท (ค่าปัจจุบันในชีทจะยังแสดงถ้าไม่ตั้งค่านี้)">
+      <SettingsSection title="เป้าหมาย KPI ต่อคน" description="กำหนดเป้าจำนวนสินค้าต่อคนเอง แทนค่าจากชีต (ค่าปัจจุบันในชีทจะยังแสดงถ้าไม่ตั้งค่านี้)">
         <div className="flex gap-2">
           <input
             type="number"
@@ -190,7 +190,7 @@ export function Settings() {
       </SettingsSection>
 
       <SettingsSection
-        title="Target ออเดอร์ (ฝ่ายออฟไลน์)"
+        title="เป้าออเดอร์ (ฝ่ายออฟไลน์)"
         description="ฝ่ายออฟไลน์เป็นขายส่ง วัดผลด้วยจำนวนออเดอร์ต่อคนต่อวัน แยกจากเป้าพัสดุของฝ่ายออนไลน์ — ใช้คำนวณจำนวนคนที่ควรใช้ในหน้าผลงานของฝ่ายออฟไลน์เท่านั้น"
       >
         <div className="flex gap-2">

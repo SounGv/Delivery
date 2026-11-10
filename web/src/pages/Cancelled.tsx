@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Ban, CalendarClock, CheckCircle2, ChevronDown, Clock, Hourglass, Layers, PackageCheck, XCircle } from "lucide-react"
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers, PackageCheck, XCircle } from "lucide-react"
 import type { EChartsOption } from "echarts"
-import { useCancelledQuery } from "@/api/queries"
-import { ErrorPanel } from "@/components/common/ErrorPanel"
-import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { ExportButton } from "@/components/common/ExportButton"
 import { DataNotice } from "@/components/common/DataNotice"
 import { ChartCard } from "@/components/charts/ChartCard"
@@ -19,7 +16,6 @@ import {
   filterSelectClass,
   type Tone,
 } from "@/components/returns/ReturnsUi"
-import { Tabs } from "@/components/ui/Tabs"
 import { cancelledReport } from "@/lib/reportExports"
 import { readChartTheme } from "@/lib/chart-theme"
 import { useTheme } from "@/lib/theme"
@@ -43,65 +39,6 @@ const DONE = "done"
 const PAGE_SIZE = 30
 const STALE_CHOICES = [1, 2, 3, 5, 7]
 const num = (n: number) => n.toLocaleString("th-TH")
-
-/** Cancelled-order scan log ("สินค้ายกเลิก"), kept apart from product returns. Two
- * kinds of cancellation live in two tabs of the gv-returns-sync workbook — stock
- * already deducted vs. not deducted — so each gets its own tab here. The status
- * (รอตรวจสอบ / รับแล้ว / ปิดงาน / ไม่ตรง) is the sheet's own — set by what the warehouse
- * scans into the same row, or by BigSeller's Stock-In / the carrier refund for
- * "ปิดงาน"; this page only reads it. Status colours are the returns page's contract
- * (see components/returns/ReturnsUi.tsx). */
-export function Cancelled() {
-  const { data, isLoading, isError, error } = useCancelledQuery()
-  const report = data?.cancelledOrders ?? null
-  const rows = useMemo(() => report?.rows ?? [], [report])
-  const deducted = useMemo(() => rows.filter((r) => r.stockDeducted), [rows])
-  const notDeducted = useMemo(() => rows.filter((r) => !r.stockDeducted), [rows])
-
-  if (isLoading) return <LoadingSkeletonGrid count={5} />
-  if (isError || !data) return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
-
-  return (
-    <div className="space-y-4">
-      <CancelledWarning report={report} />
-
-      <Tabs
-        items={[
-          {
-            key: "deducted",
-            label: `ตัดสต็อกแล้ว (${num(deducted.length)})`,
-            icon: Ban,
-            render: () => (
-              <CancelledView
-                key="deducted"
-                rows={deducted}
-                todayIso={data.todayDate}
-                kindLabel="ตัดสต็อกแล้ว"
-                description="ออเดอร์ที่ยกเลิกหลังตัดสต็อก ต้องรับของคืนเข้าคลัง"
-                duplicatesDropped={report?.duplicatesDropped ?? 0}
-              />
-            ),
-          },
-          {
-            key: "not-deducted",
-            label: `ยังไม่ตัดสต็อก (${num(notDeducted.length)})`,
-            icon: Hourglass,
-            render: () => (
-              <CancelledView
-                key="not-deducted"
-                rows={notDeducted}
-                todayIso={data.todayDate}
-                kindLabel="ยังไม่ตัดสต็อก"
-                description="ออเดอร์ที่ยกเลิกก่อนตัดสต็อก ต้องเก็บของกลับเข้าที่"
-                duplicatesDropped={report?.duplicatesDropped ?? 0}
-              />
-            ),
-          },
-        ]}
-      />
-    </div>
-  )
-}
 
 /** Shown when the cancelled-order log cannot be read (no part in the payload, an error, or a missing tab). */
 export function CancelledWarning({ report }: { report: CancelledOrdersReport | null }) {
@@ -128,6 +65,11 @@ const STATUS_TONE: Record<CancelledStatus, Tone> = {
 }
 const STATUS_ICON = { รอตรวจสอบ: Clock, รับแล้ว: CheckCircle2, ปิดงาน: PackageCheck, ไม่ตรง: XCircle }
 
+/** The cancelled-order scan log ("สินค้ายกเลิก") for one kind of cancellation — stock already deducted or not —
+ * as it appears on the report page's two cancelled tabs. The status (รอตรวจสอบ / รับแล้ว / ปิดงาน / ไม่ตรง) is the
+ * sheet's own: set by what the warehouse scans into the same row, or by BigSeller's Stock-In / the carrier refund
+ * for "ปิดงาน"; this view only reads it. Status colours follow the returns pages' contract
+ * (see components/returns/ReturnsUi.tsx). */
 export function CancelledView({
   rows,
   todayIso,
