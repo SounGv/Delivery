@@ -31,6 +31,13 @@ const PAGE_SIZE = 30
 const num = (n: number) => n.toLocaleString("th-TH")
 
 const KIND_ICON = { cancel: Ban, return: Undo2, lost: PackageX }
+/** What each count covers. "ตีกลับ" here leaves the lost parcels out, while the "สินค้าตีกลับ" page counts them in
+ * (its total is ตีกลับ + สูญหาย), so say so on the cards rather than let the two numbers look contradictory. */
+const KIND_NOTE: Record<TimelineKind, string | undefined> = {
+  cancel: undefined,
+  return: "ไม่รวมพัสดุสูญหาย",
+  lost: "หน้าสินค้าตีกลับนับรวมไว้ด้วย",
+}
 const TONE_ICON: Record<Tone, React.ComponentType<{ className?: string }> | undefined> = {
   ok: CheckCircle2,
   warn: Clock,
@@ -419,6 +426,7 @@ function TimelineOverview() {
             label={KIND_LABEL[k]}
             count={kindCounts[k]}
             unit="รายการ"
+            sub={KIND_NOTE[k]}
             active={kind === k}
             onClick={() => {
               setKind(kind === k ? ALL : k)

@@ -13,6 +13,7 @@ import { filterSelectClass } from "@/components/returns/ReturnsUi"
 import { SalesHero } from "@/components/reports/SalesHero"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
+import { DataNotice } from "@/components/common/DataNotice"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { DateRangePicker } from "@/components/reports/DateRangePicker"
 import { ChannelComparisonPanel } from "@/components/reports/ChannelComparisonPanel"
@@ -266,9 +267,10 @@ export function SalesSummary() {
 
   if (!report || allDays.length === 0) {
     return (
-      <div className="glass-panel rounded-2xl p-8 text-center text-sm text-muted-foreground">
-        ยังไม่มีข้อมูลสรุปยอดขาย — ตรวจว่าได้ redeploy Apps Script (เวอร์ชันที่อ่านแท็บ "รายงานคำสั่งซื้อ") แล้วหรือยัง
-      </div>
+      <DataNotice
+        title="ยังไม่มีข้อมูลสรุปยอดขาย"
+        detail='ไม่พบข้อมูลจากแท็บ "รายงานคำสั่งซื้อ" (ต้อง redeploy Apps Script เวอร์ชันที่อ่านแท็บนี้)'
+      />
     )
   }
 

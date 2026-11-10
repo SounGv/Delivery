@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Banknote, CheckCircle2, Clock, Layers, PackageX, Tag, Truck } from "lucide-react"
+import { Banknote, CheckCircle2, Clock, Layers, PackageX, Tag, Truck } from "lucide-react"
 import { useRefundsQuery, useRestockQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
+import { DataNotice } from "@/components/common/DataNotice"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import {
   FilterField,
@@ -116,22 +117,17 @@ export function RefundsView() {
   return (
     <div className="space-y-4">
       {(!report || report.error || report.missingTab) && (
-        <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังอ่านแท็บ "ได้เงินคืนแล้ว-พัสดุหาย" จากชีต gv-returns-sync ไม่ได้</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!report ? "ยังไม่มีข้อมูลนี้ใน payload — รอระบบหลังบ้านอัปเดต" : report.error ? `สาเหตุ: ${report.error}` : `ไม่พบแท็บ: ${report.missingTab}`}
-            </p>
-          </div>
-        </div>
+        <DataNotice
+          title="ยังอ่านข้อมูลพัสดุสูญหาย/เงินคืนไม่ได้"
+          detail={!report ? "ยังไม่มีข้อมูลส่วนนี้ใน payload" : report.error ? `สาเหตุ: ${report.error}` : `ไม่พบแท็บ: ${report.missingTab}`}
+        />
       )}
 
       <div>
         <h2 className="page-heading text-lg font-extrabold text-foreground">พัสดุสูญหาย / ตีกลับ — ได้เงินคืนหรือยัง</h2>
         <p className="text-xs text-muted-foreground">
-          ตามแท็บ "ได้เงินคืนแล้ว-พัสดุหาย" ของชีต gv-returns-sync · ทีมคลังบันทึกใน BigSeller ด้วยข้อความหรือป้ายสี · เลขพัสดุคืนมาจากแท็บ cn-restock ·
-          ชื่อขนส่งดูจากรูปแบบเลขพัสดุคืน (ไม่ใช่ข้อมูลที่ BigSeller ส่งมา) · กดการ์ดสถานะเพื่อกรอง
+          ทีมคลังบันทึกใน BigSeller ด้วยข้อความหรือป้ายสี · ชื่อขนส่งดูจากรูปแบบเลขพัสดุคืน (ไม่ใช่ข้อมูลที่ BigSeller ส่งมา) · กดการ์ดสถานะเพื่อกรอง ·
+          ที่มา: ชีต gv-returns-sync แท็บ "ได้เงินคืนแล้ว-พัสดุหาย" และ cn-restock
         </p>
       </div>
 

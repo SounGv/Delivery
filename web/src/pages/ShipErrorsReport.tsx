@@ -3,6 +3,7 @@ import { AlertTriangle, Download, Percent, ShieldCheck, Users } from "lucide-rea
 import { useDashboardQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
+import { DataNotice } from "@/components/common/DataNotice"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { downloadCsv } from "@/lib/csv"
 import { formatMonthLabel } from "@/lib/format"
@@ -64,16 +65,11 @@ export function ShipErrorsReport() {
   return (
     <div className="space-y-4">
       {!hasErrorData && (
-        <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังไม่พบข้อมูลจากชีท "ข้อผิดพลาด / ออเดอร์ส่งผิด"</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              ระบบอ่านชีทข้อผิดพลาดแบบ read-only (คอลัมน์ วันที่ / ชื่อ / เลขที่ PO / SKU ที่ผิด / จำนวนผิด / SKU ที่ถูก / จำนวนถูก / หมายเหตุ)
-              แต่ API ยังไม่ส่งข้อมูลนี้มา — ต้องอัปเดต Apps Script (SheetParser.js เวอร์ชันใหม่ที่อ่านชีทข้อผิดพลาดแล้ว) แล้ว Deploy → New version
-            </p>
-          </div>
-        </div>
+        <DataNotice
+          title='ยังไม่พบข้อมูลจากชีต "ข้อผิดพลาด / ออเดอร์ส่งผิด"'
+          body="หน้านี้อ่านชีตอย่างเดียว (คอลัมน์ วันที่ / ชื่อ / เลขที่ PO / SKU ที่ผิด / จำนวนผิด / SKU ที่ถูก / จำนวนถูก / หมายเหตุ) ถ้าทีมกรอกแล้วแต่ยังไม่ขึ้น ลองรีเฟรชหน้านี้ หรือแจ้งผู้ดูแลระบบ"
+          detail="API ยังไม่ส่งข้อมูลส่วนนี้ (ต้องอัปเดต/deploy Apps Script เวอร์ชันที่อ่านชีตข้อผิดพลาด)"
+        />
       )}
 
       <div className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">

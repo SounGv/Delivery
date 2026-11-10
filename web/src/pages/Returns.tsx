@@ -20,7 +20,7 @@ export function Returns() {
       items={[
         {
           key: "restock",
-          label: withCount("ค้างตามชีต gv-returns-sync", restockData?.restock?.rows.length),
+          label: withCount("ของคืน/ตีกลับที่ค้าง", restockData?.restock?.rows.length),
           icon: PackageSearch,
           render: () => <RestockView key="restock" />,
         },

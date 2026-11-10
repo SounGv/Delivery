@@ -32,7 +32,7 @@ export function DataPendingPage({ title, purpose, needs }: DataPendingPageProps)
           </ul>
         </div>
         <p className="mt-4 text-[11px] text-muted-foreground">
-          เมื่อเพิ่มข้อมูลในชีทและอัปเดต Apps Script (mapping layer) แล้ว หน้านี้จะคำนวณและแสดงผลจากข้อมูลจริงทันที — ไม่มีการใส่ข้อมูลจำลอง
+          เมื่อทีมเพิ่มข้อมูลในชีตแล้ว หน้านี้จะแสดงผลจากข้อมูลจริงทันที — ไม่มีการใส่ข้อมูลจำลอง
         </p>
       </div>
     </div>

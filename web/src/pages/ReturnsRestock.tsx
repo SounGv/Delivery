@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Banknote, CalendarClock, CheckCircle2, Clock, Layers, PackageSearch, PackageX, Truck, XCircle } from "lucide-react"
+import { Banknote, CalendarClock, CheckCircle2, Clock, Layers, PackageSearch, PackageX, Truck, XCircle } from "lucide-react"
 import { useRestockQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
+import { DataNotice } from "@/components/common/DataNotice"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import {
   FilterField,
@@ -141,21 +142,16 @@ export function RestockView() {
   return (
     <div className="space-y-4">
       {(!report || report.error || report.missingTab) && (
-        <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังอ่านแท็บ cn-restock จากชีต gv-returns-sync ไม่ได้</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!report ? "ยังไม่มีข้อมูลนี้ใน payload — รอระบบหลังบ้านอัปเดต" : report.error ? `สาเหตุ: ${report.error}` : `ไม่พบแท็บ: ${report.missingTab}`}
-            </p>
-          </div>
-        </div>
+        <DataNotice
+          title="ยังอ่านข้อมูลของคืน/ตีกลับไม่ได้"
+          detail={!report ? "ยังไม่มีข้อมูลส่วนนี้ใน payload" : report.error ? `สาเหตุ: ${report.error}` : `ไม่พบแท็บ: ${report.missingTab}`}
+        />
       )}
 
       <div>
         <h2 className="page-heading text-lg font-extrabold text-foreground">ของคืน/ตีกลับ ที่ยังไม่เข้าสต็อกครบ</h2>
         <p className="text-xs text-muted-foreground">
-          ตามแท็บ "cn-restock" ของชีต gv-returns-sync · รวมออเดอร์ที่ยกเลิกและเคสตีกลับ · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง
+          รวมออเดอร์ที่ยกเลิกและเคสตีกลับ · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง · ที่มา: ชีต gv-returns-sync แท็บ "cn-restock"
         </p>
       </div>
 

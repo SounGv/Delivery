@@ -17,6 +17,7 @@ import { useFocusQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { ExportButton } from "@/components/common/ExportButton"
+import { DataNotice } from "@/components/common/DataNotice"
 import {
   FilterField,
   ListToolbar,
@@ -92,25 +93,22 @@ export function Backlog() {
   return (
     <div className="space-y-4">
       {(!report || report.error || report.missingTab) && (
-        <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังอ่านหน้างานค้างจากชีต gv-returns-sync ไม่ได้</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!report
-                ? "ยังไม่มีข้อมูลนี้ใน payload — รอระบบหลังบ้านอัปเดต (deploy Apps Script เวอร์ชันล่าสุด)"
-                : report.error
-                  ? `สาเหตุ: ${report.error}`
-                  : `ไม่พบแท็บ: ${report.missingTab}`}
-            </p>
-          </div>
-        </div>
+        <DataNotice
+          title="ยังอ่านข้อมูลงานค้างไม่ได้"
+          detail={
+            !report
+              ? 'ยังไม่มีข้อมูลส่วนนี้ใน payload (ต้อง deploy Apps Script เวอร์ชันล่าสุด)'
+              : report.error
+                ? `สาเหตุ: ${report.error}`
+                : `ไม่พบแท็บ: ${report.missingTab}`
+          }
+        />
       )}
 
       <div>
         <h2 className="page-heading text-xl font-extrabold text-foreground">งานค้างที่ต้องตาม</h2>
         <p className="text-xs text-muted-foreground">
-          งานยกเลิก/ตีกลับ/ของคืนที่ยังค้าง แยกเป็นคิวตามแท็บ "โฟกัสทีม-งานค้าง" ของชีต gv-returns-sync · แถวจะหายเองเมื่อจัดการเสร็จ (ไม่มีช่องให้กรอกในหน้านี้)
+          งานยกเลิก/ตีกลับ/ของคืนที่ยังค้าง แยกเป็นคิวงาน · แถวจะหายเองเมื่อจัดการเสร็จ (หน้านี้ไม่มีช่องให้กรอก) · ที่มา: ชีต gv-returns-sync แท็บ "โฟกัสทีม-งานค้าง"
         </p>
       </div>
 
@@ -300,7 +298,7 @@ function BacklogView({ rows, summary }: { rows: BacklogRow[]; summary?: BacklogQ
 
       <p className="px-1 text-xs text-muted-foreground">
         แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ (ทั้งหมด {num(rows.length)}) · มูลค่าที่แสดง{" "}
-        {baht(sumValueBaht(filtered))} บาท · เรียงจากค้างนานสุด · แถวจากรายงาน cn-restock ไม่มีวันที่เริ่มเรื่อง จึงไม่มีจำนวนวันค้าง
+        {baht(sumValueBaht(filtered))} บาท · เรียงจากค้างนานสุด · แถวของคืน/ตีกลับไม่มีวันที่เริ่มเรื่อง จึงไม่มีจำนวนวันค้าง
       </p>
 
       <div className="space-y-2.5">

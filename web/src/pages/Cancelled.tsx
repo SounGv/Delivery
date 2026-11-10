@@ -5,6 +5,7 @@ import { useCancelledQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { ExportButton } from "@/components/common/ExportButton"
+import { DataNotice } from "@/components/common/DataNotice"
 import { ChartCard } from "@/components/charts/ChartCard"
 import { EChart } from "@/components/charts/EChart"
 import {
@@ -106,19 +107,16 @@ export function Cancelled() {
 export function CancelledWarning({ report }: { report: CancelledOrdersReport | null }) {
   if (report && !report.error && report.missingTabs.length === 0) return null
   return (
-    <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-      <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-      <div className="text-sm">
-        <p className="font-semibold text-foreground">ยังอ่านข้อมูลสินค้ายกเลิกจากชีต gv-returns-sync ไม่ได้</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {!report
-            ? "ยังไม่มีข้อมูลนี้ใน payload — รอระบบหลังบ้านอัปเดต (deploy Apps Script เวอร์ชันล่าสุด)"
-            : report.error
-              ? `สาเหตุ: ${report.error} — ตรวจว่าบัญชีที่ deploy Web App มีสิทธิ์เข้าถึงไฟล์ gv-returns-sync`
-              : `ไม่พบแท็บ: ${report.missingTabs.join(", ")}`}
-        </p>
-      </div>
-    </div>
+    <DataNotice
+      title="ยังอ่านข้อมูลสินค้ายกเลิกไม่ได้"
+      detail={
+        !report
+          ? "ยังไม่มีข้อมูลส่วนนี้ใน payload (ต้อง deploy Apps Script เวอร์ชันล่าสุด)"
+          : report.error
+            ? `สาเหตุ: ${report.error} — ตรวจว่าบัญชีที่ deploy Web App เข้าถึงไฟล์ gv-returns-sync ได้`
+            : `ไม่พบแท็บ: ${report.missingTabs.join(", ")}`
+      }
+    />
   )
 }
 
@@ -251,7 +249,7 @@ export function CancelledView({
         <div>
           <h2 className="page-heading text-lg font-extrabold text-foreground">ยกเลิก · {kindLabel}</h2>
           <p className="text-xs text-muted-foreground">
-            {description} · ข้อมูลจากชีต gv-returns-sync · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง
+            {description} · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง · ที่มา: ชีต gv-returns-sync
           </p>
         </div>
         {donePct !== null && (
