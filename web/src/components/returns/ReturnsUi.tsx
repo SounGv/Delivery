@@ -239,8 +239,10 @@ export const filterSelectClass =
 
 export function chipClass(active: boolean) {
   return cn(
-    "rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors",
-    active ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-muted"
+    "rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all",
+    active
+      ? "bg-primary text-primary-foreground -translate-y-px shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"
+      : "border border-border bg-card text-muted-foreground shadow-[0_2px_6px_-3px_rgba(43,168,162,0.5)] hover:-translate-y-px hover:bg-muted hover:text-foreground"
   )
 }
 

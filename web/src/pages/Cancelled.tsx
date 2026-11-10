@@ -249,7 +249,7 @@ export function CancelledView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-lg font-extrabold text-foreground">ยกเลิก · {kindLabel}</h2>
+          <h2 className="page-heading text-lg font-extrabold text-foreground">ยกเลิก · {kindLabel}</h2>
           <p className="text-xs text-muted-foreground">
             {description} · ข้อมูลจากชีต gv-returns-sync · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง
           </p>

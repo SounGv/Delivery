@@ -183,6 +183,61 @@
     padding-bottom: 0.75rem;
   }
 
+  /* Page and section headings: a glowing teal accent bar on the left plus a soft lift under the
+     text, so every title reads as a raised heading instead of flat bold text. */
+  .page-heading {
+    position: relative;
+    padding-left: 0.95rem;
+    letter-spacing: 0.01em;
+    text-shadow:
+      0 1px 0 color-mix(in srgb, var(--card) 85%, transparent),
+      0 6px 16px color-mix(in srgb, var(--color-brand-500) 16%, transparent);
+  }
+  .page-heading::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.2em;
+    bottom: 0.2em;
+    width: 5px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--color-brand-400), var(--color-brand-700));
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-brand-500) 55%, transparent);
+  }
+
+  /* Round icon buttons in the top bar: a raised disc that sinks when pressed. */
+  .btn-raised {
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--card), color-mix(in srgb, var(--color-brand-500) 7%, var(--card)));
+    border: 1px solid var(--border);
+    box-shadow:
+      0 3px 8px color-mix(in srgb, var(--color-brand-500) 18%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn-raised:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 8px 16px color-mix(in srgb, var(--color-brand-500) 28%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+  .btn-raised:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 2px 5px color-mix(in srgb, var(--color-brand-700) 25%, transparent);
+  }
+
+  /* Side menu surface: the card colour fading into a faint teal at the bottom. */
+  .sidebar-surface {
+    background: linear-gradient(180deg, var(--card) 0%, color-mix(in srgb, var(--color-brand-500) 9%, var(--card)) 100%);
+    box-shadow: 8px 0 30px -18px color-mix(in srgb, var(--color-brand-500) 55%, transparent);
+  }
+
+  /* Top bar: same card colour with a teal lift underneath. */
+  .topbar-surface {
+    background: linear-gradient(180deg, var(--card), color-mix(in srgb, var(--color-brand-500) 5%, var(--card)));
+    box-shadow: 0 12px 28px -20px color-mix(in srgb, var(--color-brand-500) 60%, transparent);
+  }
+
   .rdp-theme {
     --rdp-accent-color: var(--color-brand-500);
     --rdp-accent-background-color: color-mix(in srgb, var(--color-brand-500) 22%, transparent);

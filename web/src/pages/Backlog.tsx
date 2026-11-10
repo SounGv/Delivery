@@ -108,7 +108,7 @@ export function Backlog() {
       )}
 
       <div>
-        <h2 className="text-xl font-extrabold text-foreground">งานค้างที่ต้องตาม</h2>
+        <h2 className="page-heading text-xl font-extrabold text-foreground">งานค้างที่ต้องตาม</h2>
         <p className="text-xs text-muted-foreground">
           งานยกเลิก/ตีกลับ/ของคืนที่ยังค้าง แยกเป็นคิวตามแท็บ "โฟกัสทีม-งานค้าง" ของชีต gv-returns-sync · แถวจะหายเองเมื่อจัดการเสร็จ (ไม่มีช่องให้กรอกในหน้านี้)
         </p>
@@ -156,7 +156,7 @@ export function Backlog() {
       )}
 
       <div>
-        <h2 className="text-lg font-extrabold text-foreground">เลือกคิวงาน</h2>
+        <h2 className="page-heading text-lg font-extrabold text-foreground">เลือกคิวงาน</h2>
         <p className="text-xs text-muted-foreground">สีบอกความเร่งด่วน ดูจากเรื่องที่ค้างนานสุดในคิว: แดง = เกิน 14 วัน · เหลือง = 4-14 วัน · เขียว = 0-3 วัน · กดการ์ดเพื่อดูรายการในคิว</p>
       </div>
 

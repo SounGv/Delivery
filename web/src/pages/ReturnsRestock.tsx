@@ -153,7 +153,7 @@ export function RestockView() {
       )}
 
       <div>
-        <h2 className="text-lg font-extrabold text-foreground">ของคืน/ตีกลับ ที่ยังไม่เข้าสต็อกครบ</h2>
+        <h2 className="page-heading text-lg font-extrabold text-foreground">ของคืน/ตีกลับ ที่ยังไม่เข้าสต็อกครบ</h2>
         <p className="text-xs text-muted-foreground">
           ตามแท็บ "cn-restock" ของชีต gv-returns-sync · รวมออเดอร์ที่ยกเลิกและเคสตีกลับ · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง
         </p>

@@ -29,14 +29,16 @@ export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: Head
   }, [])
 
   return (
-    <header className="glass-panel sticky top-0 z-10 flex items-center justify-between gap-4 rounded-none border-x-0 border-t-0 px-4 py-2 md:px-6">
+    <header className="glass-panel topbar-surface sticky top-0 z-10 flex items-center justify-between gap-4 rounded-none border-x-0 border-t-0 px-4 py-2.5 md:px-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <h1 className="truncate text-base font-semibold text-foreground md:text-lg">Warehouse Dashboard Pro</h1>
           <span
             className={cn(
-              "hidden items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium sm:inline-flex",
-              isConnected ? "bg-emerald-glow/15 text-emerald-glow" : "bg-destructive/15 text-destructive"
+              "hidden items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold sm:inline-flex",
+              isConnected
+                ? "bg-emerald-glow/15 text-emerald-glow shadow-[0_0_14px_rgba(39,174,96,0.35)] ring-1 ring-emerald-glow/30"
+                : "bg-destructive/15 text-destructive ring-1 ring-destructive/30"
             )}
           >
             <span className={cn("size-1.5 rounded-full", isConnected ? "bg-emerald-glow animate-pulse" : "bg-destructive")} />
@@ -49,20 +51,20 @@ export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: Head
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" size="icon-sm" onClick={onRefresh} aria-label="Refresh">
-          <RefreshCw className={cn("size-4", isFetching && "animate-spin")} />
+      <div className="flex shrink-0 items-center gap-2">
+        <Button variant="ghost" size="icon-sm" className="btn-raised" onClick={onRefresh} aria-label="Refresh">
+          <RefreshCw className={cn("size-4 text-primary", isFetching && "animate-spin")} />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={toggleTheme} aria-label="Toggle theme">
-          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        <Button variant="ghost" size="icon-sm" className="btn-raised" onClick={toggleTheme} aria-label="Toggle theme">
+          {theme === "dark" ? <Sun className="size-4 text-primary" /> : <Moon className="size-4 text-primary" />}
         </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Notifications">
-          <Bell className="size-4" />
+        <Button variant="ghost" size="icon-sm" className="btn-raised" aria-label="Notifications">
+          <Bell className="size-4 text-primary" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="User menu">
-              <UserCircle className="size-5" />
+            <Button variant="ghost" size="icon-sm" className="btn-raised" aria-label="User menu">
+              <UserCircle className="size-5 text-primary" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

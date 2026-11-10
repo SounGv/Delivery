@@ -92,15 +92,15 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
     <motion.aside
       animate={{ width: collapsed ? 76 : 240 }}
       transition={{ type: "spring", stiffness: 260, damping: 28 }}
-      className="glass-panel sticky top-0 z-20 hidden h-svh flex-col justify-between rounded-r-2xl border-y-0 border-l-0 py-4 md:flex"
+      className="glass-panel sidebar-surface sticky top-0 z-20 hidden h-svh flex-col justify-between rounded-r-2xl border-y-0 border-l-0 py-4 md:flex"
     >
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className={cn("flex items-center gap-2 px-4 pb-6", collapsed && "justify-center px-0")}>
           {logoDataUrl ? (
             <img src={logoDataUrl} alt="Company logo" className="size-9 shrink-0 rounded-xl object-cover" />
           ) : (
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-emerald-glow shadow-lg shadow-brand-600/30">
-              <Warehouse className="size-5 text-white" />
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-emerald-glow shadow-[0_10px_22px_-8px_rgba(43,168,162,0.85)] ring-1 ring-white/30">
+              <Warehouse className="size-5 text-white drop-shadow" />
             </div>
           )}
           {!collapsed && (
@@ -111,15 +111,16 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           )}
         </div>
 
-        <nav className="flex flex-col gap-0.5 px-3">
+        <nav className="flex flex-col gap-1 px-3">
           {NAV_GROUPS.map((group) => (
-            <div key={group.section} className="mb-2">
+            <div key={group.section} className="mb-2 flex flex-col gap-1">
               {!collapsed ? (
-                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-muted-foreground/70">
+                <p className="flex items-center gap-2 px-3 pt-2 pb-1 text-[11px] font-bold tracking-wide text-muted-foreground">
                   {group.section}
+                  <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" aria-hidden />
                 </p>
               ) : (
-                <div className="mx-3 my-2 border-t border-white/5" />
+                <div className="mx-3 my-2 border-t border-border" />
               )}
               {group.items.map((item) => {
                 const Icon = item.icon
@@ -130,16 +131,26 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
                     type="button"
                     disabled={!item.enabled}
                     onClick={() => item.enabled && onNavigate(item.key)}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                      "group relative flex w-full items-center gap-3 rounded-2xl px-2 py-1.5 text-sm font-semibold transition-all duration-200",
                       collapsed && "justify-center px-0",
                       isActive
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                      !item.enabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground"
+                        ? "bg-gradient-to-r from-[#17706b] to-[#1a7f79] text-white shadow-[0_12px_24px_-10px_rgba(23,112,107,0.9),inset_0_1px_0_rgba(255,255,255,0.28)] ring-1 ring-white/15"
+                        : "text-foreground/80 hover:-translate-y-px hover:bg-accent hover:text-foreground hover:shadow-[0_8px_18px_-12px_rgba(43,168,162,0.7)]",
+                      !item.enabled && "cursor-not-allowed opacity-40 hover:translate-y-0 hover:bg-transparent hover:shadow-none"
                     )}
                   >
-                    <Icon className="size-[18px] shrink-0" />
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-xl transition-colors",
+                        isActive
+                          ? "bg-white/20 text-white shadow-inner"
+                          : "bg-muted text-primary shadow-[0_2px_5px_rgba(43,168,162,0.18),inset_0_1px_0_rgba(255,255,255,0.4)] group-hover:bg-card"
+                      )}
+                    >
+                      <Icon className="size-[18px]" />
+                    </span>
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </button>
                 )
@@ -161,7 +172,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+          className="btn-raised flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
         >
           {collapsed ? <ChevronsRight className="size-[18px]" /> : <ChevronsLeft className="size-[18px]" />}
           {!collapsed && <span>Collapse</span>}

@@ -128,7 +128,7 @@ export function RefundsView() {
       )}
 
       <div>
-        <h2 className="text-lg font-extrabold text-foreground">พัสดุสูญหาย / ตีกลับ — ได้เงินคืนหรือยัง</h2>
+        <h2 className="page-heading text-lg font-extrabold text-foreground">พัสดุสูญหาย / ตีกลับ — ได้เงินคืนหรือยัง</h2>
         <p className="text-xs text-muted-foreground">
           ตามแท็บ "ได้เงินคืนแล้ว-พัสดุหาย" ของชีต gv-returns-sync · ทีมคลังบันทึกใน BigSeller ด้วยข้อความหรือป้ายสี · เลขพัสดุคืนมาจากแท็บ cn-restock ·
           ชื่อขนส่งดูจากรูปแบบเลขพัสดุคืน (ไม่ใช่ข้อมูลที่ BigSeller ส่งมา) · กดการ์ดสถานะเพื่อกรอง
