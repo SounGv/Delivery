@@ -88,6 +88,10 @@ export interface OverviewHeroProps {
   targetLabel?: string
   sales: { net: number; monthLabel: string; note?: string } | null
   stockTotal: number | null
+  /** Crews to switch between; a single entry hides the switch. */
+  teams: { key: string; label: string }[]
+  selectedTeam: string
+  onSelectTeam: (key: string) => void
   onOpenTeam: () => void
   onOpenSales: () => void
   onOpenStock: () => void
@@ -127,6 +131,30 @@ export function OverviewHero(p: OverviewHeroProps) {
           </div>
           <h1 className="mt-4 text-3xl font-extrabold tracking-wide drop-shadow-md sm:text-4xl">ภาพรวมทีมคลัง</h1>
           <p className="mt-1 text-sm text-white/85">ฝ่าย{p.teamLabel} · พนักงานที่ทำงานวันนี้ {num(p.activeEmployees)} คน</p>
+
+          {p.teams.length > 1 && (
+            <div role="group" aria-label="เลือกฝ่ายที่แสดง" className="mt-4 inline-flex rounded-full bg-black/25 p-1 shadow-inner ring-1 ring-white/15">
+              {p.teams.map((t) => {
+                const active = t.key === p.selectedTeam
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => p.onSelectTeam(t.key)}
+                    className={cn(
+                      "rounded-full px-4 py-1.5 text-sm font-extrabold transition-all",
+                      active
+                        ? "bg-white text-[#0b3a37] shadow-[0_6px_14px_-6px_rgba(0,0,0,0.6)]"
+                        : "text-white/85 hover:bg-white/10 hover:text-white"
+                    )}
+                  >
+                    ฝ่าย{t.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           <div className="mt-5">
             {p.needAction > 0 ? (

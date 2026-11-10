@@ -37,6 +37,17 @@ export function latestOutputDate(employees: Employee[]): string | null {
   return latest
 }
 
+/** The latest date before `data.todayDate` on which the (scoped) crew had output — what "compared with the day
+ * before" should mean: a Sunday with no work is not a day to compare against (it made +100% out of any Monday). */
+export function previousOutputDate(data: DashboardResponse): string | null {
+  const dates = [...data.dates].sort()
+  for (let i = dates.indexOf(data.todayDate) - 1; i >= 0; i--) {
+    const t = data.teamTotalsByDate[dates[i]!]
+    if (t && (t.parcels > 0 || t.items > 0)) return dates[i]!
+  }
+  return null
+}
+
 /** True when the payload actually distinguishes an offline crew — lets the UI hide
  * the team switcher entirely on older payloads (pre-parser-split) where everyone is online. */
 export function hasOfflineTeam(employees: Employee[]): boolean {

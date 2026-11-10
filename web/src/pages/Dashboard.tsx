@@ -14,7 +14,6 @@ import {
   FileText,
   ListChecks,
   Minus,
-  PackageCheck,
   PackageOpen,
   PackagePlus,
   PackageX,
@@ -22,7 +21,16 @@ import {
   Users,
   Warehouse,
 } from "lucide-react"
-import { useCancelledQuery, useFocusQuery, useRefundsQuery, useRestockQuery, useStockValueQuery, useTeamDashboard } from "@/api/queries"
+import {
+  useCancelledQuery,
+  useCrewDashboards,
+  useFocusQuery,
+  useRefundsQuery,
+  useRestockQuery,
+  useStockValueQuery,
+  useTeamDashboard,
+  type ScopedDashboard,
+} from "@/api/queries"
 import type { Employee } from "@/api/types"
 import { useEmployeeDetail } from "@/lib/employeeDetailStore"
 import { StatusPill, type Tone } from "@/components/returns/ReturnsUi"
@@ -64,6 +72,7 @@ import {
   getTeamTotalForDate,
   monthKeyOf,
   percentChange,
+  previousOutputDate,
 } from "@/lib/dashboard-selectors"
 
 // ECharts pulls in a large canvas-rendering library; split it into its own
@@ -220,6 +229,102 @@ function Collapsible({ title, caption, children }: { title: string; caption: str
   )
 }
 
+interface CrewSummary {
+  date: string
+  parcels: number
+  items: number
+  active: number
+  headcount: number
+  parcelTrend: number | null
+  targetPct: number | null
+  targetLabel?: string
+}
+
+/** The numbers shown on one crew's card, computed from that crew's own scoped payload. */
+function summarizeCrew(scoped: ScopedDashboard): CrewSummary {
+  const today = getTeamTotalForDate(scoped, scoped.todayDate)
+  const prevDate = previousOutputDate(scoped)
+  const prev = prevDate ? getTeamTotalForDate(scoped, prevDate) : null
+  return {
+    date: scoped.todayDate,
+    parcels: today.parcels,
+    items: today.items,
+    active: today.activeEmployees,
+    headcount: scoped.employees.length,
+    parcelTrend: prev ? percentChange(today.parcels, prev.parcels) : null,
+    targetPct: getTargetAchievementPercent(scoped),
+    targetLabel: scoped.target?.label,
+  }
+}
+
+function CrewCard({
+  label,
+  summary,
+  selected,
+  onSelect,
+  onOpen,
+}: {
+  label: string
+  summary: CrewSummary
+  selected: boolean
+  onSelect: () => void
+  onOpen: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        "glass-panel relative overflow-hidden rounded-2xl p-5 transition-shadow",
+        selected && "shadow-[0_18px_40px_-22px_rgba(43,168,162,0.85)] ring-2 ring-primary"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 text-base font-extrabold text-foreground">
+            <Users className="size-4 text-primary" /> ฝ่าย{label}
+            {selected && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">แสดงในหน้านี้</span>}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            ข้อมูลล่าสุด {formatDateLabel(summary.date)} · ทำงาน {num(summary.active)}/{num(summary.headcount)} คน
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="btn-raised inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs font-bold text-foreground"
+        >
+          เปิดฝ่าย <ArrowRight className="size-3.5" />
+        </button>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-4xl font-extrabold leading-none tabular-nums text-foreground">
+            <AnimatedValue value={summary.parcels} />
+            <span className="ml-2 text-sm font-semibold text-muted-foreground">พัสดุ</span>
+          </p>
+          <div className="mt-2.5">
+            <TrendPill value={summary.parcelTrend} label="เทียบวันทำงานก่อน" />
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            ชิ้นงาน <b className="tabular-nums text-foreground"><AnimatedValue value={summary.items} /></b> ชิ้น
+          </p>
+        </div>
+        <TargetRing percent={summary.targetPct} label={summary.targetLabel} size={92} />
+      </div>
+
+      {!selected && (
+        <button
+          type="button"
+          onClick={onSelect}
+          className="mt-4 w-full rounded-full border border-border bg-card py-2 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted"
+        >
+          ดูพนักงานและเรื่องต้องตามของฝ่ายนี้ด้านล่าง
+        </button>
+      )}
+    </div>
+  )
+}
+
 const FOLLOW_UP_LIMIT = 8
 const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`
 const num = (n: number) => n.toLocaleString("th-TH")
@@ -316,7 +421,8 @@ function DepartmentCard({ summary, goTo, icon: Icon }: { summary: RwDepartmentSu
 
 export function Dashboard() {
   const { data, isLoading, isError, error } = useTeamDashboard()
-  const { targetOverride, selectedTeam } = useSettings()
+  const { targetOverride, selectedTeam, setSelectedTeam } = useSettings()
+  const crews = useCrewDashboards()
   const otConfig = useOtConfig()
   const { openEmployeeDetail } = useEmployeeDetail()
   const navigate = useNavigate()
@@ -374,15 +480,12 @@ export function Dashboard() {
     return <ErrorPanel message={error instanceof Error ? error.message : "Unknown error"} />
   }
 
-  // "Today" and the previous date that actually has data, for day-over-day trends.
-  const sortedDates = [...data.dates].sort()
-  const todayIdx = sortedDates.indexOf(data.todayDate)
-  const prevDate = todayIdx > 0 ? sortedDates[todayIdx - 1] : null
+  // The previous working day (one that has output), for day-over-day trends.
+  const prevDate = previousOutputDate(data)
 
   const today = getTeamTotalForDate(data, data.todayDate)
   const prev = prevDate ? getTeamTotalForDate(data, prevDate) : null
   const parcelTrend = prev ? percentChange(today.parcels, prev.parcels) : null
-  const itemTrend = prev ? percentChange(today.items, prev.items) : null
 
   const monthKey = monthKeyOf(data.todayDate)
   const monthDates = datesInMonth(data.dates, monthKey)
@@ -397,6 +500,7 @@ export function Dashboard() {
 
   const belowTargetCount = followUpRows.filter((r) => r.status === "below-target").length
   const teamLabel = TEAM_LABELS[selectedTeam]
+  const crewKeys = (["online", "offline"] as const).filter((t) => crews[t])
 
   // ---- "ต้องตามวันนี้": one number per menu, read from the same sheets that menu shows. null = could not be read.
   const focus = focusQuery.data?.focus
@@ -528,6 +632,9 @@ export function Dashboard() {
             : null
         }
         stockTotal={stockSnapshot ? stockSnapshot.total : null}
+        teams={crewKeys.map((t) => ({ key: t, label: TEAM_LABELS[t] }))}
+        selectedTeam={selectedTeam}
+        onSelectTeam={(key) => setSelectedTeam(key as "online" | "offline")}
         onOpenTeam={() => navigate(`team-${selectedTeam}`)}
         onOpenSales={() => navigate("sales-summary")}
         onOpenStock={() => navigate("stock-value")}
@@ -541,38 +648,22 @@ export function Dashboard() {
           </Section>
         </div>
         <div className="col-span-12 lg:col-span-5">
-          <Section title={`ผลงานวันนี้ · ฝ่าย${teamLabel}`} goTo={`team-${selectedTeam}`} goLabel="เปิดฝ่าย">
-            <div className="glass-panel rounded-2xl p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground">
-                    <PackageCheck className="size-4" /> พัสดุที่ทำได้ · {formatDateLabel(data.todayDate)}
-                  </p>
-                  <p className="mt-1 text-5xl font-extrabold leading-none tabular-nums text-foreground">
-                    <AnimatedValue value={today.parcels} />
-                    <span className="ml-2 text-base font-semibold text-muted-foreground">พัสดุ</span>
-                  </p>
-                  <div className="mt-3">
-                    <TrendPill value={parcelTrend} label="เทียบวันก่อน" />
-                  </div>
-                </div>
-                <TargetRing percent={targetPct} label={targetLabel} size={116} />
-              </div>
-              <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-dashed border-border pt-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">ชิ้นงานวันนี้</dt>
-                  <dd className="text-xl font-extrabold tabular-nums text-foreground">
-                    <AnimatedValue value={today.items} /> <span className="text-sm font-semibold text-muted-foreground">ชิ้น</span>
-                  </dd>
-                  <dd className="mt-1"><TrendPill value={itemTrend} label="เทียบวันก่อน" /></dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">พนักงานที่ทำงาน</dt>
-                  <dd className="text-xl font-extrabold tabular-nums text-foreground">
-                    <AnimatedValue value={today.activeEmployees} /> <span className="text-sm font-semibold text-muted-foreground">คน</span>
-                  </dd>
-                </div>
-              </dl>
+          <Section title="ผลงานวันนี้ · แยกตามฝ่าย" caption="วันล่าสุดที่แต่ละฝ่ายมียอดจริง · กดการ์ดเพื่อดูรายละเอียดของฝ่ายนั้นในหน้านี้">
+            <div className="space-y-3">
+              {crewKeys.map((t) => {
+                const scoped = crews[t]
+                if (!scoped) return null
+                return (
+                  <CrewCard
+                    key={t}
+                    label={TEAM_LABELS[t]}
+                    summary={summarizeCrew(scoped)}
+                    selected={selectedTeam === t}
+                    onSelect={() => setSelectedTeam(t)}
+                    onOpen={() => navigate(`team-${t}`)}
+                  />
+                )
+              })}
             </div>
           </Section>
         </div>

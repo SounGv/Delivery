@@ -12,6 +12,7 @@ import type {
   RefundsPart,
   RestockPart,
   StockValuePart,
+  TeamId,
   WorkPerformancePart,
 } from "./types"
 
@@ -92,36 +93,56 @@ export type UseTeamDashboardResult = Omit<UseQueryResult<DashboardResponse, Erro
   data: ScopedDashboard | undefined
 }
 
+/** The dashboard payload scoped to one crew: its employees, its own "today" (latest day with output),
+ * its totals, month totals and target. */
+function scopeDashboard(raw: DashboardResponse, team: TeamId, targetOverride: number | null): ScopedDashboard {
+  const employees = employeesForTeam(raw.employees, team)
+  const teamTotalsByDate = computeTeamTotalsByDate(employees, raw.dates)
+  // "Today" for this crew: its own latest day with output (see latestOutputDate), not the all-crew one.
+  const todayDate = latestOutputDate(employees) ?? raw.todayDate
+  const monthKey = todayDate.slice(0, 7)
+  const monthlyTotals = raw.dates.reduce(
+    (acc, d) => {
+      const t = teamTotalsByDate[d]
+      if (!t || !d.startsWith(monthKey)) return acc
+      return { parcels: acc.parcels + t.parcels, items: acc.items + t.items }
+    },
+    { parcels: 0, items: 0 }
+  )
+  const teamTarget = raw.targetsByTeam?.[team] ?? (team === "online" ? raw.target : null)
+  // A "Target KPI" override in Settings wins over the sheet's target and applies
+  // everywhere at once, since every page reads its target from data.target — no
+  // page needs to know about the setting individually.
+  const target =
+    targetOverride != null ? { label: `เป้ากำหนดเอง: ${targetOverride}`, value: targetOverride } : teamTarget
+  return { ...raw, todayDate, employees, allEmployees: raw.employees, teamTotalsByDate, monthlyTotals, target }
+}
+
 export function useTeamDashboard(): UseTeamDashboardResult {
   const query = useDashboardQuery()
   const { selectedTeam, targetOverride } = useSettings()
   const raw = query.data
 
-  const data = useMemo<ScopedDashboard | undefined>(() => {
-    if (!raw) return undefined
-    const employees = employeesForTeam(raw.employees, selectedTeam)
-    const teamTotalsByDate = computeTeamTotalsByDate(employees, raw.dates)
-    // "Today" for this crew: its own latest day with output (see latestOutputDate), not the all-crew one.
-    const todayDate = latestOutputDate(employees) ?? raw.todayDate
-    const monthKey = todayDate.slice(0, 7)
-    const monthlyTotals = raw.dates.reduce(
-      (acc, d) => {
-        const t = teamTotalsByDate[d]
-        if (!t || !d.startsWith(monthKey)) return acc
-        return { parcels: acc.parcels + t.parcels, items: acc.items + t.items }
-      },
-      { parcels: 0, items: 0 }
-    )
-    const teamTarget = raw.targetsByTeam?.[selectedTeam] ?? (selectedTeam === "online" ? raw.target : null)
-    // A "Target KPI" override in Settings wins over the sheet's target and applies
-    // everywhere at once, since every page reads its target from data.target — no
-    // page needs to know about the setting individually.
-    const target =
-      targetOverride != null
-        ? { label: `เป้ากำหนดเอง: ${targetOverride}`, value: targetOverride }
-        : teamTarget
-    return { ...raw, todayDate, employees, allEmployees: raw.employees, teamTotalsByDate, monthlyTotals, target }
-  }, [raw, selectedTeam, targetOverride])
+  const data = useMemo<ScopedDashboard | undefined>(
+    () => (raw ? scopeDashboard(raw, selectedTeam, targetOverride) : undefined),
+    [raw, selectedTeam, targetOverride]
+  )
 
   return { ...query, data } as UseTeamDashboardResult
+}
+
+/** Both crews side by side, each scoped as in useTeamDashboard, for views that must show every crew at once
+ * (the overview) instead of only the one picked in the hidden "selected team" setting. A crew with no
+ * employees in the payload is left out. */
+export function useCrewDashboards(): Partial<Record<TeamId, ScopedDashboard>> {
+  const raw = useDashboardQuery().data
+  const { targetOverride } = useSettings()
+  return useMemo(() => {
+    if (!raw) return {}
+    const out: Partial<Record<TeamId, ScopedDashboard>> = {}
+    for (const team of ["online", "offline"] as const) {
+      if (employeesForTeam(raw.employees, team).length > 0) out[team] = scopeDashboard(raw, team, targetOverride)
+    }
+    return out
+  }, [raw, targetOverride])
 }
