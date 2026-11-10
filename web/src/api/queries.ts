@@ -1,7 +1,7 @@
 import { useMemo } from "react"
 import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query"
 import { fetchDashboard, fetchPayloadPart } from "./client"
-import { getRefreshIntervalMs } from "@/lib/settingsStorage"
+import { getRefreshIntervalMs, getSlowRefreshIntervalMs } from "@/lib/settingsStorage"
 import { useSettings } from "@/lib/settingsContext"
 import { computeTeamTotalsByDate, employeesForTeam } from "@/lib/dashboard-selectors"
 import type {
@@ -76,7 +76,7 @@ export function useStockValueQuery() {
     queryKey: ["stockValue"],
     queryFn: ({ signal }) => fetchPayloadPart<StockValuePart>("stockValue", signal),
     placeholderData: keepPreviousData,
-    refetchInterval: getRefreshIntervalMs(),
+    refetchInterval: getSlowRefreshIntervalMs(),
   })
 }
 

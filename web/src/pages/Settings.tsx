@@ -17,10 +17,10 @@ function SettingsSection({ title, description, children }: { title: string; desc
 }
 
 const REFRESH_OPTIONS = [
-  { ms: 5000, label: "5 วินาที" },
-  { ms: 10000, label: "10 วินาที" },
-  { ms: 30000, label: "30 วินาที" },
-  { ms: 60000, label: "1 นาที" },
+  { ms: 60_000, label: "1 นาที" },
+  { ms: 120_000, label: "2 นาที (แนะนำ)" },
+  { ms: 300_000, label: "5 นาที" },
+  { ms: 600_000, label: "10 นาที" },
 ]
 
 export function Settings() {
@@ -110,7 +110,7 @@ export function Settings() {
         {saved && <p className="mt-2 text-xs text-emerald-glow">บันทึกแล้ว กำลังโหลดหน้าใหม่...</p>}
       </SettingsSection>
 
-      <SettingsSection title="Refresh Interval" description="ความถี่ในการดึงข้อมูลใหม่จาก Google Sheets">
+      <SettingsSection title="Refresh Interval" description="ความถี่ในการดึงข้อมูลใหม่จาก Google Sheets · ข้อมูลฝั่งเซิร์ฟเวอร์ปรับใหม่ทุกไม่กี่นาที ตั้งถี่กว่านี้ไม่ทำให้ข้อมูลใหม่ขึ้นเร็วกว่าเดิม มูลค่าสต็อกดึงใหม่ทุก 15 นาที">
         <div className="flex flex-wrap gap-2">
           {REFRESH_OPTIONS.map((opt) => (
             <button
