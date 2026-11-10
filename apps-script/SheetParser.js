@@ -2295,6 +2295,15 @@ function loadRefundCases_() {
 }
 
 /**
+ * The team workbook the dashboard reads: "รายงานของทีม v2" (monthly team tabs, BigSeller order
+ * and store reports, ship errors, work issues). Opened by id instead of getActiveSpreadsheet()
+ * because this script project is bound to the older "รายงานของทีม" file, which stopped at
+ * 2026-09-30 for sales and 2026-11-03 for team output; v2 is the file the team keeps current.
+ * The deploying user must be able to open it (executeAs USER_DEPLOYING).
+ */
+var TEAM_REPORT_SOURCE_ID_ = '1j-hG_xI2aYzTlAJgrjqRQz88oxU6CASCQIfa_o2cMFk';
+
+/**
  * `part` picks which slice of the payload to build (see PAYLOAD_PARTS_ in Code.js):
  * 'core' (default) = everything except the separate parts below, 'cancelled',
  * 'workPerformance', 'focus', 'restock'. The separate parts carry their own `todayDate`
@@ -2303,7 +2312,7 @@ function loadRefundCases_() {
  */
 function buildDashboardPayload_(part) {
   part = part || 'core';
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.openById(TEAM_REPORT_SOURCE_ID_);
   var tz = ss.getSpreadsheetTimeZone();
   var calendarToday = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
