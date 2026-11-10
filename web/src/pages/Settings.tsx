@@ -95,9 +95,10 @@ export function Settings() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 max-sm:[&_button]:min-h-10 max-sm:[&_input]:min-h-10 lg:grid-cols-2">
       <SettingsSection title="Google Apps Script URL" description="ที่อยู่ Web App ที่ deploy ไว้บนชีทของทีม">
         <input
+          aria-label="Google Apps Script URL"
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
           placeholder="https://script.google.com/macros/s/XXXX/exec"
@@ -160,7 +161,7 @@ export function Settings() {
               </Button>
             )}
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+          <input ref={fileInputRef} type="file" accept="image/*" aria-label="เลือกไฟล์โลโก้" onChange={handleLogoChange} className="hidden" />
         </div>
       </SettingsSection>
 
@@ -168,6 +169,7 @@ export function Settings() {
         <div className="flex gap-2">
           <input
             type="number"
+            aria-label="เป้าจำนวนสินค้าต่อคน"
             value={targetInput}
             onChange={(e) => setTargetInput(e.target.value)}
             placeholder="เช่น 350"
@@ -194,6 +196,7 @@ export function Settings() {
         <div className="flex gap-2">
           <input
             type="number"
+            aria-label="เป้าออเดอร์ต่อคนต่อวัน (ฝ่ายออฟไลน์)"
             value={offlineOrderTargetInput}
             onChange={(e) => setOfflineOrderTargetInput(e.target.value)}
             placeholder="เช่น 40"
@@ -217,7 +220,7 @@ export function Settings() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <label className="block text-[11px] text-muted-foreground">เข้างานปกติ (ชม.)</label>
-            <input
+            <input aria-label="เข้างานปกติ (ชม.)"
               type="number"
               min={0}
               max={23}
@@ -228,7 +231,7 @@ export function Settings() {
           </div>
           <div>
             <label className="block text-[11px] text-muted-foreground">เลิกงานปกติ (ชม.)</label>
-            <input
+            <input aria-label="เลิกงานปกติ (ชม.)"
               type="number"
               min={0}
               max={23}
@@ -239,7 +242,7 @@ export function Settings() {
           </div>
           <div>
             <label className="block text-[11px] text-muted-foreground">พักเที่ยงเริ่ม (ชม.)</label>
-            <input
+            <input aria-label="พักเที่ยงเริ่ม (ชม.)"
               type="number"
               min={0}
               max={23}
@@ -250,7 +253,7 @@ export function Settings() {
           </div>
           <div>
             <label className="block text-[11px] text-muted-foreground">พักเที่ยงเลิก (ชม.)</label>
-            <input
+            <input aria-label="พักเที่ยงเลิก (ชม.)"
               type="number"
               min={0}
               max={23}
@@ -266,7 +269,7 @@ export function Settings() {
         <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 sm:grid-cols-2">
           <div>
             <label className="block text-[11px] text-muted-foreground">เป้าพัสดุ/วัน (เต็มเวลา)</label>
-            <input
+            <input aria-label="เป้าพัสดุ/วัน (เต็มเวลา)"
               type="number"
               min={0}
               value={dailyTarget}
@@ -276,7 +279,7 @@ export function Settings() {
           </div>
           <div>
             <label className="block text-[11px] text-muted-foreground">เริ่มบันทึกเวลาเข้า-ออก (วันที่)</label>
-            <input
+            <input aria-label="เริ่มบันทึกเวลาเข้า-ออก (วันที่)"
               type="date"
               value={attendanceStartDate}
               onChange={(e) => setAttendanceStartDate(e.target.value)}
@@ -293,7 +296,7 @@ export function Settings() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="block text-[11px] text-muted-foreground">ชื่อบริษัท / ทีม</label>
-            <input
+            <input aria-label="ชื่อบริษัท / ทีม"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
@@ -301,7 +304,7 @@ export function Settings() {
           </div>
           <div>
             <label className="block text-[11px] text-muted-foreground">แผนก</label>
-            <input
+            <input aria-label="แผนก"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
               className="mt-1 w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-primary"

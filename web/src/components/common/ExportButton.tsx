@@ -25,7 +25,7 @@ export function ExportButton({
         downloadCsv(table.filename, table.headers, table.rows)
       }}
       className={cn(
-        "flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-bold text-foreground shadow-[0_4px_14px_rgba(43,168,162,0.15)] transition-all hover:-translate-y-0.5 hover:bg-muted active:scale-95 disabled:pointer-events-none disabled:opacity-40",
+        "flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-2 text-xs font-bold max-sm:min-h-10 text-foreground shadow-[0_4px_14px_rgba(43,168,162,0.15)] transition-all hover:-translate-y-0.5 hover:bg-muted active:scale-95 disabled:pointer-events-none disabled:opacity-40",
         className
       )}
     >

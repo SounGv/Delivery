@@ -143,7 +143,7 @@ export function OverviewHero(p: OverviewHeroProps) {
                     aria-pressed={active}
                     onClick={() => p.onSelectTeam(t.key)}
                     className={cn(
-                      "rounded-full px-4 py-1.5 text-sm font-extrabold transition-all",
+                      "rounded-full px-4 py-1.5 text-sm font-extrabold transition-all max-sm:min-h-10",
                       active
                         ? "bg-white text-[#0b3a37] shadow-[0_6px_14px_-6px_rgba(0,0,0,0.6)]"
                         : "text-white/85 hover:bg-white/10 hover:text-white"

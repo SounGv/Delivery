@@ -195,7 +195,7 @@ function Section({
           <button
             type="button"
             onClick={() => navigate(goTo)}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-3.5 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3.5 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted max-sm:min-h-10"
           >
             {goLabel ?? "ดูทั้งหมด"}
             <ArrowRight className="size-4" />
@@ -290,7 +290,7 @@ function CrewCard({
         <button
           type="button"
           onClick={onOpen}
-          className="btn-raised inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs font-bold text-foreground"
+          className="btn-raised inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs font-bold text-foreground max-sm:min-h-10"
         >
           เปิดฝ่าย <ArrowRight className="size-3.5" />
         </button>
@@ -316,7 +316,7 @@ function CrewCard({
         <button
           type="button"
           onClick={onSelect}
-          className="mt-4 w-full rounded-full border border-border bg-card py-2 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted"
+          className="mt-4 w-full rounded-full border border-border bg-card py-2 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-muted max-sm:min-h-10"
         >
           ดูพนักงานและเรื่องต้องตามของฝ่ายนี้ด้านล่าง
         </button>
@@ -557,7 +557,7 @@ export function Dashboard() {
       label: "ตีกลับที่ยังไม่เข้าสต็อก",
       count: restockTotals ? restockTotals.rows : null,
       unit: "แถว",
-      sub: restockTotals ? `ไม่ Stock-In ${num(notStockedIn ?? 0)} แถว · สูญหาย ${num(lostRows ?? 0)} แถว` : "อ่านชีต cn-restock ไม่ได้",
+      sub: restockTotals ? `ไม่ Stock-In ${num(notStockedIn ?? 0)} แถว · สูญหาย ${num(lostRows ?? 0)} แถว` : "อ่านข้อมูลตีกลับไม่ได้",
       onOpen: () => navigate("returns"),
     },
     {

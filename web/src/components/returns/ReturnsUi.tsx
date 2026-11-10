@@ -212,7 +212,7 @@ export function ListToolbar({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted max-sm:min-h-10"
         >
           <SlidersHorizontal className="size-4" />
           ตัวกรองเพิ่มเติม
@@ -235,11 +235,11 @@ export function ListToolbar({
 }
 
 export const filterSelectClass =
-  "rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"
+  "rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-10"
 
 export function chipClass(active: boolean) {
   return cn(
-    "rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all",
+    "rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all max-sm:inline-flex max-sm:min-h-10 max-sm:items-center",
     active
       ? "bg-primary text-primary-foreground -translate-y-px shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"
       : "border border-border bg-card text-muted-foreground shadow-[0_2px_6px_-3px_rgba(43,168,162,0.5)] hover:-translate-y-px hover:bg-muted hover:text-foreground"
@@ -258,7 +258,7 @@ export function FilterField({ label, children }: { label: string; children: Reac
 export function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (page: number) => void }) {
   if (totalPages <= 1) return null
   const btn =
-    "rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+    "rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 max-sm:min-h-10"
   return (
     <div className="flex items-center justify-center gap-3 py-2">
       <button type="button" className={btn} disabled={page <= 1} onClick={() => onChange(page - 1)}>

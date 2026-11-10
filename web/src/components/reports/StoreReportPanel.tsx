@@ -40,9 +40,10 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         <div className="flex flex-wrap gap-2">
           {stores.length > 1 && (
             <select
+              aria-label="เลือกร้านค้า/ช่องทาง"
               value={storeFilter}
               onChange={(e) => setStoreFilter(e.target.value)}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted max-sm:min-h-10"
             >
               <option value={ALL_STORES} className="bg-popover text-popover-foreground">
                 ทุกร้านค้า/ช่องทาง
@@ -56,9 +57,10 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
           )}
           {periods.length > 1 && (
             <select
+              aria-label="เลือกช่วงรายงาน"
               value={periodIdx}
               onChange={(e) => setPeriodIdx(Number(e.target.value))}
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted max-sm:min-h-10"
             >
               {periods.map((p, i) => (
                 <option key={`${p.periodStart}-${p.periodEnd}`} value={i} className="bg-popover text-popover-foreground">

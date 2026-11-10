@@ -74,7 +74,7 @@ export function DateRangePicker({ start, end, minDate, maxDate, today, onChange 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="justify-start font-normal">
+        <Button variant="outline" size="sm" className="justify-start font-normal max-sm:min-h-10">
           <CalendarDays className="size-4" />
           {formatFullDateLabel(start)} - {formatFullDateLabel(end)}
         </Button>

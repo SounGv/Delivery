@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, FileWarning, PackageOpen, UserCheck, Users, Warehouse } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
+import { DataNotice } from "@/components/common/DataNotice"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { StatTile, StatusPill, type Tone } from "@/components/returns/ReturnsUi"
 import { daysBetween } from "@/lib/cancelled-selectors"
@@ -44,9 +45,10 @@ function ReceivingWarehouseView({ onlyTitle }: { onlyTitle?: string }) {
 
   if (!rw || rw.departments.length === 0) {
     return (
-      <div className="glass-panel rounded-2xl p-8 text-center text-sm text-muted-foreground">
-        ยังไม่มีข้อมูล{onlyTitle ?? "ฝ่ายรับเข้า/ฝ่ายคลัง"} — ตรวจว่าได้ redeploy Apps Script (เวอร์ชันที่อ่านแท็บ "ตารางงาน … รับเข้า+คลัง") แล้วหรือยัง
-      </div>
+      <DataNotice
+        title={`ยังไม่มีข้อมูล${onlyTitle ?? "ฝ่ายรับเข้า/ฝ่ายคลัง"}`}
+        detail='ไม่พบข้อมูลจากแท็บ "ตารางงาน … รับเข้า+คลัง" (ต้อง redeploy Apps Script เวอร์ชันที่อ่านแท็บนี้)'
+      />
     )
   }
 
@@ -66,14 +68,15 @@ function ReceivingWarehouseView({ onlyTitle }: { onlyTitle?: string }) {
             aria-label="วันก่อนหน้าที่มีข้อมูล"
             disabled={!olderDate}
             onClick={() => olderDate && setDate(olderDate)}
-            className="rounded-full border border-border p-2 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full border border-border p-2 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 max-sm:p-3"
           >
             <ChevronLeft className="size-4" />
           </button>
           <select
+            aria-label="เลือกวันที่ดูข้อมูล"
             value={activeDate}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-full border border-border bg-background px-4 py-2 text-sm font-bold text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"
+            className="rounded-full border border-border bg-background px-4 py-2 text-sm font-bold text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-10"
           >
             {activeDates.map((d) => (
               <option key={d} value={d}>
@@ -86,7 +89,7 @@ function ReceivingWarehouseView({ onlyTitle }: { onlyTitle?: string }) {
             aria-label="วันถัดไปที่มีข้อมูล"
             disabled={!newerDate}
             onClick={() => newerDate && setDate(newerDate)}
-            className="rounded-full border border-border p-2 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full border border-border p-2 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 max-sm:p-3"
           >
             <ChevronRight className="size-4" />
           </button>
@@ -268,7 +271,7 @@ function CategoryCard({ cat, date, todayIso, onJump }: { cat: RwStaffCategory; d
             <button
               type="button"
               onClick={() => onJump(latest)}
-              className="rounded-full border border-border bg-background px-3 py-1 text-xs font-bold text-primary transition-colors hover:bg-muted"
+              className="rounded-full border border-border bg-background px-3 py-1 text-xs font-bold text-primary transition-colors hover:bg-muted max-sm:min-h-10"
             >
               ไปดูวันที่ล่าสุด {formatDateLabel(latest)}
             </button>

@@ -1,10 +1,11 @@
 import { Fragment, useMemo, useState } from "react"
-import { AlertTriangle, ChevronDown, ChevronRight, CircleAlert, Clock, Download, ListChecks, Send } from "lucide-react"
+import { ChevronDown, ChevronRight, CircleAlert, Clock, Download, ListChecks, Send } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
+import { DataNotice } from "@/components/common/DataNotice"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { downloadCsv } from "@/lib/csv"
 import { cn } from "@/lib/utils"
@@ -99,20 +100,16 @@ export function WorkIssues() {
     )
   }
 
-  const selectCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted"
+  const selectCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none hover:bg-muted max-sm:min-h-10"
 
   return (
     <div className="space-y-4">
       {!hasData && (
-        <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังไม่พบข้อมูลจากชีท "ปัญหารอแก้"</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              ระบบอ่านชีทนี้แบบ read-only แต่ API ยังไม่ส่งข้อมูลนี้มา — ต้องอัปเดต Apps Script (SheetParser.js เวอร์ชันใหม่ที่อ่านชีท "ปัญหารอแก้" แล้ว) แล้ว Deploy → New version
-            </p>
-          </div>
-        </div>
+        <DataNotice
+          title='ยังไม่พบข้อมูลจากชีต "ปัญหารอแก้"'
+          body="หน้านี้อ่านชีตอย่างเดียว ถ้าทีมกรอกแล้วแต่ยังไม่ขึ้น ลองรีเฟรชหน้านี้ หรือแจ้งผู้ดูแลระบบ"
+          detail='API ยังไม่ส่งข้อมูลส่วนนี้ (ต้องอัปเดต/deploy Apps Script เวอร์ชันที่อ่านชีต "ปัญหารอแก้")'
+        />
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -140,7 +137,7 @@ export function WorkIssues() {
         </div>
         <div>
           <label className="block text-[11px] text-muted-foreground">ความเร่งด่วน</label>
-          <select value={urgency} onChange={(e) => setUrgency(e.target.value)} className={selectCls}>
+          <select aria-label="ความเร่งด่วน" value={urgency} onChange={(e) => setUrgency(e.target.value)} className={selectCls}>
             <option value="all" className="bg-popover text-popover-foreground">ทั้งหมด</option>
             {urgencies.map((u) => (
               <option key={u} value={u} className="bg-popover text-popover-foreground">{u}</option>
@@ -149,7 +146,7 @@ export function WorkIssues() {
         </div>
         <div>
           <label className="block text-[11px] text-muted-foreground">หมวดหมู่</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
+          <select aria-label="หมวดหมู่" value={category} onChange={(e) => setCategory(e.target.value)} className={selectCls}>
             <option value="all" className="bg-popover text-popover-foreground">ทั้งหมด</option>
             {categories.map((c) => (
               <option key={c} value={c} className="bg-popover text-popover-foreground">{c}</option>
@@ -161,7 +158,7 @@ export function WorkIssues() {
             type="button"
             onClick={handleExport}
             disabled={sorted.length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-40 max-sm:min-h-10"
           >
             <Download className="size-4" /> Export CSV
           </button>
@@ -197,7 +194,13 @@ export function WorkIssues() {
                 <Fragment key={rowKey}>
                   <tr className="border-b border-white/5 align-top last:border-0">
                     <td className="py-2">
-                      <button type="button" onClick={() => setExpandedKey(isExpanded ? null : key)} className="text-muted-foreground hover:text-foreground">
+                      <button
+                        type="button"
+                        aria-label={isExpanded ? "ซ่อนรายละเอียด" : "ดูรายละเอียด"}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpandedKey(isExpanded ? null : key)}
+                        className="-m-3 inline-flex p-3 text-muted-foreground hover:text-foreground"
+                      >
                         {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                       </button>
                     </td>
