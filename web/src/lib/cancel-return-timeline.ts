@@ -16,6 +16,26 @@ export type TimelineKind = "cancel" | "return" | "lost"
 export const KIND_LABEL: Record<TimelineKind, string> = { cancel: "ยกเลิก", return: "ตีกลับ", lost: "สูญหาย" }
 export const KINDS: TimelineKind[] = ["cancel", "return", "lost"]
 
+/** Colour of each kind in charts and swatches. Deliberately the brand palette (teal / sky / gold) and
+ * not the status colours, so "ยกเลิก" never reads as "problem" and green never reads as a kind. */
+export const KIND_COLOR: Record<TimelineKind, string> = { cancel: "#2ba8a2", return: "#5dade2", lost: "#ffd23f" }
+
+/** Status colours for charts: the same hues as the status pills (see components/returns/ReturnsUi.tsx). */
+export const TONE_COLOR: Record<"ok" | "warn" | "danger" | "info" | "neutral", string> = {
+  ok: "#27ae60",
+  warn: "#f59e0b",
+  danger: "#e74c3c",
+  info: "#5dade2",
+  neutral: "#94a3b8",
+}
+export const TONE_LABEL: Record<"ok" | "warn" | "danger" | "info" | "neutral", string> = {
+  ok: "เสร็จสิ้น",
+  warn: "รอดำเนินการ",
+  danger: "มีปัญหา",
+  info: "บางส่วน / รอลงบันทึก",
+  neutral: "อื่นๆ",
+}
+
 /** Bucket key for lines that have no usable date. */
 export const NO_DATE = "__no_date__"
 

@@ -4,8 +4,10 @@ import { useCancelledQuery, useRefundsQuery, useRestockQuery } from "@/api/queri
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { FilterField, ReturnRowCard, StatusPill, StatusTile, chipClass, filterSelectClass, Pager, type Tone } from "@/components/returns/ReturnsUi"
+import { StatusDonut, TrendChart } from "@/components/reports/CancelReturnCharts"
 import {
   KINDS,
+  KIND_COLOR,
   KIND_LABEL,
   LOST_STATUSES,
   NO_DATE,
@@ -159,6 +161,7 @@ function TimelineOverview() {
     return c
   }, [scoped])
   const openCount = useMemo(() => scoped.filter(needsAction).length, [scoped])
+  const doneCount = useMemo(() => scoped.filter((it) => it.status.tone === "ok").length, [scoped])
   const lostCounts = useMemo(() => {
     const m = new Map<string, number>()
     for (const it of scoped) if (it.kind === "lost") m.set(it.status.label, (m.get(it.status.label) ?? 0) + 1)
@@ -254,7 +257,7 @@ function TimelineOverview() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-extrabold text-foreground">รายงานยกเลิก / ตีกลับ</h2>
+        <h2 className="page-heading text-xl font-extrabold text-foreground">รายงานยกเลิก / ตีกลับ</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           สินค้ายกเลิก สินค้าตีกลับ และพัสดุสูญหาย รวมในหน้าเดียว เลือกช่วงวันที่ หรือดูเป็นรายเดือน/รายวัน กดแถวในตารางเพื่อกรอง แต่ละรายการมีสถานะกำกับ
         </p>
@@ -351,6 +354,62 @@ function TimelineOverview() {
         {hasRange && <p className="w-full text-xs text-muted-foreground">ตอนเลือกช่วงวันที่ รายการที่ไม่ระบุวันที่จะไม่ถูกนับ</p>}
       </div>
 
+      <section
+        aria-label="สรุปภาพรวม"
+        className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/25 via-card to-card p-5 shadow-[0_24px_60px_-24px_rgba(43,168,162,0.55)] sm:p-6"
+      >
+        <span aria-hidden className="pointer-events-none absolute -right-10 -top-12 size-44 rounded-full bg-primary/20 blur-3xl" />
+        <span aria-hidden className="pointer-events-none absolute -bottom-16 left-1/3 size-40 rounded-full bg-gold/20 blur-3xl" />
+        <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-center">
+          <div>
+            <p className="text-xs font-bold text-muted-foreground">ภาพรวม · {scopeLabel}</p>
+            <p className="mt-1 text-5xl font-extrabold tabular-nums text-foreground drop-shadow-sm">
+              {num(scoped.length)} <span className="text-lg font-bold text-muted-foreground">รายการ</span>
+            </p>
+            <div className="mt-4">
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">เสร็จสิ้นแล้ว {num(doneCount)} รายการ</span>
+                <span className="font-extrabold tabular-nums text-foreground">{scoped.length ? ((doneCount / scoped.length) * 100).toFixed(1) : "0.0"}%</span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-muted shadow-inner" role="img" aria-label={`เสร็จสิ้น ${num(doneCount)} จาก ${num(scoped.length)} รายการ`}>
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-[0_0_12px_rgba(39,174,96,0.55)]"
+                  style={{ width: `${scoped.length ? (doneCount / scoped.length) * 100 : 0}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                ค้างต้องตาม <b className="text-amber-700 dark:text-amber-300">{num(openCount)}</b> รายการ
+              </p>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-bold text-muted-foreground">สัดส่วนตามประเภท</p>
+            <div className="flex h-5 overflow-hidden rounded-full bg-muted shadow-inner" role="img" aria-label="สัดส่วนยกเลิก ตีกลับ สูญหาย">
+              {KINDS.map((k) => (
+                <div
+                  key={k}
+                  className="h-full transition-[width] duration-500 first:rounded-l-full last:rounded-r-full"
+                  style={{ width: `${scoped.length ? (kindCounts[k] / scoped.length) * 100 : 0}%`, background: KIND_COLOR[k] }}
+                  title={`${KIND_LABEL[k]} ${num(kindCounts[k])}`}
+                />
+              ))}
+            </div>
+            <ul className="mt-3 grid grid-cols-3 gap-3">
+              {KINDS.map((k) => (
+                <li key={k} className="rounded-2xl bg-card/70 p-3 shadow-sm backdrop-blur">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <span className="size-2.5 rounded-full" style={{ background: KIND_COLOR[k] }} aria-hidden />
+                    {KIND_LABEL[k]}
+                  </p>
+                  <p className="mt-1 text-2xl font-extrabold tabular-nums text-foreground">{num(kindCounts[k])}</p>
+                  <p className="text-[11px] text-muted-foreground">{scoped.length ? ((kindCounts[k] / scoped.length) * 100).toFixed(0) : 0}%</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {KINDS.map((k) => (
           <StatusTile
@@ -410,7 +469,12 @@ function TimelineOverview() {
         </div>
       </section>
 
-      <div className="glass-panel overflow-hidden rounded-2xl">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <TrendChart buckets={buckets} mode={mode} scopeLabel={scopeLabel} />
+        <StatusDonut items={scoped} scopeLabel={scopeLabel} />
+      </div>
+
+      <div className="glass-panel overflow-hidden rounded-2xl shadow-[0_18px_40px_-26px_rgba(43,168,162,0.45)]">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <caption className="sr-only">{mode === "month" ? "สรุปรายเดือน" : "สรุปรายวัน"}</caption>
@@ -419,9 +483,12 @@ function TimelineOverview() {
                 <th scope="col" className="px-4 py-2.5 font-semibold">
                   {mode === "month" ? "เดือน" : "วันที่"}
                 </th>
-                <th scope="col" className="px-3 py-2.5 text-right font-semibold">ยกเลิก</th>
-                <th scope="col" className="px-3 py-2.5 text-right font-semibold">ตีกลับ</th>
-                <th scope="col" className="px-3 py-2.5 text-right font-semibold">สูญหาย</th>
+                {KINDS.map((k) => (
+                  <th key={k} scope="col" className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">
+                    <span className="mr-1.5 inline-block size-2 rounded-full align-middle" style={{ background: KIND_COLOR[k] }} aria-hidden />
+                    {KIND_LABEL[k]}
+                  </th>
+                ))}
                 <th scope="col" className="px-3 py-2.5 text-right font-semibold">รวม</th>
                 <th scope="col" className="px-3 py-2.5 text-right font-semibold">ค้างต้องตาม</th>
                 <th scope="col" className="w-32 px-4 py-2.5" aria-hidden />
