@@ -14,6 +14,7 @@ import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
 import { Returns } from "@/pages/Returns"
 import { Cancelled } from "@/pages/Cancelled"
+import { CancelReturnTimeline } from "@/pages/CancelReturnTimeline"
 import { Backlog } from "@/pages/Backlog"
 import { StockValue } from "@/pages/StockValue"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
@@ -45,6 +46,7 @@ const PAGES: Record<string, React.ComponentType> = {
   "work-issues": WorkIssues,
   returns: Returns,
   cancelled: Cancelled,
+  timeline: CancelReturnTimeline,
   backlog: Backlog,
   "stock-value": StockValue,
   settings: Settings,

@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   PackageX,
   Ban,
+  CalendarRange,
   ListChecks,
   Coins,
 } from "lucide-react"
@@ -53,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
       { key: "returns", label: "สินค้าตีกลับ", icon: PackageX, enabled: true },
       { key: "cancelled", label: "สินค้ายกเลิก", icon: Ban, enabled: true },
+      { key: "timeline", label: "รายงาน", icon: CalendarRange, enabled: true },
       { key: "backlog", label: "งานค้าง", icon: ListChecks, enabled: true },
       { key: "stock-value", label: "มูลค่าสต็อก", icon: Coins, enabled: true },
     ],
