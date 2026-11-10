@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Coins, Info, MinusCircle, Search, Truck } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Coins, Info, MinusCircle, Search, Truck, Warehouse } from "lucide-react"
+import { useAnimatedNumber } from "@/lib/useAnimatedNumber"
 import { useStockValueQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
@@ -21,12 +22,53 @@ const PAGE_SIZE = 30
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 0 })
 
+/** One colour per warehouse (by its rank), used by the share bar, the cards and the rings so a warehouse
+ * keeps the same colour everywhere. Brand palette; deliberately not the status colours. */
+const WAREHOUSE_COLOURS = ["#2ba8a2", "#5dade2", "#ffd23f", "#ef6c4a", "#8b7be0", "#ec6a98", "#27ae60", "#f59e0b"]
+const colourOf = (all: { warehouse: string }[], name: string): string =>
+  WAREHOUSE_COLOURS[Math.max(0, all.findIndex((w) => w.warehouse === name)) % WAREHOUSE_COLOURS.length] ?? "#2ba8a2"
+
+/** A number that counts up when it first appears. */
+function Count({ value }: { value: number }) {
+  const animated = useAnimatedNumber(value)
+  return <>{baht(Math.round(animated))}</>
+}
+
+/** Share of the total as a ring with the percentage in the middle. */
+function ShareRing({ percent, colour }: { percent: number; colour: string }) {
+  const radius = 21
+  const circumference = 2 * Math.PI * radius
+  const shown = percent > 0 ? Math.max(3, Math.min(100, percent)) : 0
+  const dash = (shown / 100) * circumference
+  const label = `${percent > 0 && percent < 10 ? percent.toFixed(1) : percent.toFixed(0)}%`
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label={`${label} ของทั้งหมด`} className="shrink-0">
+      <circle cx="32" cy="32" r={radius} fill="none" strokeWidth="7" className="stroke-muted" />
+      <circle
+        cx="32"
+        cy="32"
+        r={radius}
+        fill="none"
+        stroke={colour}
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${circumference - dash}`}
+        transform="rotate(-90 32 32)"
+        style={{ filter: `drop-shadow(0 0 4px ${colour}99)` }}
+      />
+      <text x="32" y="36" textAnchor="middle" className="fill-foreground text-[12px] font-extrabold">
+        {label}
+      </text>
+    </svg>
+  )
+}
+
 /** A page block: heading, one line saying what it shows, then the content. */
 function Block({ title, caption, children }: { title: string; caption?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
       <div className="px-1">
-        <h3 className="text-xl font-extrabold text-foreground">{title}</h3>
+        <h3 className="page-heading text-xl font-extrabold text-foreground">{title}</h3>
         {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
       </div>
       {children}
@@ -81,52 +123,92 @@ export function StockValue() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-3 px-1">
-        <div>
-          <h2 className="text-2xl font-extrabold text-foreground">มูลค่าสต็อกแต่ละคลัง</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">จำนวนคงเหลือ × ราคาต้นทุนต่อ SKU (ไม่ใช่ราคาขาย) · กดการ์ดคลังเพื่อกรองตารางด้านล่าง</p>
+      {/* 1. The dominant block: the total, the goods on the road, and how the total splits across warehouses. */}
+      <section
+        aria-label="มูลค่าสต็อกรวม"
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0b3a37] via-[#125e59] to-[#17706b] p-5 text-white shadow-[0_30px_70px_-30px_rgba(11,58,55,0.95)] ring-1 ring-white/10 sm:p-8"
+      >
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <span className="absolute -right-16 -top-20 size-72 rounded-full bg-brand-400/30 blur-3xl" />
+          <span className="absolute -bottom-24 left-1/4 size-64 rounded-full bg-gold/15 blur-3xl" />
         </div>
-        {snapshot.asOf &&
-          (stale ? (
-            <StatusPill tone="warn" icon={Clock}>
-              ข้อมูล BigSeller เก่า {num(snapshot.ageDays ?? 0)} วัน
-            </StatusPill>
-          ) : (
-            <StatusPill tone="ok" icon={CheckCircle2}>
-              ข้อมูล BigSeller {snapshot.ageDays === 0 ? "วันนี้" : `${num(snapshot.ageDays ?? 0)} วันก่อน`}
-            </StatusPill>
-          ))}
-      </header>
 
-      {/* 1. The two numbers everyone asks for first. */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-        <div className="glass-panel relative overflow-hidden rounded-2xl p-5 md:col-span-3">
-          <span className="absolute inset-y-0 left-0 w-1.5 bg-primary" aria-hidden />
-          <p className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
-            <Coins className="size-4" /> มูลค่าสต็อกรวม {num(snapshot.warehouses.length)} คลัง
-          </p>
-          <p className="mt-1 text-5xl font-extrabold tabular-nums text-foreground">
-            ฿{baht(snapshot.total)}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">{num(rows.length)} รายการ SKU × คลัง</p>
+        <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-center">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-white/15 shadow-inner ring-1 ring-white/30">
+                <Coins className="size-6" />
+              </span>
+              {snapshot.asOf && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-extrabold shadow-[0_6px_16px_rgba(0,0,0,0.25)]",
+                    stale ? "text-amber-800" : "text-emerald-700"
+                  )}
+                >
+                  {stale ? <Clock className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
+                  {stale
+                    ? `ข้อมูล BigSeller เก่า ${num(snapshot.ageDays ?? 0)} วัน`
+                    : `ข้อมูล BigSeller ${snapshot.ageDays === 0 ? "วันนี้" : `${num(snapshot.ageDays ?? 0)} วันก่อน`}`}
+                </span>
+              )}
+            </div>
+            <h2 className="mt-4 text-2xl font-extrabold tracking-wide drop-shadow-md sm:text-3xl">มูลค่าสต็อกแต่ละคลัง</h2>
+            <p className="mt-1 text-sm text-white/85">จำนวนคงเหลือ × ราคาต้นทุนต่อ SKU (ไม่ใช่ราคาขาย) · กดการ์ดคลังเพื่อกรองตารางด้านล่าง</p>
+            <p className="mt-5 text-xs font-bold text-white/85">มูลค่าสต็อกรวม {num(snapshot.warehouses.length)} คลัง</p>
+            <p className="text-4xl font-extrabold leading-tight tabular-nums tracking-tight drop-shadow-md sm:text-6xl">
+              ฿<Count value={snapshot.total} />
+            </p>
+            <p className="mt-1 text-sm text-white/85">{num(rows.length)} รายการ SKU × คลัง</p>
+          </div>
+
+          <div className="rounded-2xl bg-[#082a27]/40 p-4 shadow-[0_14px_28px_-16px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.18)] ring-1 ring-white/20 backdrop-blur-md sm:p-5">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-white/90">
+              <span className="flex size-6 items-center justify-center rounded-lg bg-white/20">
+                <Truck className="size-3.5" />
+              </span>
+              สินค้าระหว่างทาง
+            </p>
+            <p className="mt-2 text-3xl font-extrabold tabular-nums drop-shadow-sm sm:text-4xl">฿{baht(snapshot.inTransitCost)}</p>
+            <p className="mt-2 text-xs text-white/85">
+              {num(snapshot.inTransitUnits)} ชิ้น · ไป {num(snapshot.inTransitWarehouses)} คลัง · ไม่รวมในยอดรวมด้านซ้าย
+            </p>
+          </div>
         </div>
-        <div className="glass-panel relative overflow-hidden rounded-2xl p-5 md:col-span-2">
-          <span className="absolute inset-y-0 left-0 w-1.5 bg-amber-500" aria-hidden />
-          <p className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
-            <Truck className="size-4" /> สินค้าระหว่างทาง
-          </p>
-          <p className="mt-1 text-4xl font-extrabold tabular-nums text-foreground">฿{baht(snapshot.inTransitCost)}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {num(snapshot.inTransitUnits)} ชิ้น · ไป {num(snapshot.inTransitWarehouses)} คลัง · ไม่รวมในยอดรวมด้านซ้าย
-          </p>
+
+        <div className="relative mt-6">
+          <p className="mb-2 text-xs font-bold text-white/85">สัดส่วนมูลค่าแต่ละคลัง</p>
+          <div className="flex h-4 overflow-hidden rounded-full bg-black/25 shadow-inner" role="img" aria-label="สัดส่วนมูลค่าสต็อกแต่ละคลัง">
+            {snapshot.warehouses
+              .filter((w) => w.value > 0)
+              .map((w) => (
+                <div
+                  key={w.warehouse}
+                  className="h-full min-w-[3px] transition-[width] duration-500 first:rounded-l-full last:rounded-r-full"
+                  style={{ width: `${w.share}%`, background: colourOf(snapshot.warehouses, w.warehouse) }}
+                  title={`${w.warehouse} ${w.share.toFixed(1)}%`}
+                />
+              ))}
+          </div>
+          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-white/90">
+            {snapshot.warehouses
+              .filter((w) => w.value > 0)
+              .map((w) => (
+                <li key={w.warehouse} className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full shadow-sm ring-1 ring-white/40" style={{ background: colourOf(snapshot.warehouses, w.warehouse) }} aria-hidden />
+                  {w.warehouse} <b className="tabular-nums">{w.share.toFixed(w.share < 1 ? 1 : 0)}%</b>
+                </li>
+              ))}
+          </ul>
         </div>
-      </div>
+      </section>
 
       {/* 2. One card per warehouse: value, share of the total, and a flag when it disagrees with BigSeller. */}
       <Block title="แยกตามคลัง" caption="เรียงจากมูลค่ามากไปน้อย · ป้ายสีเหลือง = มูลค่าในเว็บต่างจากที่ BigSeller คำนวณมาก">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {snapshot.warehouses.map((w) => {
+          {snapshot.warehouses.map((w, index) => {
             const active = warehouse === w.warehouse
+            const colour = colourOf(snapshot.warehouses, w.warehouse)
             return (
               <button
                 key={w.warehouse}
@@ -134,29 +216,43 @@ export function StockValue() {
                 aria-pressed={active}
                 onClick={() => setWarehouse(active ? ALL_WAREHOUSES : w.warehouse)}
                 className={cn(
-                  "glass-panel flex flex-col gap-2 rounded-2xl p-4 text-left transition-all hover:-translate-y-0.5",
+                  "glass-panel group relative flex flex-col gap-3 overflow-hidden rounded-2xl p-4 pt-5 text-left shadow-[0_16px_34px_-22px_rgba(43,168,162,0.7)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_22px_40px_-20px_rgba(43,168,162,0.85)]",
                   active && "ring-2 ring-primary"
                 )}
               >
-                <span className="flex items-start justify-between gap-2">
-                  <span className="text-base font-extrabold leading-snug text-foreground">{w.warehouse}</span>
-                  {w.value === 0 ? (
-                    <StatusPill tone="neutral" icon={MinusCircle} small>
-                      ไม่มีสต็อก
-                    </StatusPill>
-                  ) : w.highDiff && w.diffPercent !== null ? (
-                    <StatusPill tone="warn" icon={AlertTriangle} small>
-                      ต่างจาก BigSeller {w.diffPercent > 0 ? "+" : ""}
-                      {w.diffPercent.toFixed(0)}%
-                    </StatusPill>
-                  ) : null}
+                <span className="absolute inset-x-0 top-0 h-1.5" style={{ background: `linear-gradient(90deg, ${colour}, ${colour}55)` }} aria-hidden />
+                <span className="flex items-start gap-3">
+                  <span
+                    className="flex size-11 shrink-0 items-center justify-center rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_6px_14px_-6px_rgba(0,0,0,0.35)]"
+                    style={{ background: `linear-gradient(145deg, ${colour}33, ${colour}1a)`, color: colour }}
+                  >
+                    <Warehouse className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-base font-extrabold leading-snug text-foreground">{w.warehouse}</span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">อันดับ {num(index + 1)}</span>
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {w.value === 0 ? (
+                        <StatusPill tone="neutral" icon={MinusCircle} small>
+                          ไม่มีสต็อก
+                        </StatusPill>
+                      ) : w.highDiff && w.diffPercent !== null ? (
+                        <StatusPill tone="warn" icon={AlertTriangle} small>
+                          ต่างจาก BigSeller {w.diffPercent > 0 ? "+" : ""}
+                          {w.diffPercent.toFixed(0)}%
+                        </StatusPill>
+                      ) : null}
+                    </span>
+                  </span>
                 </span>
-                <span className="text-3xl font-extrabold tabular-nums text-foreground">฿{baht(w.value)}</span>
-                <span className="h-2 overflow-hidden rounded-full bg-muted">
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(w.value > 0 ? 2 : 0, w.share)}%` }} />
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {w.share.toFixed(w.share < 1 && w.share > 0 ? 1 : 0)}% ของทั้งหมด · {num(skuCount(w.warehouse))} SKU
+                <span className="flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-3xl font-extrabold tabular-nums text-foreground">฿{baht(w.value)}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{num(skuCount(w.warehouse))} SKU</span>
+                  </span>
+                  <ShareRing percent={w.share} colour={colour} />
                 </span>
               </button>
             )
@@ -167,15 +263,17 @@ export function StockValue() {
       {/* 3. Goods in transit, by destination warehouse. */}
       {inTransit.length > 0 && (
         <Block title="สินค้าระหว่างทาง" caption="โอนระหว่างคลังและยังไม่รับเข้า · แยกตามคลังปลายทาง · มูลค่าเป็นต้นทุนของ BigSeller โดยตรง">
-          <ul className="glass-panel divide-y divide-border/60 overflow-hidden rounded-2xl">
+          <ul className="glass-panel divide-y divide-border/60 overflow-hidden rounded-2xl shadow-[0_18px_40px_-26px_rgba(43,168,162,0.45)]">
             {inTransit.map((r) => (
-              <li key={r.warehouse} className="flex items-center gap-3 px-4 py-3">
-                <Truck className="size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <li key={r.warehouse} className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-accent/60">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400/30 to-amber-500/10 text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_4px_10px_-4px_rgba(245,158,11,0.5)] dark:text-amber-300">
+                  <Truck className="size-5" />
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-foreground">→ {r.warehouse}</span>
-                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted">
+                  <span className="mt-1.5 block h-2 overflow-hidden rounded-full bg-muted shadow-inner">
                     <span
-                      className="block h-full rounded-full bg-amber-500"
+                      className="block h-full rounded-full bg-gradient-to-r from-amber-300 to-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.55)]"
                       style={{ width: `${maxInTransit > 0 ? Math.max(2, (r.bigsellerInTransitCost / maxInTransit) * 100) : 0}%` }}
                     />
                   </span>
