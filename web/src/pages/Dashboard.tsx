@@ -32,9 +32,10 @@ import { CategoryReportPanel } from "@/components/reports/CategoryReportPanel"
 import { RecentActivityPanel } from "@/components/dashboard/RecentActivityPanel"
 import { AttentionList, type AttentionItem } from "@/components/dashboard/AttentionList"
 import { StockSnapshotPanel } from "@/components/dashboard/StockSnapshotPanel"
+import { OverviewHero } from "@/components/dashboard/OverviewHero"
 import { ChartCard, ChartChip } from "@/components/charts/ChartCard"
 import { ReportSection } from "@/components/common/ReportSection"
-import { EmployeeTable } from "@/components/employees/EmployeeTable"
+import { FollowUpList } from "@/components/dashboard/FollowUpList"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -178,7 +179,7 @@ function Section({
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2 px-1">
         <div>
-          <h2 className="text-xl font-extrabold text-foreground">{title}</h2>
+          <h2 className="page-heading text-xl font-extrabold text-foreground">{title}</h2>
           {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
         </div>
         {goTo && (
@@ -503,23 +504,33 @@ export function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* 1. One-line verdict: what to do first, how the day is going. */}
-      <header className="flex flex-wrap items-end justify-between gap-3 px-1">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground">ภาพรวมทีมคลัง</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            {needAction > 0 ? (
-              <StatusPill tone="danger" icon={AlertTriangle}>วันนี้มี {num(needAction)} เรื่องต้องตาม</StatusPill>
-            ) : (
-              <StatusPill tone="ok" icon={CheckCircle2}>วันนี้ไม่มีเรื่องค้าง</StatusPill>
-            )}
-            <span>
-              ทำพัสดุได้ <b className="text-foreground tabular-nums">{num(today.parcels)}</b> · {targetPct === null ? "ไม่มีเป้า" : <>ถึงเป้า <b className="text-foreground tabular-nums">{targetPct.toFixed(0)}%</b></>}
-            </span>
-          </p>
-        </div>
-        <span className="rounded-full bg-gold px-3 py-1 text-xs font-extrabold text-[#5c4300]">ข้อมูลล่าสุด {formatFullDateLabel(data.todayDate)}</span>
-      </header>
+      {/* 1. The dominant block: title, one verdict, and the four numbers a manager looks for first. */}
+      <OverviewHero
+        dataDateLabel={formatFullDateLabel(data.todayDate)}
+        needAction={needAction}
+        teamLabel={teamLabel}
+        parcels={today.parcels}
+        parcelTrend={parcelTrend}
+        activeEmployees={today.activeEmployees}
+        targetPct={targetPct}
+        targetLabel={targetLabel}
+        sales={
+          salesSnapshot
+            ? {
+                net: netSales,
+                monthLabel: formatMonthLabel(salesSnapshot.monthKey),
+                note:
+                  daysBetween(salesSnapshot.lastDate, data.todayDate) > 3
+                    ? `ข้อมูลถึง ${formatFullDateLabel(salesSnapshot.lastDate)}`
+                    : "หลังหักคืนเงิน",
+              }
+            : null
+        }
+        stockTotal={stockSnapshot ? stockSnapshot.total : null}
+        onOpenTeam={() => navigate(`team-${selectedTeam}`)}
+        onOpenSales={() => navigate("sales-summary")}
+        onOpenStock={() => navigate("stock-value")}
+      />
 
       {/* 2. First screen: what needs a person (left) and how today's output looks (right). */}
       <div className="grid grid-cols-12 gap-6">
@@ -667,7 +678,13 @@ export function Dashboard() {
         goLabel="ดูพนักงานทั้งหมด"
       >
         <ReportSection emoji="🚨" title="พนักงานที่ต้องติดตาม" subtitle={`เรียงจากความเสี่ยงสูงไปต่ำ — แสดง ${Math.min(FOLLOW_UP_LIMIT, followUpRows.length)} คนแรกจากทั้งหมด ${followUpRows.length} คน ดูครบที่เมนูฝ่าย${teamLabel}`}>
-          <EmployeeTable rows={followUpRows.slice(0, FOLLOW_UP_LIMIT)} onRowClick={openEmployeeDetail} searchable emptyMessage="ไม่มีพนักงานในทีมที่เลือก" />
+          <FollowUpList
+            allRows={followUpRows}
+            limit={FOLLOW_UP_LIMIT}
+            teamLabel={teamLabel}
+            onOpen={openEmployeeDetail}
+            onViewAll={() => navigate(`team-${selectedTeam}`)}
+          />
         </ReportSection>
 
         <ChartCard
