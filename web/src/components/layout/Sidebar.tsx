@@ -12,7 +12,6 @@ import {
   BarChart3,
   ClipboardCheck,
   PackageX,
-  Ban,
   CalendarRange,
   ListChecks,
   Coins,
@@ -53,7 +52,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
       { key: "returns", label: "สินค้าตีกลับ", icon: PackageX, enabled: true },
-      { key: "cancelled", label: "สินค้ายกเลิก", icon: Ban, enabled: true },
       { key: "timeline", label: "รายงาน", icon: CalendarRange, enabled: true },
       { key: "backlog", label: "งานค้าง", icon: ListChecks, enabled: true },
       { key: "stock-value", label: "มูลค่าสต็อก", icon: Coins, enabled: true },
@@ -64,6 +62,10 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ key: "settings", label: "Settings", icon: Settings, enabled: true }],
   },
 ]
+
+/** "cancelled" is no longer a menu entry (it is two tabs of the report page); links that still use that key land
+ * on the report page, so the report entry stays highlighted for it. */
+export const isActiveNav = (active: string, itemKey: string) => active === itemKey || (itemKey === "timeline" && active === "cancelled")
 
 // Flat, de-duplicated list — consumed by MobileTabBar.
 export const NAV_ITEMS: NavItem[] = (() => {
@@ -124,7 +126,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
               )}
               {group.items.map((item) => {
                 const Icon = item.icon
-                const isActive = active === item.key
+                const isActive = isActiveNav(active, item.key)
                 const button = (
                   <button
                     key={item.key + item.label}

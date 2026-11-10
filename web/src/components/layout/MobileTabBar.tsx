@@ -1,4 +1,4 @@
-import { NAV_ITEMS } from "./Sidebar"
+import { NAV_ITEMS, isActiveNav } from "./Sidebar"
 import { cn } from "@/lib/utils"
 
 interface MobileTabBarProps {
@@ -13,7 +13,7 @@ export function MobileTabBar({ active, onNavigate }: MobileTabBarProps) {
     <nav className="glass-panel topbar-surface flex gap-2 overflow-x-auto rounded-none border-x-0 border-t-0 px-2 py-2.5 md:hidden">
       {items.map((item) => {
         const Icon = item.icon
-        const isActive = active === item.key
+        const isActive = isActiveNav(active, item.key)
         return (
           <button
             key={item.key}

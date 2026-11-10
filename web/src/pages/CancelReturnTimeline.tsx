@@ -51,7 +51,7 @@ const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(
 /** The "รายงาน" page: one overview over time (below) plus the two cancelled-order views that used to
  * be only on the "สินค้ายกเลิก" page — stock already deducted (T1) and not yet deducted (T2) —
  * reused as they are (CancelledView) so every status, filter, chart and export matches that page. */
-export function CancelReturnTimeline() {
+export function CancelReturnTimeline({ initialTab }: { initialTab?: "overview" | "deducted" | "not-deducted" } = {}) {
   const { data } = useCancelledQuery()
   const report = data?.cancelledOrders ?? null
   const rows = useMemo(() => report?.rows ?? [], [report])
@@ -64,6 +64,7 @@ export function CancelReturnTimeline() {
     <div className="space-y-4">
       {data && <CancelledWarning report={report} />}
       <Tabs
+        initialKey={initialTab}
         items={[
           {
             key: "overview",
@@ -105,6 +106,11 @@ export function CancelReturnTimeline() {
       />
     </div>
   )
+}
+
+/** Where the old "สินค้ายกเลิก" menu entry and links to it now lead: the report page, on the cancelled tab. */
+export function CancelledReport() {
+  return <CancelReturnTimeline initialTab="deducted" />
 }
 
 /** "ยกเลิก / ตีกลับ ตามช่วงเวลา": cancelled orders, bounced/returned parcels and lost parcels in one

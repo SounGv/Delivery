@@ -13,8 +13,7 @@ import { ReceivingWarehouse, ReceivingDepartmentPage, WarehouseDepartmentPage } 
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
 import { Returns } from "@/pages/Returns"
-import { Cancelled } from "@/pages/Cancelled"
-import { CancelReturnTimeline } from "@/pages/CancelReturnTimeline"
+import { CancelReturnTimeline, CancelledReport } from "@/pages/CancelReturnTimeline"
 import { Backlog } from "@/pages/Backlog"
 import { StockValue } from "@/pages/StockValue"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
@@ -45,7 +44,7 @@ const PAGES: Record<string, React.ComponentType> = {
   "sales-summary": SalesSummary,
   "work-issues": WorkIssues,
   returns: Returns,
-  cancelled: Cancelled,
+  cancelled: CancelledReport,
   timeline: CancelReturnTimeline,
   backlog: Backlog,
   "stock-value": StockValue,
