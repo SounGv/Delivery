@@ -22,6 +22,8 @@ export const NO_DATE = "__no_date__"
 export interface TimelineStatus {
   label: string
   tone: Tone
+  /** Counts as "ค้างต้องตาม" even though the tone is not warn/danger (money is in, a note is missing). */
+  open?: boolean
 }
 
 export interface TimelineItem {
@@ -68,11 +70,35 @@ function returnStatus(r: RestockRow): TimelineStatus {
   return { label: "ยังไม่ Stock-In", tone: "warn" }
 }
 
-function lostStatus(paidText: string | undefined, r?: RestockRow): TimelineStatus {
-  if (paidText === "ได้เงินคืนแล้ว") return { label: "ได้เงินคืนแล้ว", tone: "ok" }
-  if (paidText === "รอเงินคืนจากขนส่ง") return { label: "รอเงินคืนจากขนส่ง", tone: "warn" }
-  if (r && stripLeadingSymbols(r.receiptStatus) === "ได้เงินคืนแล้ว") return { label: "ได้เงินคืนแล้ว", tone: "ok" }
-  return { label: "ยังไม่มีบันทึก", tone: "danger" }
+/** The three states a lost / refund-claim parcel can be in. Wording is the team's own. */
+export const LOST_PAID: TimelineStatus = { label: "ได้เงินคืนแล้ว", tone: "ok" }
+export const LOST_CHASING: TimelineStatus = { label: "ยังไม่ได้ · กำลังตามเรื่อง", tone: "warn" }
+export const LOST_UNNOTED: TimelineStatus = {
+  label: "ได้รับเงินจากแพลตฟอร์มแล้ว · ยังไม่ลงหมายเหตุในระบบ",
+  tone: "info",
+  open: true,
+}
+export const LOST_STATUSES = [LOST_PAID, LOST_CHASING, LOST_UNNOTED]
+
+/** Colour-label-only means the money is in (BigSeller label "ได้รับเงินคืนจากขนส่งแล้ว") but nobody typed
+ * the note yet; see RefundCase.knownFrom. */
+const KNOWN_FROM_COLOUR_ONLY = "ป้ายสี"
+
+/**
+ * - the refund tab says paid and the team typed a note        -> LOST_PAID
+ * - the refund tab says paid but only the colour label shows it -> LOST_UNNOTED
+ * - the refund tab says still waiting for the carrier           -> LOST_CHASING
+ * - no refund case yet, but the restock tab already shows "ได้เงินคืนแล้ว" -> LOST_UNNOTED
+ *   (the money is in, the team has not logged the case)
+ * - no refund case and no money yet                              -> LOST_CHASING
+ */
+function lostStatus(refund: RefundCase | undefined, restock?: RestockRow): TimelineStatus {
+  if (refund) {
+    if (!refund.caseResult.includes("ได้เงินคืนแล้ว")) return LOST_CHASING
+    return refund.knownFrom === KNOWN_FROM_COLOUR_ONLY ? LOST_UNNOTED : LOST_PAID
+  }
+  if (restock && stripLeadingSymbols(restock.receiptStatus) === "ได้เงินคืนแล้ว") return LOST_UNNOTED
+  return LOST_CHASING
 }
 
 export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRow[], refunds: RefundCase[]): TimelineItem[] {
@@ -114,7 +140,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       qty: r.qty,
       orderNo: r.orderNo,
       packageNo: r.packageNo,
-      status: lost ? lostStatus(refund?.caseResult, r) : returnStatus(r),
+      status: lost ? lostStatus(refund, r) : returnStatus(r),
       tag: r.origin,
       extra: money(r.refundAmount),
     })
@@ -124,7 +150,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
     if (restockPackages.has(f.packageNo)) return // already counted through its restock row
     items.push({
       id: `f:${f.packageNo || f.orderNo}:${f.sku}:${i}`,
-      kind: "lost",
+      kind: f.platformStatus === "สูญหาย" ? "lost" : "return",
       date: null,
       dateNote: "",
       channel: f.channel,
@@ -132,7 +158,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       qty: f.qty,
       orderNo: f.orderNo,
       packageNo: f.packageNo,
-      status: lostStatus(f.caseResult),
+      status: lostStatus(f),
       tag: f.platformStatus,
       extra: money(f.sellPrice),
     })
@@ -142,7 +168,8 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
 }
 
 /** Waiting on someone, or a problem — the lines the team still has to act on. */
-export const needsAction = (item: TimelineItem) => item.status.tone === "warn" || item.status.tone === "danger"
+export const needsAction = (item: TimelineItem) =>
+  item.status.tone === "warn" || item.status.tone === "danger" || item.status.open === true
 
 export interface Bucket {
   key: string

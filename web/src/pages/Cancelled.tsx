@@ -34,7 +34,7 @@ import {
   distinctChannels,
   isStaleCancelled,
 } from "@/lib/cancelled-selectors"
-import type { CancelledRow, CancelledStatus } from "@/api/types"
+import type { CancelledOrdersReport, CancelledRow, CancelledStatus } from "@/api/types"
 
 const ALL = "__all__"
 const STALE = "stale"
@@ -62,21 +62,7 @@ export function Cancelled() {
 
   return (
     <div className="space-y-4">
-      {(!report || report.error || report.missingTabs.length > 0) && (
-        <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
-          <div className="text-sm">
-            <p className="font-semibold text-foreground">ยังอ่านข้อมูลสินค้ายกเลิกจากชีต gv-returns-sync ไม่ได้</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {!report
-                ? "ยังไม่มีข้อมูลนี้ใน payload — รอระบบหลังบ้านอัปเดต (deploy Apps Script เวอร์ชันล่าสุด)"
-                : report.error
-                  ? `สาเหตุ: ${report.error} — ตรวจว่าบัญชีที่ deploy Web App มีสิทธิ์เข้าถึงไฟล์ gv-returns-sync`
-                  : `ไม่พบแท็บ: ${report.missingTabs.join(", ")}`}
-            </p>
-          </div>
-        </div>
-      )}
+      <CancelledWarning report={report} />
 
       <Tabs
         items={[
@@ -116,6 +102,26 @@ export function Cancelled() {
   )
 }
 
+/** Shown when the cancelled-order log cannot be read (no part in the payload, an error, or a missing tab). */
+export function CancelledWarning({ report }: { report: CancelledOrdersReport | null }) {
+  if (report && !report.error && report.missingTabs.length === 0) return null
+  return (
+    <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
+      <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
+      <div className="text-sm">
+        <p className="font-semibold text-foreground">ยังอ่านข้อมูลสินค้ายกเลิกจากชีต gv-returns-sync ไม่ได้</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {!report
+            ? "ยังไม่มีข้อมูลนี้ใน payload — รอระบบหลังบ้านอัปเดต (deploy Apps Script เวอร์ชันล่าสุด)"
+            : report.error
+              ? `สาเหตุ: ${report.error} — ตรวจว่าบัญชีที่ deploy Web App มีสิทธิ์เข้าถึงไฟล์ gv-returns-sync`
+              : `ไม่พบแท็บ: ${report.missingTabs.join(", ")}`}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 const STATUS_TONE: Record<CancelledStatus, Tone> = {
   รอตรวจสอบ: "warn",
   รับแล้ว: "ok",
@@ -124,7 +130,7 @@ const STATUS_TONE: Record<CancelledStatus, Tone> = {
 }
 const STATUS_ICON = { รอตรวจสอบ: Clock, รับแล้ว: CheckCircle2, ปิดงาน: PackageCheck, ไม่ตรง: XCircle }
 
-function CancelledView({
+export function CancelledView({
   rows,
   todayIso,
   kindLabel,

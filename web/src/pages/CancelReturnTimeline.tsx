@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { AlertTriangle, Ban, CalendarDays, CheckCircle2, Clock, PackageCheck, PackageX, Search, Undo2, XCircle } from "lucide-react"
+import { AlertTriangle, Ban, CalendarDays, CalendarRange, CheckCircle2, Clock, Hourglass, PackageCheck, PackageX, Search, Undo2, XCircle } from "lucide-react"
 import { useCancelledQuery, useRefundsQuery, useRestockQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -7,6 +7,7 @@ import { FilterField, ReturnRowCard, StatusPill, StatusTile, chipClass, filterSe
 import {
   KINDS,
   KIND_LABEL,
+  LOST_STATUSES,
   NO_DATE,
   buildTimelineItems,
   bucketsByDay,
@@ -19,6 +20,8 @@ import {
   type TimelineKind,
 } from "@/lib/cancel-return-timeline"
 import { dateFromIso, formatFullDateLabel, formatMonthLabel, isoDateOf } from "@/lib/format"
+import { Tabs } from "@/components/ui/Tabs"
+import { CancelledView, CancelledWarning } from "@/pages/Cancelled"
 import { cn } from "@/lib/utils"
 
 const ALL = "__all__"
@@ -36,11 +39,70 @@ const TONE_ICON: Record<Tone, React.ComponentType<{ className?: string }> | unde
 
 const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("th-TH", { weekday: "short" })
 
+/** The "รายงาน" page: one overview over time (below) plus the two cancelled-order views that used to
+ * be only on the "สินค้ายกเลิก" page — stock already deducted (T1) and not yet deducted (T2) —
+ * reused as they are (CancelledView) so every status, filter, chart and export matches that page. */
+export function CancelReturnTimeline() {
+  const { data } = useCancelledQuery()
+  const report = data?.cancelledOrders ?? null
+  const rows = useMemo(() => report?.rows ?? [], [report])
+  const deducted = useMemo(() => rows.filter((r) => r.stockDeducted), [rows])
+  const notDeducted = useMemo(() => rows.filter((r) => !r.stockDeducted), [rows])
+  const todayIso = data?.todayDate ?? ""
+  const duplicatesDropped = report?.duplicatesDropped ?? 0
+
+  return (
+    <div className="space-y-4">
+      {data && <CancelledWarning report={report} />}
+      <Tabs
+        items={[
+          {
+            key: "overview",
+            label: "ภาพรวมตามช่วงเวลา",
+            icon: CalendarRange,
+            render: () => <TimelineOverview key="overview" />,
+          },
+          {
+            key: "deducted",
+            label: `ยกเลิก · ตัดสต็อกแล้ว (${num(deducted.length)})`,
+            icon: Ban,
+            render: () => (
+              <CancelledView
+                key="deducted"
+                rows={deducted}
+                todayIso={todayIso}
+                kindLabel="ตัดสต็อกแล้ว"
+                description="ออเดอร์ที่ยกเลิกหลังตัดสต็อก ต้องรับของคืนเข้าคลัง"
+                duplicatesDropped={duplicatesDropped}
+              />
+            ),
+          },
+          {
+            key: "not-deducted",
+            label: `ยกเลิก · ยังไม่ตัดสต็อก (${num(notDeducted.length)})`,
+            icon: Hourglass,
+            render: () => (
+              <CancelledView
+                key="not-deducted"
+                rows={notDeducted}
+                todayIso={todayIso}
+                kindLabel="ยังไม่ตัดสต็อก"
+                description="ออเดอร์ที่ยกเลิกก่อนตัดสต็อก ต้องเก็บของกลับเข้าที่"
+                duplicatesDropped={duplicatesDropped}
+              />
+            ),
+          },
+        ]}
+      />
+    </div>
+  )
+}
+
 /** "ยกเลิก / ตีกลับ ตามช่วงเวลา": cancelled orders, bounced/returned parcels and lost parcels in one
  * list, switchable between a month view and a day view, every line with its status. Read-only; it
  * only regroups what the cancelled, restock and refund parts already carry (see
  * lib/cancel-return-timeline.ts for how the three sources are merged). */
-export function CancelReturnTimeline() {
+function TimelineOverview() {
   const cancelledQ = useCancelledQuery()
   const restockQ = useRestockQuery()
   const refundsQ = useRefundsQuery()
@@ -97,6 +159,11 @@ export function CancelReturnTimeline() {
     return c
   }, [scoped])
   const openCount = useMemo(() => scoped.filter(needsAction).length, [scoped])
+  const lostCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const it of scoped) if (it.kind === "lost") m.set(it.status.label, (m.get(it.status.label) ?? 0) + 1)
+    return m
+  }, [scoped])
 
   const inKind = useMemo(() => scoped.filter((it) => kind === ALL || it.kind === kind), [scoped, kind])
   const statusChips = useMemo(() => {
@@ -315,6 +382,33 @@ export function CancelReturnTimeline() {
           }}
         />
       </div>
+
+      <section aria-label="พัสดุสูญหาย ตามถึงไหนแล้ว" className="space-y-2">
+        <h3 className="px-1 text-sm font-bold text-foreground">
+          พัสดุสูญหาย: ตามถึงไหนแล้ว <span className="font-normal text-muted-foreground">· ใน {scopeLabel}</span>
+        </h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {LOST_STATUSES.map((s) => {
+            const active = kind === "lost" && statusLabel === s.label
+            return (
+              <StatusTile
+                key={s.label}
+                tone={s.tone}
+                icon={TONE_ICON[s.tone] ?? Clock}
+                label={s.label}
+                count={lostCounts.get(s.label) ?? 0}
+                unit="รายการ"
+                active={active}
+                onClick={() => {
+                  setKind(active ? ALL : "lost")
+                  setStatusLabel(active ? ALL : s.label)
+                  resetPaging()
+                }}
+              />
+            )
+          })}
+        </div>
+      </section>
 
       <div className="glass-panel overflow-hidden rounded-2xl">
         <div className="overflow-x-auto">
