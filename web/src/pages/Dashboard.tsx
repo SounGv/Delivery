@@ -507,6 +507,7 @@ export function Dashboard() {
       {/* 1. The dominant block: title, one verdict, and the four numbers a manager looks for first. */}
       <OverviewHero
         dataDateLabel={formatFullDateLabel(data.todayDate)}
+        dayLabel={formatDateLabel(data.todayDate)}
         needAction={needAction}
         teamLabel={teamLabel}
         parcels={today.parcels}

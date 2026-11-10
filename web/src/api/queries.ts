@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react
 import { fetchDashboard, fetchPayloadPart } from "./client"
 import { getRefreshIntervalMs, getSlowRefreshIntervalMs } from "@/lib/settingsStorage"
 import { useSettings } from "@/lib/settingsContext"
-import { computeTeamTotalsByDate, employeesForTeam } from "@/lib/dashboard-selectors"
+import { computeTeamTotalsByDate, employeesForTeam, latestOutputDate } from "@/lib/dashboard-selectors"
 import type {
   CancelledPart,
   DashboardResponse,
@@ -101,7 +101,9 @@ export function useTeamDashboard(): UseTeamDashboardResult {
     if (!raw) return undefined
     const employees = employeesForTeam(raw.employees, selectedTeam)
     const teamTotalsByDate = computeTeamTotalsByDate(employees, raw.dates)
-    const monthKey = raw.todayDate.slice(0, 7)
+    // "Today" for this crew: its own latest day with output (see latestOutputDate), not the all-crew one.
+    const todayDate = latestOutputDate(employees) ?? raw.todayDate
+    const monthKey = todayDate.slice(0, 7)
     const monthlyTotals = raw.dates.reduce(
       (acc, d) => {
         const t = teamTotalsByDate[d]
@@ -118,7 +120,7 @@ export function useTeamDashboard(): UseTeamDashboardResult {
       targetOverride != null
         ? { label: `เป้ากำหนดเอง: ${targetOverride}`, value: targetOverride }
         : teamTarget
-    return { ...raw, employees, allEmployees: raw.employees, teamTotalsByDate, monthlyTotals, target }
+    return { ...raw, todayDate, employees, allEmployees: raw.employees, teamTotalsByDate, monthlyTotals, target }
   }, [raw, selectedTeam, targetOverride])
 
   return { ...query, data } as UseTeamDashboardResult

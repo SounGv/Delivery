@@ -76,6 +76,8 @@ function HeroTile({
 export interface OverviewHeroProps {
   /** Short date label of the newest data, e.g. "09 พ.ย. 2026". */
   dataDateLabel: string
+  /** Day the parcel figure belongs to, e.g. "07 พ.ย." — the crew's latest day with output, not necessarily the calendar day. */
+  dayLabel: string
   needAction: number
   teamLabel: string
   parcels: number
@@ -141,7 +143,7 @@ export function OverviewHero(p: OverviewHeroProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <HeroTile icon={PackageCheck} label="พัสดุวันนี้" onClick={p.onOpenTeam} sub={<HeroTrend value={p.parcelTrend} />}>
+          <HeroTile icon={PackageCheck} label={`พัสดุ · ${p.dayLabel}`} onClick={p.onOpenTeam} sub={<HeroTrend value={p.parcelTrend} />}>
             <Count value={p.parcels} />
           </HeroTile>
           <HeroTile

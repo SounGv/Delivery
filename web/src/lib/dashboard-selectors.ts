@@ -21,6 +21,22 @@ export function employeesForTeam(employees: Employee[], team: TeamId): Employee[
   return employees.filter((e) => teamOf(e) === team)
 }
 
+/**
+ * The latest date on which one of these employees has real output (a parcel or item count above zero).
+ * The payload's own `todayDate` is the latest such day across ALL crews, so when one crew has already filled
+ * in a day another crew has not, the second crew would be shown an empty "today" and every person as having
+ * no data. Each crew therefore gets its own "today". Returns null when nobody has any output.
+ */
+export function latestOutputDate(employees: Employee[]): string | null {
+  let latest: string | null = null
+  for (const e of employees) {
+    for (const [date, entry] of Object.entries(e.byDate)) {
+      if (((entry.parcels ?? 0) > 0 || (entry.items ?? 0) > 0) && (latest === null || date > latest)) latest = date
+    }
+  }
+  return latest
+}
+
 /** True when the payload actually distinguishes an offline crew — lets the UI hide
  * the team switcher entirely on older payloads (pre-parser-split) where everyone is online. */
 export function hasOfflineTeam(employees: Employee[]): boolean {
