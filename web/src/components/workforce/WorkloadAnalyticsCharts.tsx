@@ -48,14 +48,14 @@ export function WorkloadAnalyticsCharts({ series }: { series: DailyWorkforceStat
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <ChartCard title="ผลงานรวมเทียบ Productivity" subtitle="พัสดุ / สินค้า รายวัน เทียบ productivity ต่อคน" className="lg:col-span-2">
+      <ChartCard title="ผลงานรวมเทียบผลผลิตต่อคน" subtitle="พัสดุ / สินค้า รายวัน เทียบผลผลิตต่อคน" className="lg:col-span-2">
         <BarLineChart
           categories={categories}
           bars={[
             { name: "พัสดุ", data: series.map((s) => s.totalParcels) },
             { name: "สินค้า", data: series.map((s) => s.totalItems) },
           ]}
-          line={{ name: "Productivity (พัสดุ/คน)", data: series.map((s) => Math.round(s.actualProductivity)) }}
+          line={{ name: "ผลผลิต (พัสดุ/คน)", data: series.map((s) => Math.round(s.actualProductivity)) }}
           height={280}
         />
       </ChartCard>

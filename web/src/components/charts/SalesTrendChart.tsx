@@ -18,7 +18,7 @@ export function SalesTrendChart({ days }: { days: OrderReportDay[] }) {
     >
       <BarLineChart
         categories={days.map((d) => formatFullDateLabel(d.date))}
-        bars={[{ name: "คำสั่งซื้อ", data: days.map((d) => d.effOrders) }]}
+        bars={[{ name: "ออเดอร์", data: days.map((d) => d.effOrders) }]}
         line={{ name: "ยอดขาย", data: days.map((d) => d.effSales) }}
         leftAxisFormatter={(v) => v.toLocaleString("th-TH")}
         rightAxisFormatter={(v) => `${(v / 1e6).toFixed(1)}M`}

@@ -61,8 +61,8 @@ function TeamDepartmentPage({ team }: { team: TeamId }) {
             ? [{ key: "bigseller-ranking", label: "อันดับผลงาน", icon: Trophy, render: () => <BigSellerRankingSection team={team} /> }]
             : []),
           { key: "kpi", label: "KPI", icon: Gauge, render: () => <KpiEvaluation /> },
-          { key: "productivity", label: "Productivity", icon: LineChart, render: () => <Productivity /> },
-          { key: "ot", label: "OT & HR", icon: Timer, render: () => <OtHr defaultDepartment={deptLabel} /> },
+          { key: "productivity", label: "ผลผลิตต่อคน", icon: LineChart, render: () => <Productivity /> },
+          { key: "ot", label: "OT และเวลาทำงาน", icon: Timer, render: () => <OtHr defaultDepartment={deptLabel} /> },
         ]}
       />
     </div>

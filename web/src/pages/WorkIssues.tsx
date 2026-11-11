@@ -160,7 +160,7 @@ export function WorkIssues() {
             disabled={sorted.length === 0}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-40 max-sm:min-h-10"
           >
-            <Download className="size-4" /> Export CSV
+            <Download className="size-4" /> ส่งออก CSV
           </button>
         </div>
       </div>
@@ -238,7 +238,7 @@ export function WorkIssues() {
                           )}
                           {i.note && (
                             <p className="mt-1 text-xs text-muted-foreground">
-                              <span className="font-medium text-foreground">หมายเหตุจากชีท: </span>{i.note}
+                              <span className="font-medium text-foreground">หมายเหตุจากชีต: </span>{i.note}
                             </p>
                           )}
                           <p className="mt-2 text-xs font-semibold text-foreground">ประวัติการติดตาม (บันทึกในเครื่องนี้เท่านั้น)</p>
@@ -280,7 +280,7 @@ export function WorkIssues() {
             {sorted.length === 0 && (
               <tr>
                 <td colSpan={11} className="py-8 text-center text-muted-foreground">
-                  {hasData ? "ไม่มีปัญหาตามเงื่อนไขที่เลือก" : "ยังไม่มีข้อมูลปัญหาจากชีท"}
+                  {hasData ? "ไม่มีปัญหาตามเงื่อนไขที่เลือก" : "ยังไม่มีข้อมูลปัญหาจากชีต"}
                 </td>
               </tr>
             )}

@@ -161,7 +161,7 @@ export function OtReport({ defaultDepartment }: { defaultDepartment?: string } =
         </div>
         <div className="ml-auto text-right">
           <Button size="sm" variant="outline" onClick={handleExport}>
-            <Download className="size-4" /> Export CSV
+            <Download className="size-4" /> ส่งออก CSV
           </Button>
           <p className="mt-1 text-[11px] text-muted-foreground">
             ส่งออก {records.length} วันทำงาน (มี OT {otRecords.length} วัน)

@@ -111,7 +111,7 @@ export function Errors() {
             {incidents.length === 0 && (
               <tr>
                 <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                  ไม่มีรายการผิดปกติในชีท 🎉
+                  ไม่มีรายการผิดปกติในชีต 🎉
                 </td>
               </tr>
             )}

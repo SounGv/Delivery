@@ -106,7 +106,7 @@ export function ShipErrorsReport() {
             disabled={filtered.length === 0}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-40"
           >
-            <Download className="size-4" /> Export CSV
+            <Download className="size-4" /> ส่งออก CSV
           </button>
         </div>
       </div>
@@ -152,7 +152,7 @@ export function ShipErrorsReport() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                  {hasErrorData ? "ไม่มีข้อผิดพลาดตามเงื่อนไขที่เลือก" : "ยังไม่มีข้อมูลข้อผิดพลาดจากชีท"}
+                  {hasErrorData ? "ไม่มีข้อผิดพลาดตามเงื่อนไขที่เลือก" : "ยังไม่มีข้อมูลข้อผิดพลาดจากชีต"}
                 </td>
               </tr>
             )}

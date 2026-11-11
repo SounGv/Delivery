@@ -28,7 +28,7 @@ export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: Head
     <header className="glass-panel topbar-surface sticky top-0 z-10 flex items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] md:px-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <h1 className="truncate text-base font-semibold text-foreground md:text-lg">Warehouse Dashboard Pro</h1>
+          <h1 className="truncate text-base font-semibold text-foreground md:text-lg">แดชบอร์ดทีมคลัง</h1>
           {/* On a phone the connection badge appears only when something is wrong; from sm up it is always shown. */}
           <span
             className={cn(
@@ -39,12 +39,12 @@ export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: Head
             )}
           >
             <span className={cn("size-1.5 rounded-full", isConnected ? "animate-pulse bg-emerald-glow" : "bg-destructive")} />
-            {isConnected ? "LIVE" : "ออฟไลน์"}
+            {isConnected ? "เชื่อมต่อแล้ว" : "ออฟไลน์"}
           </span>
         </div>
         <p className="truncate text-xs text-muted-foreground">
           <span className="max-sm:hidden">
-            Google Sheets Connected · <Clock />
+            เชื่อมต่อชีตแล้ว · <Clock />
             {lastUpdated && " · "}
           </span>
           {lastUpdated && <>อัปเดตล่าสุด {lastUpdated}</>}

@@ -8,7 +8,7 @@ export function OtDataNotice() {
     <div className="glass-panel flex items-start gap-3 rounded-2xl border-amber-500/30 p-4">
       <Info className="mt-0.5 size-5 shrink-0 text-amber-500" />
       <div className="text-sm">
-        <p className="font-semibold text-foreground">ยังไม่พบข้อมูลเวลาเข้า-ออกงานจากชีท</p>
+        <p className="font-semibold text-foreground">ยังไม่พบข้อมูลเวลาเข้า-ออกงานจากชีต</p>
         <p className="mt-1 text-xs text-muted-foreground">
           ระบบ OT อ่านคอลัมน์ <b>เวลาเข้างาน / เวลาออกงาน</b> จากชีตโดยตรง แต่ตอนนี้ยังไม่พบข้อมูลเวลา
           {" "}เมื่อทีมกรอกเวลาเข้า-ออกแล้ว หน้านี้จะแสดง OT จริงทันทีที่มีเวลาออกงานเกินเวลาเลิกงานปกติ

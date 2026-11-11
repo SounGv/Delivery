@@ -75,7 +75,7 @@ export function Employees() {
   const rankEntry = isAllSelected ? null : ranking.find((r) => r.name === activeSelection)
 
   if (!employee) {
-    return <ErrorPanel message="ไม่พบข้อมูลพนักงานในชีท" />
+    return <ErrorPanel message="ไม่พบข้อมูลพนักงานในชีต" />
   }
 
   const buckets = aggregateEmployeeByPeriod(employee, period)
@@ -176,7 +176,7 @@ export function Employees() {
             ))}
           </div>
           <Button size="sm" variant="outline" onClick={handleExportCsv}>
-            <Download className="size-4" /> Export CSV
+            <Download className="size-4" /> ส่งออก CSV
           </Button>
         </div>
       </div>

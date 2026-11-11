@@ -12,11 +12,11 @@ export function MonthlyTrendChart({ days }: { days: OrderReportDay[] }) {
   const rows = useMemo(() => monthlySalesTrend(days), [days])
 
   return (
-    <ChartCard title="เทียบยอดขาย/คำสั่งซื้อ/พัสดุ รายเดือน" subtitle="แนวโน้มแต่ละเดือน ตามช่องทางและช่วงวันที่ที่เลือกด้านบน">
+    <ChartCard title="เทียบยอดขาย/ออเดอร์/พัสดุ รายเดือน" subtitle="แนวโน้มแต่ละเดือน ตามช่องทางและช่วงวันที่ที่เลือกด้านบน">
       <BarLineChart
         categories={rows.map((r) => formatMonthLabel(r.monthKey))}
         bars={[
-          { name: "คำสั่งซื้อ", data: rows.map((r) => r.orders) },
+          { name: "ออเดอร์", data: rows.map((r) => r.orders) },
           { name: "พัสดุ", data: rows.map((r) => r.parcels) },
         ]}
         line={{ name: "ยอดขาย", data: rows.map((r) => r.sales) }}

@@ -21,7 +21,7 @@ export function DataPendingPage({ title, purpose, needs }: DataPendingPageProps)
         <h2 className="text-lg font-semibold text-foreground">{title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{purpose}</p>
         <div className="mt-5 rounded-xl border border-border bg-white/5 p-4 text-left">
-          <p className="text-xs font-semibold text-foreground">ต้องมีข้อมูลนี้ในชีทก่อน (ยังไม่พบใน Google Sheets ที่เชื่อมอยู่):</p>
+          <p className="text-xs font-semibold text-foreground">ต้องมีข้อมูลนี้ในชีตก่อน (ยังไม่พบใน Google Sheets ที่เชื่อมอยู่):</p>
           <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
             {needs.map((n) => (
               <li key={n} className="flex gap-2">

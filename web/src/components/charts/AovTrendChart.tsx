@@ -39,7 +39,7 @@ export function AovTrendChart({ days }: { days: OrderReportDay[] }) {
       },
       series: [
         {
-          name: "AOV",
+          name: "ยอดเฉลี่ยต่อออเดอร์",
           type: "line",
           smooth: true,
           symbol: "none",
@@ -61,7 +61,7 @@ export function AovTrendChart({ days }: { days: OrderReportDay[] }) {
 
   return (
     <ChartCard
-      title="AOV รายวัน (มูลค่าเฉลี่ยต่อออเดอร์)"
+      title="ยอดเฉลี่ยต่อออเดอร์ รายวัน"
       subtitle={`เฉลี่ยทั้งช่วง ฿${avgAov.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`}
     >
       <EChart option={option} height={300} />

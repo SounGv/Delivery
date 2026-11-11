@@ -50,7 +50,7 @@ export function MobileTabBar({ active, onNavigate }: MobileTabBarProps) {
         <span className={cn("flex h-6 w-10 items-center justify-center rounded-full transition-colors", isActive && "bg-primary/15")}>
           <Icon className="size-4" />
         </span>
-        <span className="max-w-full truncate">{item.label}</span>
+        <span className="max-w-full truncate">{item.shortLabel ?? item.label}</span>
       </button>
     )
   }

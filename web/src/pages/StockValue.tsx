@@ -396,7 +396,7 @@ export function StockValue() {
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
               <Search className="size-6" />
-              <p>ไม่พบ SKU ที่ตรงกับเงื่อนไข</p>
+              <p>ไม่พบ SKU ที่ตรงกับเงื่อนไข — ลองล้างคำค้นหาหรือเลือกทุกคลัง</p>
             </div>
           ) : (
             <div className="overflow-x-auto">

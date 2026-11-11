@@ -110,11 +110,11 @@ export function SalesHero(p: SalesHeroProps) {
           <Tile icon={Coins} label="ยอดขายรวม (มีผล)" value={<Count value={t.totalEffSales} format={compactMoney} />} title={money(t.totalEffSales)} sub={`เฉลี่ย ${money(p.avgPerDay)}/วัน`} />
           <Tile
             icon={ShoppingCart}
-            label="คำสั่งซื้อที่มีผล"
+            label="ออเดอร์ที่มีผล"
             value={<Count value={t.totalEffOrders} format={(n) => Math.round(n).toLocaleString("th-TH")} />}
             sub={`จากทั้งหมด ${t.totalOrders.toLocaleString("th-TH")} ออเดอร์`}
           />
-          <Tile icon={Receipt} label="AOV เฉลี่ย" value={`฿${t.weightedAov.toFixed(2)}`} sub="ต่อคำสั่งซื้อ 1 รายการ" />
+          <Tile icon={Receipt} label="เฉลี่ยต่อออเดอร์" value={`฿${t.weightedAov.toFixed(2)}`} sub="ยอดต่อออเดอร์ 1 รายการ" />
           <Tile icon={RotateCcw} label="อัตราคืนเงินเฉลี่ย" value={`${t.avgRefundRate.toFixed(2)}%`} sub={`คืนเงิน ${money(t.totalRefundAmount)}`} />
           <Tile
             icon={TicketPercent}

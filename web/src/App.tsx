@@ -12,8 +12,7 @@ import { OtHr } from "@/pages/OtHr"
 import { ReceivingWarehouse, ReceivingDepartmentPage, WarehouseDepartmentPage } from "@/pages/ReceivingWarehouse"
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
-import { BacklogHub, ReturnsStockHub } from "@/pages/ReturnsHub"
-import { CancelReturnTimeline, CancelledReport } from "@/pages/CancelReturnTimeline"
+import { BacklogHub, CancelledHub, ReportHub, ReturnsStockHub } from "@/pages/ReturnsHub"
 import { StockValue } from "@/pages/StockValue"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
@@ -43,8 +42,8 @@ const PAGES: Record<string, React.ComponentType> = {
   "sales-summary": SalesSummary,
   "work-issues": WorkIssues,
   returns: ReturnsStockHub,
-  cancelled: CancelledReport,
-  timeline: CancelReturnTimeline,
+  cancelled: CancelledHub,
+  timeline: ReportHub,
   backlog: BacklogHub,
   "stock-value": StockValue,
   settings: Settings,

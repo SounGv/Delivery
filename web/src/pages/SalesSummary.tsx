@@ -116,7 +116,7 @@ function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]
             <th className="pb-2.5 font-medium">วันที่</th>
             <th className="pb-2.5 font-medium text-right">ยอดขาย (฿)</th>
             <th className="pb-2.5 font-medium text-right">ออเดอร์</th>
-            <th className="pb-2.5 font-medium text-right">AOV (฿)</th>
+            <th className="pb-2.5 font-medium text-right">เฉลี่ยต่อออเดอร์ (฿)</th>
             <th className="pb-2.5 font-medium text-right">อัตรายกเลิก</th>
           </tr>
         </thead>
@@ -152,7 +152,7 @@ function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]
                   </span>
                 </td>
                 <td data-label="ออเดอร์" className="py-2.5 text-right tabular-nums text-muted-foreground">{d.effOrders.toLocaleString("th-TH")}</td>
-                <td data-label="AOV (฿)" className="py-2.5 text-right tabular-nums text-muted-foreground">{d.aov.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</td>
+                <td data-label="เฉลี่ยต่อออเดอร์ (฿)" className="py-2.5 text-right tabular-nums text-muted-foreground">{d.aov.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</td>
                 <td data-label="อัตรายกเลิก" className="py-2.5 text-right tabular-nums text-muted-foreground">{cancelRate.toFixed(1)}%</td>
               </tr>
             )
@@ -203,13 +203,13 @@ function ExtraStatsPanel({ totals }: { totals: OrderReportTotals }) {
         <StatChip label="ยอดขาย (ตามคอลัมน์ในชีต)" value={money(totals.totalSales)} />
         <StatChip label="ยอดคืนเงินรวม" value={money(totals.totalRefundAmount)} tone="rose" />
         <StatChip
-          label="คำสั่งซื้อ/ลูกค้าที่คืนเงิน"
+          label="ออเดอร์/ลูกค้าที่คืนเงิน"
           value={`${totals.totalRefundOrders.toLocaleString("th-TH")} / ${totals.totalRefundCustomers.toLocaleString("th-TH")}`}
           tone="rose"
         />
-        <StatChip label="มูลค่าคำสั่งซื้อที่ยกเลิก" value={money(totals.totalCancelledAmount)} tone="rose" />
+        <StatChip label="มูลค่าออเดอร์ที่ยกเลิก" value={money(totals.totalCancelledAmount)} tone="rose" />
         <StatChip
-          label="คำสั่งซื้อที่ยกเลิก"
+          label="ออเดอร์ที่ยกเลิก"
           value={`${totals.totalCancelledOrders.toLocaleString("th-TH")} ออเดอร์ (${totals.cancelRate.toFixed(1)}%)`}
           tone="rose"
         />
@@ -358,7 +358,7 @@ export function SalesSummary() {
 
       {channel === "all" && (
         <>
-          <SectionHeading title="เทียบออนไลน์ vs ออฟไลน์" caption="ตามช่วงวันที่ที่เลือก ไม่ขึ้นกับตัวกรองช่องทาง" />
+          <SectionHeading title="เทียบออนไลน์กับออฟไลน์" caption="ตามช่วงวันที่ที่เลือก ไม่ขึ้นกับตัวกรองช่องทาง" />
           <ChannelComparisonPanel days={daysInRange} />
         </>
       )}
@@ -372,7 +372,7 @@ export function SalesSummary() {
 
       {days.length > 0 && (
         <>
-          <SectionHeading title="แนวโน้มและวันเด่น" caption="ดูว่ายอดขายเปลี่ยนไปอย่างไรตามสัปดาห์ เดือน และค่า AOV" />
+          <SectionHeading title="แนวโน้มและวันเด่น" caption="ดูว่ายอดขายเปลี่ยนไปอย่างไรตามสัปดาห์ เดือน และยอดเฉลี่ยต่อออเดอร์" />
           <div className="grid grid-cols-12 gap-4">
             <div className="col-span-12 lg:col-span-6">
               <Suspense fallback={<ChartFallback height={300} />}>
@@ -405,7 +405,7 @@ export function SalesSummary() {
               title={peak ? formatFullDateLabel(peak.date) : "-"}
               text={
                 peak
-                  ? `จาก ${peak.effOrders.toLocaleString("th-TH")} ออเดอร์ (AOV ${money(peak.aov)}) สูงกว่าค่าเฉลี่ยรายวัน (${money(avgPerDay)}) ${(peak.effSales / avgPerDay).toFixed(1)} เท่า`
+                  ? `จาก ${peak.effOrders.toLocaleString("th-TH")} ออเดอร์ (เฉลี่ย ${money(peak.aov)} ต่อออเดอร์) สูงกว่าค่าเฉลี่ยรายวัน (${money(avgPerDay)}) ${(peak.effSales / avgPerDay).toFixed(1)} เท่า`
                   : ""
               }
             />
@@ -435,7 +435,7 @@ export function SalesSummary() {
 
           <p className="px-1 text-xs leading-relaxed text-muted-foreground">
             ที่มาข้อมูล: ชีต "รายงานคำสั่งซื้อ ออนไลน์" และ "รายงานคำสั่งซื้อ ออฟไลน์" (BigSeller export) · เลือกช่องทางได้จากตัวกรองด้านบน · ข้อจำกัด: ไม่แยกตาม SKU,
-            และ AOV/อัตราคืนเงินคำนวณแบบถ่วงน้ำหนัก (ยอดขายรวม/ออเดอร์รวม) ไม่ใช่ค่าเฉลี่ยอย่างง่ายของแต่ละวัน
+            และยอดเฉลี่ยต่อออเดอร์/อัตราคืนเงินคำนวณแบบถ่วงน้ำหนัก (ยอดขายรวม/ออเดอร์รวม) ไม่ใช่ค่าเฉลี่ยอย่างง่ายของแต่ละวัน
           </p>
         </>
       )}

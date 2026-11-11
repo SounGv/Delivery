@@ -11,7 +11,6 @@ import {
   Warehouse,
   BarChart3,
   ClipboardCheck,
-  CalendarRange,
   ListChecks,
   Coins,
 } from "lucide-react"
@@ -22,6 +21,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 export interface NavItem {
   key: string
   label: string
+  /** Shorter name for the phone's bottom bar, where the full label does not fit. */
+  shortLabel?: string
   icon: React.ComponentType<{ className?: string }>
   enabled: boolean
 }
@@ -50,8 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "team-offline", label: "ฝ่ายออฟไลน์", icon: Home, enabled: true },
       { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
-      { key: "timeline", label: "รายงานยกเลิก/ตีกลับ", icon: CalendarRange, enabled: true },
-      { key: "backlog", label: "งานค้าง/ตีกลับ", icon: ListChecks, enabled: true },
+      { key: "backlog", label: "งานค้าง/ยกเลิก/ตีกลับ", shortLabel: "งานค้าง", icon: ListChecks, enabled: true },
       { key: "stock-value", label: "มูลค่าสต็อก", icon: Coins, enabled: true },
     ],
   },
@@ -61,10 +61,11 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-/** "cancelled" is no longer a menu entry (it is two tabs of the report page); links that still use that key land
- * on the report page, so the report entry stays highlighted for it. */
+/** Backlog, cancelled orders, returns and the period report are tabs of one page behind the "งานค้าง/ตีกลับ" entry; the
+ * other keys still work as links into it and keep that entry highlighted. */
+const CASE_PAGE_KEYS = ["backlog", "returns", "cancelled", "timeline"]
 export const isActiveNav = (active: string, itemKey: string) =>
-  active === itemKey || (itemKey === "timeline" && active === "cancelled") || (itemKey === "backlog" && active === "returns")
+  active === itemKey || (itemKey === "backlog" && CASE_PAGE_KEYS.includes(active))
 
 // Flat, de-duplicated list — consumed by MobileTabBar.
 export const NAV_ITEMS: NavItem[] = (() => {
@@ -98,7 +99,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className={cn("flex items-center gap-2 px-4 pb-6", collapsed && "justify-center px-0")}>
           {logoDataUrl ? (
-            <img src={logoDataUrl} alt="Company logo" className="size-9 shrink-0 rounded-xl object-cover" />
+            <img src={logoDataUrl} alt="โลโก้บริษัท" className="size-9 shrink-0 rounded-xl object-cover" />
           ) : (
             <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-emerald-glow shadow-[0_10px_22px_-8px_rgba(43,168,162,0.85)] ring-1 ring-white/30">
               <Warehouse className="size-5 text-white drop-shadow" />
@@ -106,8 +107,8 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           )}
           {!collapsed && (
             <div className="overflow-hidden">
-              <p className="truncate text-sm font-semibold text-foreground">Warehouse Pro</p>
-              <p className="truncate text-xs text-muted-foreground">Dashboard</p>
+              <p className="truncate text-sm font-semibold text-foreground">แดชบอร์ด</p>
+              <p className="truncate text-xs text-muted-foreground">ทีมคลัง</p>
             </div>
           )}
         </div>
@@ -176,7 +177,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           className="btn-raised flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
         >
           {collapsed ? <ChevronsRight className="size-[18px]" /> : <ChevronsLeft className="size-[18px]" />}
-          {!collapsed && <span>Collapse</span>}
+          {!collapsed && <span>ย่อเมนู</span>}
         </button>
       </div>
     </motion.aside>

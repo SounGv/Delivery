@@ -276,7 +276,7 @@ export function RestockView() {
         }
         activeCount={activeCount}
         onClear={clear}
-        actions={<ExportButton disabled={filtered.length === 0} label={`ส่งออก ${num(filtered.length)} แถว`} build={() => restockReport(filtered)} />}
+        actions={<ExportButton disabled={filtered.length === 0} label={`ส่งออก ${num(filtered.length)} รายการ`} build={() => restockReport(filtered)} />}
       />
 
       <p className="px-1 text-xs text-muted-foreground">

@@ -186,13 +186,13 @@ export function Reports() {
       { label: "สินค้าเฉลี่ย/วัน", value: Math.round(avgItemsPerDay) },
       { label: "พัสดุเฉลี่ย/คน/วัน", value: Math.round(avgParcelsPerPersonPerDay) },
       { label: "สินค้าเฉลี่ย/คน/วัน", value: Math.round(avgItemsPerPersonPerDay) },
-      { label: "เป้าพัสดุ/วัน", value: effectiveTarget ?? "ไม่มีเป้าต่อคนสำหรับฝ่ายนี้ในชีท" },
+      { label: "เป้าพัสดุ/วัน", value: effectiveTarget ?? "ไม่มีเป้าต่อคนสำหรับฝ่ายนี้ในชีต" },
       { label: "Progress เทียบเป้า (%)", value: progressPct !== null ? Number(progressPct.toFixed(1)) : "-" },
       { label: "พนักงานยอดเยี่ยม", value: topEmployee?.name ?? "-" },
       { label: "พนักงานยอดเยี่ยม - พัสดุ", value: topEmployee?.totalParcels ?? 0 },
       { label: "พนักงานยอดเยี่ยม - สินค้า", value: topEmployee?.totalItems ?? 0 },
       { label: "พนักงานยอดเยี่ยม - สัดส่วนของทีม (%)", value: Number(topSharePct.toFixed(1)) },
-      { label: "พนักงานที่ต้องการตามเป้า (คน)", value: requiredHeadcount ?? "ไม่มีเป้าต่อคนสำหรับฝ่ายนี้ในชีท" },
+      { label: "พนักงานที่ต้องการตามเป้า (คน)", value: requiredHeadcount ?? "ไม่มีเป้าต่อคนสำหรับฝ่ายนี้ในชีต" },
       { label: "พนักงานที่ทำงานจริงเฉลี่ย/วัน (ปัดเศษ)", value: currentHeadcount },
       { label: "ส่วนต่างกำลังคน (บวก = ขาด, ลบ = เกิน)", value: headcountGap ?? "-" },
     ]
@@ -200,7 +200,7 @@ export function Reports() {
       ok: headcountGap === null || headcountGap <= 0,
       message:
         headcountGap === null
-          ? "ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีท — ไม่สามารถคำนวณกำลังคนที่ควรใช้ได้"
+          ? "ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีต — ไม่สามารถคำนวณกำลังคนที่ควรใช้ได้"
           : headcountGap > 0
             ? `ขาดพนักงาน ${headcountGap} คน — ออเดอร์มากกว่ากำลังคนที่มี`
             : headcountGap === 0
@@ -420,7 +420,7 @@ export function Reports() {
               </p>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีท — แสดงได้เฉพาะยอดงานจริง</p>
+            <p className="text-xs text-muted-foreground">ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีต — แสดงได้เฉพาะยอดงานจริง</p>
           )}
         </div>
 
@@ -469,7 +469,7 @@ export function Reports() {
                 <span className="font-semibold text-foreground">{currentHeadcount} คน/วัน</span> (สะสมทั้งช่วง {formatNumber(uniqueEmployees)} คน)
               </p>
               <div className="mt-3 flex items-center gap-2 rounded-xl bg-sky-500/15 p-2.5 text-sm font-semibold text-sky-400">
-                ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีท — ไม่สามารถคำนวณกำลังคนที่ควรใช้ได้
+                ฝ่ายนี้ยังไม่มีเป้าต่อคนในชีต — ไม่สามารถคำนวณกำลังคนที่ควรใช้ได้
               </div>
             </>
           )}

@@ -22,9 +22,9 @@ export function DataSourceStrip({ isFetching, isError, generatedAt, sheetLabel, 
       <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
         <span className={cn("inline-flex items-center gap-1.5 font-medium", isError ? "text-destructive" : "text-emerald-glow")}>
           <span className={cn("size-1.5 rounded-full", isError ? "bg-destructive" : "bg-emerald-glow")} />
-          {isError ? "Google Sheets: เชื่อมต่อไม่ได้" : "Google Sheets Connected"}
+          {isError ? "เชื่อมต่อชีตไม่ได้" : "เชื่อมต่อชีตแล้ว"}
         </span>
-        <span>ชีท: {sheetLabel}</span>
+        <span>ชีต: {sheetLabel}</span>
         <span>ช่วง: {period}</span>
         <span>ทีม/กะ: {teamLabel}</span>
         <span>Sync ล่าสุด: {generatedAt ? formatDateTime(generatedAt) : "-"}</span>

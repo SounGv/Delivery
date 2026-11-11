@@ -21,7 +21,7 @@ import type { TeamId } from "@/api/types"
 // to พัสดุ (see dailyParcelTotal). SKU and ป้าย still show in each person's small breakdown line.
 const RANKING_METRIC_OPTIONS: { key: RankingMetric; label: string }[] = [
   { key: "parcels", label: "พัสดุ" },
-  { key: "productivity", label: "Productivity" },
+  { key: "productivity", label: "ผลผลิตต่อคน" },
   { key: "pctTarget", label: "% Target" },
   { key: "pdaPick", label: "PDA หยิบของ" },
 ]

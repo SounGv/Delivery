@@ -106,7 +106,7 @@ export function Settings() {
         />
         <div className="mt-3 flex gap-2">
           <Button size="sm" onClick={handleSaveUrl}>บันทึกและโหลดใหม่</Button>
-          <Button size="sm" variant="outline" onClick={handleResetUrl}>ใช้ค่าเริ่มต้น (.env)</Button>
+          <Button size="sm" variant="outline" onClick={handleResetUrl}>ใช้ค่าเริ่มต้น</Button>
         </div>
         {saved && <p className="mt-2 text-xs text-emerald-glow">บันทึกแล้ว กำลังโหลดหน้าใหม่...</p>}
       </SettingsSection>
@@ -165,7 +165,7 @@ export function Settings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="เป้าหมาย KPI ต่อคน" description="กำหนดเป้าจำนวนสินค้าต่อคนเอง แทนค่าจากชีต (ค่าปัจจุบันในชีทจะยังแสดงถ้าไม่ตั้งค่านี้)">
+      <SettingsSection title="เป้าหมาย KPI ต่อคน" description="กำหนดเป้าจำนวนสินค้าต่อคนเอง แทนค่าจากชีต (ค่าปัจจุบันในชีตจะยังแสดงถ้าไม่ตั้งค่านี้)">
         <div className="flex gap-2">
           <input
             type="number" inputMode="numeric"
@@ -175,7 +175,7 @@ export function Settings() {
             placeholder="เช่น 350"
             className="w-32 rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
           />
-          <Button size="sm" onClick={handleSaveTarget}>บันทึก</Button>
+          <Button size="sm" onClick={handleSaveTarget}>บันทึกเป้า KPI</Button>
           <Button
             size="sm"
             variant="outline"
@@ -184,7 +184,7 @@ export function Settings() {
               setTargetOverride(null)
             }}
           >
-            ใช้ค่าจากชีท
+            ล้างค่า · ใช้ค่าจากชีต
           </Button>
         </div>
       </SettingsSection>
@@ -202,7 +202,7 @@ export function Settings() {
             placeholder="เช่น 40"
             className="w-32 rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
           />
-          <Button size="sm" onClick={handleSaveOfflineOrderTarget}>บันทึก</Button>
+          <Button size="sm" onClick={handleSaveOfflineOrderTarget}>บันทึกเป้าออเดอร์</Button>
           <Button
             size="sm"
             variant="outline"
@@ -216,7 +216,7 @@ export function Settings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="ตั้งค่าเวลาทำงาน / OT" description="ใช้คำนวณ OT และชั่วโมงทำงานสุทธิจากเวลาเข้า-ออกจริงในชีท (ไม่คำนวณเป็นเงิน) — เป็นค่านโยบายบริษัท ไม่ใช่ข้อมูลรายวันในชีท">
+      <SettingsSection title="ตั้งค่าเวลาทำงาน / OT" description="ใช้คำนวณ OT และชั่วโมงทำงานสุทธิจากเวลาเข้า-ออกจริงในชีต (ไม่คำนวณเป็นเงิน) — เป็นค่านโยบายบริษัท ไม่ใช่ข้อมูลรายวันในชีต">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
             <label className="block text-[11px] text-muted-foreground">เข้างานปกติ (ชม.)</label>

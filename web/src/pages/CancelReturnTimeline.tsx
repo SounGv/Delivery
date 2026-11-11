@@ -1,7 +1,7 @@
 import { ClampText } from "@/components/common/ClampText"
 import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { useMemo, useState } from "react"
-import { AlertTriangle, Ban, CalendarDays, CalendarRange, CheckCircle2, Clock, Hourglass, PackageCheck, PackageX, Search, Undo2, XCircle } from "lucide-react"
+import { AlertTriangle, Ban, CalendarDays, CheckCircle2, Clock, PackageCheck, PackageX, Search, Undo2, XCircle } from "lucide-react"
 import { useCancelledQuery, useRefundsQuery, useRestockQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -24,8 +24,6 @@ import {
   type TimelineKind,
 } from "@/lib/cancel-return-timeline"
 import { dateFromIso, formatFullDateLabel, formatMonthLabel, isoDateOf } from "@/lib/format"
-import { Tabs } from "@/components/ui/Tabs"
-import { CancelledView, CancelledWarning } from "@/pages/Cancelled"
 import { cn } from "@/lib/utils"
 
 const ALL = "__all__"
@@ -50,76 +48,11 @@ const TONE_ICON: Record<Tone, React.ComponentType<{ className?: string }> | unde
 
 const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("th-TH", { weekday: "short" })
 
-/** The "รายงาน" page: one overview over time (below) plus the two cancelled-order views that used to
- * be only on the "สินค้ายกเลิก" page — stock already deducted (T1) and not yet deducted (T2) —
- * reused as they are (CancelledView) so every status, filter, chart and export matches that page. */
-export function CancelReturnTimeline({ initialTab }: { initialTab?: "overview" | "deducted" | "not-deducted" } = {}) {
-  const { data } = useCancelledQuery()
-  const report = data?.cancelledOrders ?? null
-  const rows = useMemo(() => report?.rows ?? [], [report])
-  const deducted = useMemo(() => rows.filter((r) => r.stockDeducted), [rows])
-  const notDeducted = useMemo(() => rows.filter((r) => !r.stockDeducted), [rows])
-  const todayIso = data?.todayDate ?? ""
-  const duplicatesDropped = report?.duplicatesDropped ?? 0
-
-  return (
-    <div className="space-y-4">
-      {data && <CancelledWarning report={report} />}
-      <Tabs
-        initialKey={initialTab}
-        items={[
-          {
-            key: "overview",
-            label: "ภาพรวมตามช่วงเวลา",
-            icon: CalendarRange,
-            render: () => <TimelineOverview key="overview" />,
-          },
-          {
-            key: "deducted",
-            label: `ยกเลิก · ตัดสต็อกแล้ว (${num(deducted.length)})`,
-            icon: Ban,
-            render: () => (
-              <CancelledView
-                key="deducted"
-                rows={deducted}
-                todayIso={todayIso}
-                kindLabel="ตัดสต็อกแล้ว"
-                description="ออเดอร์ที่ยกเลิกหลังตัดสต็อก ต้องรับของคืนเข้าคลัง"
-                duplicatesDropped={duplicatesDropped}
-              />
-            ),
-          },
-          {
-            key: "not-deducted",
-            label: `ยกเลิก · ยังไม่ตัดสต็อก (${num(notDeducted.length)})`,
-            icon: Hourglass,
-            render: () => (
-              <CancelledView
-                key="not-deducted"
-                rows={notDeducted}
-                todayIso={todayIso}
-                kindLabel="ยังไม่ตัดสต็อก"
-                description="ออเดอร์ที่ยกเลิกก่อนตัดสต็อก ต้องเก็บของกลับเข้าที่"
-                duplicatesDropped={duplicatesDropped}
-              />
-            ),
-          },
-        ]}
-      />
-    </div>
-  )
-}
-
-/** Where the old "สินค้ายกเลิก" menu entry and links to it now lead: the report page, on the cancelled tab. */
-export function CancelledReport() {
-  return <CancelReturnTimeline initialTab="deducted" />
-}
-
 /** "ยกเลิก / ตีกลับ ตามช่วงเวลา": cancelled orders, bounced/returned parcels and lost parcels in one
  * list, switchable between a month view and a day view, every line with its status. Read-only; it
  * only regroups what the cancelled, restock and refund parts already carry (see
  * lib/cancel-return-timeline.ts for how the three sources are merged). */
-function TimelineOverview() {
+export function TimelineOverview() {
   const cancelledQ = useCancelledQuery()
   const restockQ = useRestockQuery()
   const refundsQ = useRefundsQuery()
@@ -272,7 +205,7 @@ function TimelineOverview() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="page-heading text-xl font-extrabold text-foreground max-sm:text-lg">รายงานยกเลิก / ตีกลับ</h2>
+        <h2 className="page-heading text-xl font-extrabold text-foreground max-sm:text-lg">ภาพรวมตามช่วงเวลา</h2>
         <ClampText className="mt-1 text-sm text-muted-foreground">
           สินค้ายกเลิก ตีกลับ และพัสดุสูญหาย รวมในหน้าเดียว เลือกช่วงวันที่ หรือดูเป็นรายเดือน/รายวัน กดแถวในตารางเพื่อกรอง แต่ละรายการมีสถานะกำกับ
         </ClampText>
@@ -446,7 +379,7 @@ function TimelineOverview() {
 
       <section aria-label="พัสดุสูญหาย ตามถึงไหนแล้ว" className="space-y-2">
         <h3 className="px-1 text-sm font-bold text-foreground">
-          พัสดุสูญหาย: ตามถึงไหนแล้ว <span className="font-normal text-muted-foreground">· ใน {scopeLabel}</span>
+          พัสดุสูญหาย: ตามถึงไหนแล้ว <span className="font-normal text-muted-foreground">· {scopeLabel}</span>
         </h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {LOST_STATUSES.map((s) => {
@@ -603,7 +536,7 @@ function TimelineOverview() {
           <TimelineRow key={it.id} item={it} />
         ))}
         {pageItems.length === 0 && (
-          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-muted-foreground">ไม่พบรายการตามตัวกรองนี้</div>
+          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-muted-foreground">ไม่พบรายการตามตัวกรองนี้ — ลองเลือก “ทั้งหมด” หรือขยายช่วงวันที่</div>
         )}
       </div>
       <Pager page={safePage} totalPages={totalPages} onChange={setPage} />

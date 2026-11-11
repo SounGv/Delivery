@@ -60,7 +60,7 @@ function ChannelColumn({
       <div className="space-y-2">
         <Row label="ยอดขาย" value={money(totals.totalEffSales)} />
         <Row label="ออเดอร์" value={`${totals.totalEffOrders.toLocaleString("th-TH")} ออเดอร์`} />
-        <Row label="AOV" value={`฿${totals.weightedAov.toFixed(2)}`} />
+        <Row label="ยอดเฉลี่ยต่อออเดอร์" value={`฿${totals.weightedAov.toFixed(2)}`} />
         <Row label="ยอดคืนเงิน" value={`− ${money(totals.totalRefundAmount)}`} tone="rose" />
         <Row
           label="ยกเลิก"

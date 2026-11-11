@@ -17,7 +17,7 @@ export function RecentActivityPanel({ data }: { data: DashboardResponse }) {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Recent Activity</h3>
-          <p className="text-xs text-muted-foreground">อัปเดตล่าสุดจากชีทรายวัน</p>
+          <p className="text-xs text-muted-foreground">อัปเดตล่าสุดจากชีตรายวัน</p>
         </div>
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Clock className="size-3" /> {formatDateTime(data.generatedAt)}

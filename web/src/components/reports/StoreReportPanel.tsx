@@ -81,7 +81,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <th className="pb-2.5 font-medium">ร้านค้า/ช่องทาง</th>
             <th className="pb-2.5 text-right font-medium">ยอดขาย (฿)</th>
             <th className="pb-2.5 text-right font-medium">ยอดขายมีผล (฿)</th>
-            <th className="pb-2.5 text-right font-medium">คำสั่งซื้อ</th>
+            <th className="pb-2.5 text-right font-medium">ออเดอร์</th>
             <th className="pb-2.5 text-right font-medium">ยกเลิก</th>
             <th className="pb-2.5 text-right font-medium">ยอดขายสินค้า (฿)</th>
             <th className="pb-2.5 text-right font-medium">คืนสินค้า (฿)</th>
@@ -101,7 +101,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
               </td>
               <td data-label="ยอดขาย (฿)" className="py-2.5 text-right tabular-nums font-medium">{money(r.sales)}</td>
               <td data-label="ยอดขายมีผล (฿)" className="py-2.5 text-right tabular-nums text-muted-foreground">{money(r.effSales)}</td>
-              <td data-label="คำสั่งซื้อ" className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>
+              <td data-label="ออเดอร์" className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>
               <td data-label="ยกเลิก" className="py-2.5 text-right tabular-nums text-destructive">{num(r.cancelledOrders)}</td>
               <td data-label="ยอดขายสินค้า (฿)" className="py-2.5 text-right tabular-nums">{money(r.productSales)}</td>
               <td data-label="คืนสินค้า (฿)" className="py-2.5 text-right tabular-nums text-destructive">
@@ -123,7 +123,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
             <td className="stack-title pt-2.5">รวม</td>
             <td data-label="ยอดขาย (฿)" className="pt-2.5 text-right tabular-nums">{money(totals.totalSales)}</td>
             <td data-label="ยอดขายมีผล (฿)" className="pt-2.5 text-right tabular-nums text-muted-foreground">{money(totals.totalEffSales)}</td>
-            <td data-label="คำสั่งซื้อ" className="pt-2.5 text-right tabular-nums">{num(totals.totalOrders)}</td>
+            <td data-label="ออเดอร์" className="pt-2.5 text-right tabular-nums">{num(totals.totalOrders)}</td>
             <td data-label="ยกเลิก" className="pt-2.5 text-right tabular-nums text-destructive">{num(totals.totalCancelledOrders)}</td>
             <td data-label="ยอดขายสินค้า (฿)" className="pt-2.5 text-right tabular-nums">{money(totals.totalProductSales)}</td>
             <td data-label="คืนสินค้า (฿)" className="pt-2.5 text-right tabular-nums text-destructive">

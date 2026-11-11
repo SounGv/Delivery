@@ -6,6 +6,7 @@ export function ErrorPanel({ message }: { message: string }) {
       <AlertTriangle className="size-8 text-destructive" />
       <p className="font-medium text-foreground">โหลดข้อมูลไม่สำเร็จ</p>
       <p className="text-sm text-muted-foreground">{message}</p>
+      <p className="text-xs text-muted-foreground">ลองกดปุ่มรีเฟรชด้านบน หรือตรวจสัญญาณอินเทอร์เน็ต แล้วเปิดหน้านี้ใหม่</p>
     </div>
   )
 }

@@ -722,9 +722,9 @@ export function Dashboard() {
 
                   <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-dashed border-border pt-4">
                     <div>
-                      <dt className="text-xs text-muted-foreground">คำสั่งซื้อที่มีผล</dt>
+                      <dt className="text-xs text-muted-foreground">ออเดอร์ที่มีผล</dt>
                       <dd className="text-xl font-extrabold tabular-nums text-foreground">{num(salesSnapshot.totals.totalEffOrders)}</dd>
-                      <dd className="text-xs text-muted-foreground">AOV ฿{salesSnapshot.totals.weightedAov.toFixed(2)}</dd>
+                      <dd className="text-xs text-muted-foreground">เฉลี่ยต่อออเดอร์ ฿{salesSnapshot.totals.weightedAov.toFixed(2)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">ยอดคืนเงิน</dt>
@@ -765,12 +765,12 @@ export function Dashboard() {
 
       {/* 5. People to follow up and the 14-day trend. */}
       <Section
-        title="พนักงานที่ต้องติดตาม และผลงานย้อนหลัง"
+        title="พนักงานที่ต้องตาม และผลงานย้อนหลัง"
         caption={`ฝ่าย${teamLabel} — ใครต่ำกว่าเป้า และผลงานจริงเทียบเป้า 14 วันล่าสุด`}
         goTo={`team-${selectedTeam}`}
         goLabel="ดูพนักงานทั้งหมด"
       >
-        <ReportSection emoji="🚨" title="พนักงานที่ต้องติดตาม" subtitle={`เรียงจากความเสี่ยงสูงไปต่ำ — แสดง ${Math.min(FOLLOW_UP_LIMIT, followUpRows.length)} คนแรกจากทั้งหมด ${followUpRows.length} คน ดูครบที่เมนูฝ่าย${teamLabel}`}>
+        <ReportSection emoji="🚨" title="พนักงานที่ต้องตาม" subtitle={`เรียงจากความเสี่ยงสูงไปต่ำ — แสดง ${Math.min(FOLLOW_UP_LIMIT, followUpRows.length)} คนแรกจากทั้งหมด ${followUpRows.length} คน ดูครบที่เมนูฝ่าย${teamLabel}`}>
           <FollowUpList
             allRows={followUpRows}
             limit={FOLLOW_UP_LIMIT}

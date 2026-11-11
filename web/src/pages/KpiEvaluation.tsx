@@ -137,7 +137,7 @@ export function KpiEvaluation() {
         </div>
         <div className="ml-auto">
           <Button size="sm" variant="outline" onClick={handleExportCsv}>
-            <Download className="size-4" /> Export CSV
+            <Download className="size-4" /> ส่งออก CSV
           </Button>
         </div>
       </div>
@@ -150,7 +150,7 @@ export function KpiEvaluation() {
           <br />
           <b className="text-foreground">หมายเหตุ:</b>{" "}
           {mode === "individual"
-            ? "ข้อผิดพลาด/ของคืน/ของหายในชีทไม่ได้ระบุว่าเป็นของพนักงานคนไหน จึงหักเท่ากันทุกคนที่มียอดงานในเดือนนี้ ไม่ใช่การตัดสินความผิดรายบุคคล"
+            ? "ข้อผิดพลาด/ของคืน/ของหายในชีตไม่ได้ระบุว่าเป็นของพนักงานคนไหน จึงหักเท่ากันทุกคนที่มียอดงานในเดือนนี้ ไม่ใช่การตัดสินความผิดรายบุคคล"
             : "โหมดนี้ประเมินทีมทั้งหมดเป็นหน่วยเดียว โดยคิดผลงานเฉลี่ยต่อคนต่อวัน (หารด้วยจำนวนคนที่ทำงานในวันนั้นจริง) เทียบเป้าเดียวกับรายบุคคล"}
         </p>
       </div>

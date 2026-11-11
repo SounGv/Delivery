@@ -52,7 +52,7 @@ export function CancelledWarning({ report }: { report: CancelledOrdersReport | n
         !report
           ? "ยังไม่มีข้อมูลส่วนนี้ใน payload (ต้อง deploy Apps Script เวอร์ชันล่าสุด)"
           : report.error
-            ? `สาเหตุ: ${report.error} — ตรวจว่าบัญชีที่ deploy Web App เข้าถึงไฟล์ gv-returns-sync ได้`
+            ? `สาเหตุ: ${report.error} — ตรวจว่าบัญชีตี่ deploy Web App เข้าถึงไฟล์ gv-returns-sync ได้`
             : `ไม่พบแท็บ: ${report.missingTabs.join(", ")}`
       }
     />
@@ -230,7 +230,7 @@ export function CancelledView({
           label={`ค้างเกิน ${staleDays} วัน`}
           count={totals.stale}
           unit="รายการ"
-          sub="รอตรวจสอบนานเกินกำหนด"
+          sub="รอตรวจสอบนานเลยกำหนด"
           active={status === STALE}
           onClick={() => toggleStatus(STALE)}
         />
@@ -280,7 +280,7 @@ export function CancelledView({
                 {CANCELLED_STATUSES.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
-                <option value={STALE}>ค้างรอตรวจสอบเกินกำหนด</option>
+                <option value={STALE}>ค้างรอตรวจสอบเลยกำหนด</option>
               </select>
             </FilterField>
             <FilterField label="ตั้งแต่วันที่">
@@ -310,7 +310,7 @@ export function CancelledView({
       />
 
       <p className="px-1 text-xs text-muted-foreground">
-        แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ (ทั้งหมด {num(rows.length)}) · เรียงเรื่องที่ต้องตามขึ้นก่อน (ไม่ตรง → ค้างเกินกำหนด → รอตรวจสอบ → เสร็จสิ้น)
+        แสดง {num(pageRows.length ? pageStart + 1 : 0)}-{num(pageStart + pageRows.length)} จาก {num(filtered.length)} รายการ (ทั้งหมด {num(rows.length)}) · เรียงเรื่องที่ต้องตามขึ้นก่อน (ไม่ตรง → ค้างเลยกำหนด → รอตรวจสอบ → เสร็จสิ้น)
       </p>
 
       <div className="space-y-2.5">

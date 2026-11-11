@@ -90,7 +90,7 @@ export function LiveWarehouse() {
             🏆
           </span>
           <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Top Employee</p>
+            <p className="text-xs text-muted-foreground">อันดับ 1</p>
             <p className="truncate text-base font-extrabold text-foreground">{topEmployee?.name ?? "-"}</p>
             {topEmployee && <p className="text-xs text-muted-foreground">{formatNumber(topEmployee.items)} ชิ้น</p>}
           </div>

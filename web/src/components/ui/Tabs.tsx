@@ -5,6 +5,8 @@ export interface TabItem {
   key: string
   label: string
   icon?: React.ComponentType<{ className?: string }>
+  /** Sub-heading this tab sits under; when any tab has one, the tabs are laid out in labelled groups. */
+  group?: string
   render: () => ReactNode
 }
 
@@ -16,6 +18,52 @@ export interface TabItem {
 export function Tabs({ items, initialKey }: { items: TabItem[]; initialKey?: string }) {
   const [active, setActive] = useState(initialKey ?? items[0]?.key ?? "")
   const current = items.find((i) => i.key === active) ?? items[0]
+
+  if (items.some((i) => i.group)) {
+    const groups: { name: string; items: TabItem[] }[] = []
+    for (const item of items) {
+      const name = item.group ?? ""
+      const last = groups[groups.length - 1]
+      if (last && last.name === name) last.items.push(item)
+      else groups.push({ name, items: [item] })
+    }
+    return (
+      <div className="space-y-4">
+        <div className="glass-panel grid grid-cols-1 gap-2 rounded-2xl p-3 max-sm:p-2.5 sm:gap-3 sm:flex sm:flex-wrap sm:gap-x-8 sm:gap-y-3">
+          {groups.map((g) => (
+            <div key={g.name} role="group" aria-label={g.name}>
+              {g.name && <p className="mb-1.5 px-1 text-xs font-extrabold tracking-wide text-muted-foreground">{g.name}</p>}
+              <div role="tablist" className="flex flex-wrap gap-2 max-sm:gap-1.5">
+                {g.items.map((item) => {
+                  const Icon = item.icon
+                  const isActive = item.key === active
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActive(item.key)}
+                      className={cn(
+                        "flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all active:scale-95 max-sm:gap-1 max-sm:px-3 max-sm:text-[13px]",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "border border-border text-foreground/70 hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {Icon && <Icon className="size-4 max-sm:hidden" />}
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div>{current?.render()}</div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
