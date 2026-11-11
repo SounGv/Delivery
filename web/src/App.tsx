@@ -12,9 +12,8 @@ import { OtHr } from "@/pages/OtHr"
 import { ReceivingWarehouse, ReceivingDepartmentPage, WarehouseDepartmentPage } from "@/pages/ReceivingWarehouse"
 import { SalesSummary } from "@/pages/SalesSummary"
 import { WorkIssues } from "@/pages/WorkIssues"
-import { Returns } from "@/pages/Returns"
+import { BacklogHub, ReturnsStockHub } from "@/pages/ReturnsHub"
 import { CancelReturnTimeline, CancelledReport } from "@/pages/CancelReturnTimeline"
-import { Backlog } from "@/pages/Backlog"
 import { StockValue } from "@/pages/StockValue"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
@@ -43,10 +42,10 @@ const PAGES: Record<string, React.ComponentType> = {
   "team-offline": OfflineTeamPage,
   "sales-summary": SalesSummary,
   "work-issues": WorkIssues,
-  returns: Returns,
+  returns: ReturnsStockHub,
   cancelled: CancelledReport,
   timeline: CancelReturnTimeline,
-  backlog: Backlog,
+  backlog: BacklogHub,
   "stock-value": StockValue,
   settings: Settings,
   // legacy aliases -> original standalone pages (no longer in the main nav)

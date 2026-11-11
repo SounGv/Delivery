@@ -108,7 +108,7 @@ export function Backlog() {
       )}
 
       <div>
-        <h2 className="page-heading text-xl font-extrabold text-foreground">งานค้างที่ต้องตาม</h2>
+        <h2 className="page-heading text-xl font-extrabold text-foreground">งานค้างที่ต้องทำ</h2>
         <ClampText className="text-xs text-muted-foreground">
           งานยกเลิก/ตีกลับ/ของคืนที่ยังค้าง แยกเป็นคิวงาน · แถวจะหายเองเมื่อจัดการเสร็จ (หน้านี้ไม่มีช่องให้กรอก) · ที่มา: ชีต gv-returns-sync แท็บ "โฟกัสทีม-งานค้าง"
         </ClampText>

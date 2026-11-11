@@ -11,7 +11,6 @@ import {
   Warehouse,
   BarChart3,
   ClipboardCheck,
-  PackageX,
   CalendarRange,
   ListChecks,
   Coins,
@@ -51,9 +50,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "team-offline", label: "ฝ่ายออฟไลน์", icon: Home, enabled: true },
       { key: "sales-summary", label: "ยอดขาย", icon: BarChart3, enabled: true },
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
-      { key: "returns", label: "สินค้าตีกลับ", icon: PackageX, enabled: true },
       { key: "timeline", label: "รายงานยกเลิก/ตีกลับ", icon: CalendarRange, enabled: true },
-      { key: "backlog", label: "งานค้าง", icon: ListChecks, enabled: true },
+      { key: "backlog", label: "งานค้าง/ตีกลับ", icon: ListChecks, enabled: true },
       { key: "stock-value", label: "มูลค่าสต็อก", icon: Coins, enabled: true },
     ],
   },
@@ -65,7 +63,8 @@ export const NAV_GROUPS: NavGroup[] = [
 
 /** "cancelled" is no longer a menu entry (it is two tabs of the report page); links that still use that key land
  * on the report page, so the report entry stays highlighted for it. */
-export const isActiveNav = (active: string, itemKey: string) => active === itemKey || (itemKey === "timeline" && active === "cancelled")
+export const isActiveNav = (active: string, itemKey: string) =>
+  active === itemKey || (itemKey === "timeline" && active === "cancelled") || (itemKey === "backlog" && active === "returns")
 
 // Flat, de-duplicated list — consumed by MobileTabBar.
 export const NAV_ITEMS: NavItem[] = (() => {
