@@ -1,3 +1,5 @@
+import { ClampText } from "@/components/common/ClampText"
+import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { useEffect, useMemo, useState } from "react"
 import { Banknote, CheckCircle2, Clock, Layers, PackageX, Tag, Truck } from "lucide-react"
 import { useRefundsQuery, useRestockQuery } from "@/api/queries"
@@ -30,7 +32,7 @@ const ALL = "__all__"
 const PAID = "__paid__"
 const UNPAID = "__unpaid__"
 const LOST = "สูญหาย"
-const PAGE_SIZE = 30
+const PAGE_SIZE = LIST_PAGE_SIZE
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number | null) => (n === null ? "-" : n.toLocaleString("th-TH", { maximumFractionDigits: 0 }))
 
@@ -125,10 +127,10 @@ export function RefundsView() {
 
       <div>
         <h2 className="page-heading text-lg font-extrabold text-foreground">พัสดุสูญหาย / ตีกลับ — ได้เงินคืนหรือยัง</h2>
-        <p className="text-xs text-muted-foreground">
+        <ClampText className="text-xs text-muted-foreground">
           ทีมคลังบันทึกใน BigSeller ด้วยข้อความหรือป้ายสี · ชื่อขนส่งดูจากรูปแบบเลขพัสดุคืน (ไม่ใช่ข้อมูลที่ BigSeller ส่งมา) · กดการ์ดสถานะเพื่อกรอง ·
           ที่มา: ชีต gv-returns-sync แท็บ "ได้เงินคืนแล้ว-พัสดุหาย" และ cn-restock
-        </p>
+        </ClampText>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

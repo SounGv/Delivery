@@ -167,7 +167,7 @@ export function WorkIssues() {
 
       <div className="glass-panel overflow-x-auto rounded-2xl p-4">
         <h3 className="mb-3 text-sm font-semibold text-foreground">รายการปัญหาหน้างาน</h3>
-        <table className="w-full min-w-[1080px] text-left text-sm">
+        <table className="stack-table w-full min-w-[1080px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="pb-2 font-medium"></th>
@@ -193,7 +193,7 @@ export function WorkIssues() {
               return (
                 <Fragment key={rowKey}>
                   <tr className="border-b border-white/5 align-top last:border-0">
-                    <td className="py-2">
+                    <td className="py-2 max-sm:text-right">
                       <button
                         type="button"
                         aria-label={isExpanded ? "ซ่อนรายละเอียด" : "ดูรายละเอียด"}
@@ -204,15 +204,15 @@ export function WorkIssues() {
                         {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                       </button>
                     </td>
-                    <td className="py-2 text-foreground">{i.date || "-"}</td>
-                    <td className="py-2 text-foreground">{i.reporter || "-"}</td>
-                    <td className="py-2 text-muted-foreground">{i.category || "-"}</td>
-                    <td className="py-2 text-foreground">{i.detail || "-"}</td>
-                    <td className="py-2"><UrgencyBadge urgency={i.urgency} /></td>
-                    <td className="py-2 text-muted-foreground">{i.assignee || "-"}</td>
-                    <td className="py-2 text-muted-foreground">{i.startDate || "-"}</td>
-                    <td className="py-2 text-muted-foreground">{i.dueDate || "-"}</td>
-                    <td className="py-2"><BucketBadge bucket={bucketForRow} sheetStatus={i.status} /></td>
+                    <td data-label="วันที่แจ้ง" className="py-2 text-foreground">{i.date || "-"}</td>
+                    <td data-label="ผู้แจ้ง" className="py-2 text-foreground">{i.reporter || "-"}</td>
+                    <td data-label="หมวดหมู่" className="py-2 text-muted-foreground">{i.category || "-"}</td>
+                    <td data-label="รายละเอียด" className="py-2 text-foreground">{i.detail || "-"}</td>
+                    <td data-label="ความเร่งด่วน" className="py-2"><UrgencyBadge urgency={i.urgency} /></td>
+                    <td data-label="ผู้รับผิดชอบ" className="py-2 text-muted-foreground">{i.assignee || "-"}</td>
+                    <td data-label="เริ่มแก้ไข" className="py-2 text-muted-foreground">{i.startDate || "-"}</td>
+                    <td data-label="กำหนดเสร็จ" className="py-2 text-muted-foreground">{i.dueDate || "-"}</td>
+                    <td data-label="สถานะ" className="py-2"><BucketBadge bucket={bucketForRow} sheetStatus={i.status} /></td>
                     <td className="py-2">
                       {bucketForRow === "not-started" && (
                         <Button size="sm" variant="outline" onClick={() => startFollowUp(key)}>
@@ -223,7 +223,7 @@ export function WorkIssues() {
                   </tr>
                   {isExpanded && (
                     <tr className="border-b border-white/5 last:border-0">
-                      <td />
+                      <td className="stack-skip" />
                       <td colSpan={10} className="py-3">
                         <div className="rounded-lg border border-border p-3">
                           {i.resolution && (

@@ -75,7 +75,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         {money(totals.totalSales)} <span className="text-sm font-semibold text-muted-foreground">ยอดขายรวมของช่วงนี้</span>
       </p>
 
-      <table className="w-full min-w-[760px] text-left text-base">
+      <table className="stack-table w-full min-w-[760px] text-left text-base">
         <thead>
           <tr className="border-b border-border text-sm text-muted-foreground">
             <th className="pb-2.5 font-medium">ร้านค้า/ช่องทาง</th>
@@ -90,7 +90,7 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         <tbody>
           {periodRows.map((r) => (
             <tr key={r.store} className="border-b border-white/5 last:border-0">
-              <td className="py-2.5 pr-3 text-foreground">
+              <td className="stack-title py-2.5 pr-3 text-foreground">
                 <span className="block font-semibold">{r.store}</span>
                 <span className="mt-1 flex items-center gap-2">
                   <span className="block h-1.5 w-28 overflow-hidden rounded-full bg-muted" aria-hidden>
@@ -99,12 +99,12 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
                   <span className="text-xs tabular-nums text-muted-foreground">{totals.totalSales > 0 ? ((r.sales / totals.totalSales) * 100).toFixed(1) : "0.0"}%</span>
                 </span>
               </td>
-              <td className="py-2.5 text-right tabular-nums font-medium">{money(r.sales)}</td>
-              <td className="py-2.5 text-right tabular-nums text-muted-foreground">{money(r.effSales)}</td>
-              <td className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>
-              <td className="py-2.5 text-right tabular-nums text-destructive">{num(r.cancelledOrders)}</td>
-              <td className="py-2.5 text-right tabular-nums">{money(r.productSales)}</td>
-              <td className="py-2.5 text-right tabular-nums text-destructive">
+              <td data-label="ยอดขาย (฿)" className="py-2.5 text-right tabular-nums font-medium">{money(r.sales)}</td>
+              <td data-label="ยอดขายมีผล (฿)" className="py-2.5 text-right tabular-nums text-muted-foreground">{money(r.effSales)}</td>
+              <td data-label="คำสั่งซื้อ" className="py-2.5 text-right tabular-nums">{num(r.totalOrders)}</td>
+              <td data-label="ยกเลิก" className="py-2.5 text-right tabular-nums text-destructive">{num(r.cancelledOrders)}</td>
+              <td data-label="ยอดขายสินค้า (฿)" className="py-2.5 text-right tabular-nums">{money(r.productSales)}</td>
+              <td data-label="คืนสินค้า (฿)" className="py-2.5 text-right tabular-nums text-destructive">
                 {money(r.refundAmount)}
                 {r.refundOrders > 0 && <span className="ml-1 text-muted-foreground">({num(r.refundOrders)})</span>}
               </td>
@@ -120,13 +120,13 @@ export function StoreReportPanel({ rows }: { rows: StoreReportRow[] }) {
         </tbody>
         <tfoot>
           <tr className="border-t border-border text-sm font-semibold text-foreground">
-            <td className="pt-2.5">รวม</td>
-            <td className="pt-2.5 text-right tabular-nums">{money(totals.totalSales)}</td>
-            <td className="pt-2.5 text-right tabular-nums text-muted-foreground">{money(totals.totalEffSales)}</td>
-            <td className="pt-2.5 text-right tabular-nums">{num(totals.totalOrders)}</td>
-            <td className="pt-2.5 text-right tabular-nums text-destructive">{num(totals.totalCancelledOrders)}</td>
-            <td className="pt-2.5 text-right tabular-nums">{money(totals.totalProductSales)}</td>
-            <td className="pt-2.5 text-right tabular-nums text-destructive">
+            <td className="stack-title pt-2.5">รวม</td>
+            <td data-label="ยอดขาย (฿)" className="pt-2.5 text-right tabular-nums">{money(totals.totalSales)}</td>
+            <td data-label="ยอดขายมีผล (฿)" className="pt-2.5 text-right tabular-nums text-muted-foreground">{money(totals.totalEffSales)}</td>
+            <td data-label="คำสั่งซื้อ" className="pt-2.5 text-right tabular-nums">{num(totals.totalOrders)}</td>
+            <td data-label="ยกเลิก" className="pt-2.5 text-right tabular-nums text-destructive">{num(totals.totalCancelledOrders)}</td>
+            <td data-label="ยอดขายสินค้า (฿)" className="pt-2.5 text-right tabular-nums">{money(totals.totalProductSales)}</td>
+            <td data-label="คืนสินค้า (฿)" className="pt-2.5 text-right tabular-nums text-destructive">
               {money(totals.totalRefundAmount)}
               {totals.totalRefundOrders > 0 && <span className="ml-1 text-muted-foreground">({num(totals.totalRefundOrders)})</span>}
             </td>

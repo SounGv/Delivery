@@ -56,7 +56,7 @@ function ChannelColumn({
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Coins className="size-3.5" /> ยอดขายสุทธิ (หลังหักคืนเงิน)
       </p>
-      <p className="mb-3 text-3xl font-extrabold tabular-nums text-emerald-700 dark:text-emerald-300">{money(net)}</p>
+      <p className="mb-3 text-[22px] font-extrabold tabular-nums text-emerald-700 sm:text-3xl dark:text-emerald-300">{money(net)}</p>
       <div className="space-y-2">
         <Row label="ยอดขาย" value={money(totals.totalEffSales)} />
         <Row label="ออเดอร์" value={`${totals.totalEffOrders.toLocaleString("th-TH")} ออเดอร์`} />
@@ -101,7 +101,7 @@ export function ChannelComparisonPanel({ days }: { days: OrderReportDay[] }) {
 
       {monthly.length > 0 && (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-base">
+          <table className="stack-table w-full min-w-[720px] text-left text-base">
             <thead>
               <tr className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 <th></th>
@@ -125,13 +125,13 @@ export function ChannelComparisonPanel({ days }: { days: OrderReportDay[] }) {
             <tbody>
               {[...monthly].reverse().map((m) => (
                 <tr key={m.monthKey} className="border-b border-white/5 last:border-0">
-                  <td className="py-2.5 text-foreground">{formatMonthLabel(m.monthKey)}</td>
-                  <td className="border-l border-border/60 py-2.5 pl-3 text-right tabular-nums">{money(m.onlineSales)}</td>
-                  <td className="py-2.5 text-right tabular-nums text-destructive">{money(m.onlineRefund)}</td>
-                  <td className="py-2.5 text-right tabular-nums text-emerald-glow">{money(m.onlineNet)}</td>
-                  <td className="border-l border-border/60 py-2.5 pl-3 text-right tabular-nums">{money(m.offlineSales)}</td>
-                  <td className="py-2.5 text-right tabular-nums text-destructive">{money(m.offlineRefund)}</td>
-                  <td className="py-2.5 text-right tabular-nums text-emerald-glow">{money(m.offlineNet)}</td>
+                  <td className="stack-title py-2.5 text-foreground">{formatMonthLabel(m.monthKey)}</td>
+                  <td data-label="ออนไลน์ · ยอดขาย" className="border-l border-border/60 py-2.5 pl-3 text-right tabular-nums">{money(m.onlineSales)}</td>
+                  <td data-label="ออนไลน์ · คืนเงิน" className="py-2.5 text-right tabular-nums text-destructive">{money(m.onlineRefund)}</td>
+                  <td data-label="ออนไลน์ · สุทธิ" className="py-2.5 text-right tabular-nums text-emerald-glow">{money(m.onlineNet)}</td>
+                  <td data-label="ออฟไลน์ · ยอดขาย" className="border-l border-border/60 py-2.5 pl-3 text-right tabular-nums">{money(m.offlineSales)}</td>
+                  <td data-label="ออฟไลน์ · คืนเงิน" className="py-2.5 text-right tabular-nums text-destructive">{money(m.offlineRefund)}</td>
+                  <td data-label="ออฟไลน์ · สุทธิ" className="py-2.5 text-right tabular-nums text-emerald-glow">{money(m.offlineNet)}</td>
                 </tr>
               ))}
             </tbody>

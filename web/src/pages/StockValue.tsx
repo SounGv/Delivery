@@ -1,3 +1,5 @@
+import { ClampText } from "@/components/common/ClampText"
+import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Coins, Info, MinusCircle, Search, Truck, Warehouse } from "lucide-react"
 import { useAnimatedNumber } from "@/lib/useAnimatedNumber"
@@ -18,7 +20,7 @@ import {
 } from "@/lib/stock-value-selectors"
 import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 30
+const PAGE_SIZE = LIST_PAGE_SIZE
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 0 })
 
@@ -69,7 +71,7 @@ function Block({ title, caption, children }: { title: string; caption?: string; 
     <section className="space-y-3">
       <div className="px-1">
         <h3 className="page-heading text-xl font-extrabold text-foreground">{title}</h3>
-        {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
+        {caption && <ClampText className="mt-0.5 text-sm text-muted-foreground">{caption}</ClampText>}
       </div>
       {children}
     </section>
@@ -156,7 +158,7 @@ export function StockValue() {
             <h2 className="mt-4 text-2xl font-extrabold tracking-wide drop-shadow-md sm:text-3xl">มูลค่าสต็อกแต่ละคลัง</h2>
             <p className="mt-1 text-sm text-white/85">จำนวนคงเหลือ × ราคาต้นทุนต่อ SKU (ไม่ใช่ราคาขาย) · กดการ์ดคลังเพื่อกรองตารางด้านล่าง</p>
             <p className="mt-5 text-xs font-bold text-white/85">มูลค่าสต็อกรวม {num(snapshot.warehouses.length)} คลัง</p>
-            <p className="text-4xl font-extrabold leading-tight tabular-nums tracking-tight drop-shadow-md sm:text-6xl">
+            <p className="text-[26px] font-extrabold leading-tight tabular-nums tracking-tight drop-shadow-md sm:text-6xl">
               ฿<Count value={snapshot.total} />
             </p>
             <p className="mt-1 text-sm text-white/85">{num(rows.length)} รายการ SKU × คลัง</p>
@@ -169,7 +171,7 @@ export function StockValue() {
               </span>
               สินค้าระหว่างทาง
             </p>
-            <p className="mt-2 text-3xl font-extrabold tabular-nums drop-shadow-sm sm:text-4xl">฿{baht(snapshot.inTransitCost)}</p>
+            <p className="mt-2 text-[22px] font-extrabold tabular-nums drop-shadow-sm sm:text-4xl">฿{baht(snapshot.inTransitCost)}</p>
             <p className="mt-2 text-xs text-white/85">
               {num(snapshot.inTransitUnits)} ชิ้น · ไป {num(snapshot.inTransitWarehouses)} คลัง · ไม่รวมในยอดรวมด้านซ้าย
             </p>
@@ -249,7 +251,7 @@ export function StockValue() {
                 </span>
                 <span className="flex items-center justify-between gap-3">
                   <span className="min-w-0">
-                    <span className="block text-3xl font-extrabold tabular-nums text-foreground">฿{baht(w.value)}</span>
+                    <span className="block text-[22px] font-extrabold tabular-nums text-foreground sm:text-3xl">฿{baht(w.value)}</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">{num(skuCount(w.warehouse))} SKU</span>
                   </span>
                   <ShareRing percent={w.share} colour={colour} />
@@ -315,7 +317,7 @@ export function StockValue() {
               {snapshot.asOf ? ` · ข้อมูล BigSeller ณ ${new Date(snapshot.asOf).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}` : ""}
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-sm">
+              <table className="stack-table w-full min-w-[560px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground">
                     <th className="pb-2 font-medium">คลัง</th>
@@ -332,14 +334,14 @@ export function StockValue() {
                     const diff = w.value - ref.bigsellerOnHandCost
                     return (
                       <tr key={w.warehouse} className="border-b border-white/5 last:border-0">
-                        <td className="py-2 font-medium text-foreground">{w.warehouse}</td>
-                        <td className="py-2 text-right tabular-nums">{baht(w.value)}</td>
-                        <td className="py-2 text-right tabular-nums">{baht(ref.bigsellerOnHandCost)}</td>
-                        <td className="py-2 text-right font-semibold tabular-nums">
+                        <td className="stack-title py-2 font-medium text-foreground">{w.warehouse}</td>
+                        <td data-label="มูลค่าในเว็บ (฿)" className="py-2 text-right tabular-nums">{baht(w.value)}</td>
+                        <td data-label="BigSeller คำนวณ (฿)" className="py-2 text-right tabular-nums">{baht(ref.bigsellerOnHandCost)}</td>
+                        <td data-label="ส่วนต่าง (฿)" className="py-2 text-right font-semibold tabular-nums">
                           {diff > 0 ? "+" : ""}
                           {baht(diff)}
                         </td>
-                        <td className="py-2 text-right tabular-nums">
+                        <td data-label="ต่าง (%)" className="py-2 text-right tabular-nums">
                           {w.diffPercent === null ? (
                             "—"
                           ) : w.highDiff ? (
@@ -398,7 +400,7 @@ export function StockValue() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-base">
+              <table className="stack-table w-full min-w-[560px] text-left text-base">
                 <thead>
                   <tr className="border-b border-border text-sm text-muted-foreground">
                     <th className="pb-2.5 font-medium">SKU</th>
@@ -411,11 +413,11 @@ export function StockValue() {
                 <tbody>
                   {paged.map((r) => (
                     <tr key={`${r.sku}::${r.warehouse}`} className="border-b border-white/5 last:border-0">
-                      <td className="py-2.5 font-medium text-foreground">{r.sku}</td>
-                      <td className="py-2.5 text-muted-foreground">{r.warehouse}</td>
-                      <td className="py-2.5 text-right tabular-nums">{num(r.qty)}</td>
-                      <td className="py-2.5 text-right tabular-nums">{baht(r.costPrice)}</td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-foreground">{baht(r.stockValue)}</td>
+                      <td className="stack-title py-2.5 font-medium text-foreground">{r.sku}</td>
+                      <td data-label="คลัง" className="py-2.5 text-muted-foreground">{r.warehouse}</td>
+                      <td data-label="จำนวน" className="py-2.5 text-right tabular-nums">{num(r.qty)}</td>
+                      <td data-label="ราคาต้นทุน" className="py-2.5 text-right tabular-nums">{baht(r.costPrice)}</td>
+                      <td data-label="มูลค่า (฿)" className="py-2.5 text-right font-semibold tabular-nums text-foreground">{baht(r.stockValue)}</td>
                     </tr>
                   ))}
                 </tbody>

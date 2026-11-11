@@ -80,7 +80,7 @@ export function SalesHero(p: SalesHeroProps) {
           </div>
           <p className="mt-4 text-sm font-bold text-white/85">ยอดขายสุทธิ (หลังหักคืนเงิน)</p>
           <p
-            className="text-4xl font-extrabold leading-tight tabular-nums tracking-tight drop-shadow-md sm:text-6xl"
+            className="text-[26px] font-extrabold leading-tight tabular-nums tracking-tight drop-shadow-md sm:text-6xl"
             title={money(p.netSales)}
           >
             <Count value={p.netSales} format={money} />

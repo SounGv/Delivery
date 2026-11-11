@@ -1,3 +1,5 @@
+import { ClampText } from "@/components/common/ClampText"
+import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { useEffect, useMemo, useState } from "react"
 import { Banknote, CalendarClock, CheckCircle2, Clock, Layers, PackageSearch, PackageX, Truck, XCircle } from "lucide-react"
 import { useRestockQuery } from "@/api/queries"
@@ -36,7 +38,7 @@ const NOTE_REFUND = "__refund__"
 const NOTE_ANY = "__any__"
 const NOTE_NONE = "__none__"
 const LOST = "สูญหาย"
-const PAGE_SIZE = 30
+const PAGE_SIZE = LIST_PAGE_SIZE
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number) => n.toLocaleString("th-TH", { maximumFractionDigits: 0 })
 
@@ -150,9 +152,9 @@ export function RestockView() {
 
       <div>
         <h2 className="page-heading text-lg font-extrabold text-foreground">ของคืน/ตีกลับ ที่ยังไม่เข้าสต็อกครบ</h2>
-        <p className="text-xs text-muted-foreground">
+        <ClampText className="text-xs text-muted-foreground">
           รวมออเดอร์ที่ยกเลิกและเคสตีกลับ · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง · ที่มา: ชีต gv-returns-sync แท็บ "cn-restock"
-        </p>
+        </ClampText>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

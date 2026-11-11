@@ -102,7 +102,7 @@ export function StatusTile({
         </span>
         <span className="text-sm font-bold text-foreground">{label}</span>
       </div>
-      <p className="mt-2 text-3xl font-extrabold tabular-nums text-foreground">
+      <p className="mt-2 text-[22px] font-extrabold tabular-nums text-foreground sm:text-3xl">
         {count === null ? "—" : count.toLocaleString("th-TH")} <span className="text-sm font-semibold text-muted-foreground">{unit}</span>
       </p>
       {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
@@ -133,7 +133,7 @@ export function StatTile({
         </span>
         <span className="text-sm font-bold text-foreground">{label}</span>
       </div>
-      <p className="mt-2 text-3xl font-extrabold tabular-nums text-foreground">{value}</p>
+      <p className="mt-2 text-3xl max-sm:text-2xl font-extrabold tabular-nums text-foreground">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   )
@@ -235,11 +235,11 @@ export function ListToolbar({
 }
 
 export const filterSelectClass =
-  "rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-10"
+  "rounded-lg border border-border bg-background px-3 py-2 text-sm max-sm:text-xs font-semibold text-foreground shadow-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-10"
 
 export function chipClass(active: boolean) {
   return cn(
-    "rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all max-sm:inline-flex max-sm:min-h-10 max-sm:items-center",
+    "rounded-full px-3.5 py-1.5 text-sm max-sm:text-xs font-semibold transition-all max-sm:inline-flex max-sm:min-h-10 max-sm:items-center",
     active
       ? "bg-primary text-primary-foreground -translate-y-px shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"
       : "border border-border bg-card text-muted-foreground shadow-[0_2px_6px_-3px_rgba(43,168,162,0.5)] hover:-translate-y-px hover:bg-muted hover:text-foreground"
@@ -251,6 +251,20 @@ export function FilterField({ label, children }: { label: string; children: Reac
     <div>
       <label className="mb-1 block text-[11px] text-muted-foreground">{label}</label>
       {children}
+    </div>
+  )
+}
+
+/** A date input that says what it is for while empty — an empty native date field is a blank box on phones. */
+export function DateInput({ value, onChange, min, max, label }: { value: string; onChange: (v: string) => void; min?: string; max?: string; label: string }) {
+  return (
+    <div className="relative">
+      <input type="date" value={value} min={min} max={max} onChange={(e) => onChange(e.target.value)} className={`${filterSelectClass} w-full min-w-0 ${value ? "" : "max-sm:[&::-webkit-datetime-edit]:opacity-0"}`} aria-label={label} />
+      {!value && (
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-normal text-muted-foreground sm:hidden">
+          เลือกวันที่
+        </span>
+      )}
     </div>
   )
 }

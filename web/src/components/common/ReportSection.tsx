@@ -1,3 +1,4 @@
+import { ClampText } from "@/components/common/ClampText"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
@@ -27,7 +28,7 @@ export function ReportSection({ title, subtitle, emoji, actions, children, class
             )}
             <div className="min-w-0">
               {title && <h3 className="text-base font-extrabold tracking-wide text-foreground">{title}</h3>}
-              {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+              {subtitle && <ClampText className="text-xs text-muted-foreground">{subtitle}</ClampText>}
             </div>
           </div>
           {actions}

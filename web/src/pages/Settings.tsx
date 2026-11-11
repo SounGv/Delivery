@@ -168,7 +168,7 @@ export function Settings() {
       <SettingsSection title="เป้าหมาย KPI ต่อคน" description="กำหนดเป้าจำนวนสินค้าต่อคนเอง แทนค่าจากชีต (ค่าปัจจุบันในชีทจะยังแสดงถ้าไม่ตั้งค่านี้)">
         <div className="flex gap-2">
           <input
-            type="number"
+            type="number" inputMode="numeric"
             aria-label="เป้าจำนวนสินค้าต่อคน"
             value={targetInput}
             onChange={(e) => setTargetInput(e.target.value)}
@@ -195,7 +195,7 @@ export function Settings() {
       >
         <div className="flex gap-2">
           <input
-            type="number"
+            type="number" inputMode="numeric"
             aria-label="เป้าออเดอร์ต่อคนต่อวัน (ฝ่ายออฟไลน์)"
             value={offlineOrderTargetInput}
             onChange={(e) => setOfflineOrderTargetInput(e.target.value)}
@@ -221,7 +221,7 @@ export function Settings() {
           <div>
             <label className="block text-[11px] text-muted-foreground">เข้างานปกติ (ชม.)</label>
             <input aria-label="เข้างานปกติ (ชม.)"
-              type="number"
+              type="number" inputMode="numeric"
               min={0}
               max={23}
               value={workStartHour}
@@ -232,7 +232,7 @@ export function Settings() {
           <div>
             <label className="block text-[11px] text-muted-foreground">เลิกงานปกติ (ชม.)</label>
             <input aria-label="เลิกงานปกติ (ชม.)"
-              type="number"
+              type="number" inputMode="numeric"
               min={0}
               max={23}
               value={workEndHour}
@@ -243,7 +243,7 @@ export function Settings() {
           <div>
             <label className="block text-[11px] text-muted-foreground">พักเที่ยงเริ่ม (ชม.)</label>
             <input aria-label="พักเที่ยงเริ่ม (ชม.)"
-              type="number"
+              type="number" inputMode="numeric"
               min={0}
               max={23}
               value={lunchStartHour}
@@ -254,7 +254,7 @@ export function Settings() {
           <div>
             <label className="block text-[11px] text-muted-foreground">พักเที่ยงเลิก (ชม.)</label>
             <input aria-label="พักเที่ยงเลิก (ชม.)"
-              type="number"
+              type="number" inputMode="numeric"
               min={0}
               max={23}
               value={lunchEndHour}
@@ -270,7 +270,7 @@ export function Settings() {
           <div>
             <label className="block text-[11px] text-muted-foreground">เป้าพัสดุ/วัน (เต็มเวลา)</label>
             <input aria-label="เป้าพัสดุ/วัน (เต็มเวลา)"
-              type="number"
+              type="number" inputMode="numeric"
               min={0}
               value={dailyTarget}
               onChange={(e) => setDailyTarget(Math.max(0, Number(e.target.value) || 0))}

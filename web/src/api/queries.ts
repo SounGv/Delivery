@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react
 import { fetchDashboard, fetchPayloadPart } from "./client"
 import { getRefreshIntervalMs, getSlowRefreshIntervalMs } from "@/lib/settingsStorage"
 import { useSettings } from "@/lib/settingsContext"
-import { computeTeamTotalsByDate, employeesForTeam, latestOutputDate } from "@/lib/dashboard-selectors"
+import { computeTeamTotalsByDate, employeesForTeam, latestOutputDate, recentlyActiveEmployees } from "@/lib/dashboard-selectors"
 import type {
   CancelledPart,
   DashboardResponse,
@@ -84,9 +84,11 @@ export function useStockValueQuery() {
 /** The dashboard payload scoped to the currently selected crew. `data.employees`,
  * `target`, `teamTotalsByDate` and `monthlyTotals` reflect just that team, so every
  * production/ranking view honours the team switcher without page-by-page filtering.
- * The full, unscoped roster is exposed as `allEmployees` for cross-team views. */
+ * The full, unscoped roster is exposed as `allEmployees` for cross-team views; `roster` is the crew's current
+ * staff (worked in the last 30 days) for headcounts and the follow-up list. */
 export interface ScopedDashboard extends DashboardResponse {
   allEmployees: Employee[]
+  roster: Employee[]
 }
 
 export type UseTeamDashboardResult = Omit<UseQueryResult<DashboardResponse, Error>, "data"> & {
@@ -115,7 +117,8 @@ function scopeDashboard(raw: DashboardResponse, team: TeamId, targetOverride: nu
   // page needs to know about the setting individually.
   const target =
     targetOverride != null ? { label: `เป้ากำหนดเอง: ${targetOverride}`, value: targetOverride } : teamTarget
-  return { ...raw, todayDate, employees, allEmployees: raw.employees, teamTotalsByDate, monthlyTotals, target }
+  const roster = recentlyActiveEmployees(employees, todayDate)
+  return { ...raw, todayDate, employees, allEmployees: raw.employees, roster, teamTotalsByDate, monthlyTotals, target }
 }
 
 export function useTeamDashboard(): UseTeamDashboardResult {

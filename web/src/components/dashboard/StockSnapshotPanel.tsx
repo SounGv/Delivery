@@ -13,7 +13,7 @@ export function StockSnapshotPanel({ snapshot }: { snapshot: StockSnapshot }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-sm font-bold text-muted-foreground">มูลค่าสต็อกรวม {num(snapshot.warehouses.length)} คลัง</p>
-          <p className="text-4xl font-extrabold tabular-nums text-foreground">{baht(snapshot.total)}</p>
+          <p className="text-[26px] font-extrabold tabular-nums text-foreground sm:text-4xl">{baht(snapshot.total)}</p>
         </div>
         {snapshot.asOf &&
           (stale ? (

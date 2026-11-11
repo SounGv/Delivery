@@ -1,3 +1,4 @@
+import { ClampText } from "@/components/common/ClampText"
 import { lazy, Suspense, useMemo, useState } from "react"
 import {
   AlertTriangle,
@@ -189,7 +190,7 @@ function Section({
       <div className="flex flex-wrap items-end justify-between gap-2 px-1">
         <div>
           <h2 className="page-heading text-xl font-extrabold text-foreground">{title}</h2>
-          {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
+          {caption && <ClampText className="mt-0.5 text-sm text-muted-foreground">{caption}</ClampText>}
         </div>
         {goTo && (
           <button
@@ -250,7 +251,7 @@ function summarizeCrew(scoped: ScopedDashboard): CrewSummary {
     parcels: today.parcels,
     items: today.items,
     active: today.activeEmployees,
-    headcount: scoped.employees.length,
+    headcount: scoped.roster.length,
     parcelTrend: prev ? percentChange(today.parcels, prev.parcels) : null,
     targetPct: getTargetAchievementPercent(scoped),
     targetLabel: scoped.target?.label,
@@ -298,7 +299,7 @@ function CrewCard({
 
       <div className="mt-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-4xl font-extrabold leading-none tabular-nums text-foreground">
+          <p className="text-[26px] font-extrabold leading-none tabular-nums text-foreground sm:text-4xl">
             <AnimatedValue value={summary.parcels} />
             <span className="ml-2 text-sm font-semibold text-muted-foreground">พัสดุ</span>
           </p>
@@ -435,7 +436,7 @@ export function Dashboard() {
   // Hooks must run unconditionally — compute derived data after the null-guards
   // below only via plain values (no more hooks past this point).
   const targetPerPerson = targetOverride ?? data?.target?.value ?? null
-  const followUpRows = useMemo(() => (data ? buildFollowUpRows(data, targetPerPerson) : []), [data, targetPerPerson])
+  const followUpRows = useMemo(() => (data ? buildFollowUpRows({ ...data, employees: data.roster }, targetPerPerson) : []), [data, targetPerPerson])
 
   const recentWindow = useMemo(() => {
     if (!data) return { dates: [] as string[], employees: [] as Employee[] }
@@ -642,7 +643,7 @@ export function Dashboard() {
 
       {/* 2. First screen: what needs a person (left) and how today's output looks (right). */}
       <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-7">
+        <div id="attention-today" className="col-span-12 scroll-mt-20 lg:col-span-7">
           <Section title="ต้องตามวันนี้" caption="เรียงจากเร่งด่วนสุดไปน้อยสุด · กดแถวเพื่อเข้าเมนูนั้น">
             <AttentionList items={attentionItems} />
           </Section>
@@ -705,7 +706,7 @@ export function Dashboard() {
                     </div>
                   )}
                   <p className="text-sm font-bold text-muted-foreground">ยอดขายสุทธิ (หลังหักคืนเงิน)</p>
-                  <p className="text-4xl font-extrabold tabular-nums text-foreground">{baht(netSales)}</p>
+                  <p className="text-[26px] font-extrabold tabular-nums text-foreground sm:text-4xl">{baht(netSales)}</p>
                   <p className="text-xs text-muted-foreground">ยอดขายมีผล {baht(salesSnapshot.totals.totalEffSales)}</p>
 
                   <div className="mt-4">

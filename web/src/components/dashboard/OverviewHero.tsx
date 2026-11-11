@@ -56,7 +56,7 @@ function HeroTile({
         {label}
         {onClick && <ArrowRight className="ml-auto size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />}
       </p>
-      <p title={valueTitle} className="mt-2 text-2xl font-extrabold leading-none tabular-nums tracking-tight drop-shadow-sm sm:text-4xl">
+      <p title={valueTitle} className="mt-2 whitespace-nowrap text-xl font-extrabold leading-none tabular-nums tracking-tight drop-shadow-sm sm:whitespace-normal sm:text-4xl">
         {children}
       </p>
       {sub && <div className="mt-2 min-h-5 text-xs text-white/85">{sub}</div>}
@@ -129,7 +129,7 @@ export function OverviewHero(p: OverviewHeroProps) {
               ข้อมูลล่าสุด {p.dataDateLabel}
             </span>
           </div>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-wide drop-shadow-md sm:text-4xl">ภาพรวมทีมคลัง</h1>
+          <h1 className="mt-4 text-2xl font-extrabold tracking-wide drop-shadow-md sm:text-4xl">ภาพรวมทีมคลัง</h1>
           <p className="mt-1 text-sm text-white/85">ฝ่าย{p.teamLabel} · พนักงานที่ทำงานวันนี้ {num(p.activeEmployees)} คน</p>
 
           {p.teams.length > 1 && (
@@ -158,10 +158,15 @@ export function OverviewHero(p: OverviewHeroProps) {
 
           <div className="mt-5">
             {p.needAction > 0 ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-extrabold text-rose-700 shadow-[0_10px_26px_-8px_rgba(244,63,94,0.7)] ring-2 ring-rose-300/70">
+              <button
+                type="button"
+                onClick={() => document.getElementById("attention-today")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-extrabold text-rose-700 shadow-[0_10px_26px_-8px_rgba(244,63,94,0.7)] ring-2 ring-rose-300/70 active:scale-95"
+              >
                 <AlertTriangle className="size-4" />
                 วันนี้มี {num(p.needAction)} เรื่องต้องตาม
-              </span>
+                <ArrowDown className="size-4" aria-hidden />
+              </button>
             ) : (
               <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-extrabold text-emerald-700 shadow-[0_10px_26px_-8px_rgba(39,174,96,0.7)] ring-2 ring-emerald-300/70">
                 วันนี้ไม่มีเรื่องค้าง

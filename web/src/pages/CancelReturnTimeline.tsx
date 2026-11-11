@@ -1,9 +1,11 @@
+import { ClampText } from "@/components/common/ClampText"
+import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { useMemo, useState } from "react"
 import { AlertTriangle, Ban, CalendarDays, CalendarRange, CheckCircle2, Clock, Hourglass, PackageCheck, PackageX, Search, Undo2, XCircle } from "lucide-react"
 import { useCancelledQuery, useRefundsQuery, useRestockQuery } from "@/api/queries"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
-import { FilterField, ReturnRowCard, StatusPill, StatusTile, chipClass, filterSelectClass, Pager, type Tone } from "@/components/returns/ReturnsUi"
+import { DateInput, FilterField, ReturnRowCard, StatusPill, StatusTile, chipClass, filterSelectClass, Pager, type Tone } from "@/components/returns/ReturnsUi"
 import { StatusDonut, TrendChart } from "@/components/reports/CancelReturnCharts"
 import {
   KINDS,
@@ -27,7 +29,7 @@ import { CancelledView, CancelledWarning } from "@/pages/Cancelled"
 import { cn } from "@/lib/utils"
 
 const ALL = "__all__"
-const PAGE_SIZE = 30
+const PAGE_SIZE = LIST_PAGE_SIZE
 const num = (n: number) => n.toLocaleString("th-TH")
 
 const KIND_ICON = { cancel: Ban, return: Undo2, lost: PackageX }
@@ -270,10 +272,10 @@ function TimelineOverview() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="page-heading text-xl font-extrabold text-foreground">รายงานยกเลิก / ตีกลับ</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          สินค้ายกเลิก สินค้าตีกลับ และพัสดุสูญหาย รวมในหน้าเดียว เลือกช่วงวันที่ หรือดูเป็นรายเดือน/รายวัน กดแถวในตารางเพื่อกรอง แต่ละรายการมีสถานะกำกับ
-        </p>
+        <h2 className="page-heading text-xl font-extrabold text-foreground max-sm:text-lg">รายงานยกเลิก / ตีกลับ</h2>
+        <ClampText className="mt-1 text-sm text-muted-foreground">
+          สินค้ายกเลิก ตีกลับ และพัสดุสูญหาย รวมในหน้าเดียว เลือกช่วงวันที่ หรือดูเป็นรายเดือน/รายวัน กดแถวในตารางเพื่อกรอง แต่ละรายการมีสถานะกำกับ
+        </ClampText>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -305,7 +307,7 @@ function TimelineOverview() {
             </select>
           </label>
         )}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground max-sm:w-full">
           กำลังดู: <span className="font-bold text-foreground">{scopeLabel}</span>
           {(day || activeMonth) && mode === "month" && (
             <button
@@ -323,33 +325,19 @@ function TimelineOverview() {
         </p>
       </div>
 
-      <div className="glass-panel flex flex-wrap items-end gap-3 rounded-2xl p-4">
-        <FilterField label="ตั้งแต่วันที่ (วัน/เดือน/ปี)">
-          <input
-            type="date"
-            value={from}
-            max={to || undefined}
-            onChange={(e) => setRange(e.target.value, to)}
-            className={filterSelectClass}
-            aria-label="ตั้งแต่วันที่"
-          />
+      <div className="glass-panel grid grid-cols-2 items-end gap-3 rounded-2xl p-4 sm:flex sm:flex-wrap">
+        <FilterField label="ตั้งแต่วันที่">
+          <DateInput value={from} max={to || undefined} onChange={(v) => setRange(v, to)} label="ตั้งแต่วันที่" />
         </FilterField>
-        <FilterField label="ถึงวันที่ (วัน/เดือน/ปี)">
-          <input
-            type="date"
-            value={to}
-            min={from || undefined}
-            onChange={(e) => setRange(from, e.target.value)}
-            className={filterSelectClass}
-            aria-label="ถึงวันที่"
-          />
+        <FilterField label="ถึงวันที่">
+          <DateInput value={to} min={from || undefined} onChange={(v) => setRange(from, v)} label="ถึงวันที่" />
         </FilterField>
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="ช่วงวันที่ที่ใช้บ่อย">
+        <div className="col-span-2 grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:items-center" role="group" aria-label="ช่วงวันที่ที่ใช้บ่อย">
           <button type="button" className={chipClass(false)} onClick={() => presetRange("7")}>
-            7 วันล่าสุด
+            7 วัน<span className="max-sm:hidden">ล่าสุด</span>
           </button>
           <button type="button" className={chipClass(false)} onClick={() => presetRange("30")}>
-            30 วันล่าสุด
+            30 วัน<span className="max-sm:hidden">ล่าสุด</span>
           </button>
           <button type="button" className={chipClass(false)} onClick={() => presetRange("month")}>
             เดือนนี้
@@ -358,13 +346,13 @@ function TimelineOverview() {
             <button
               type="button"
               onClick={() => setRange("", "")}
-              className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20"
+              className="col-span-3 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20 max-sm:min-h-10"
             >
               ล้างช่วงวันที่
             </button>
           )}
         </div>
-        {hasRange && <p className="w-full text-xs text-muted-foreground">ตอนเลือกช่วงวันที่ รายการที่ไม่ระบุวันที่จะไม่ถูกนับ</p>}
+        {hasRange && <p className="col-span-2 w-full text-xs text-muted-foreground">ตอนเลือกช่วงวันที่ รายการที่ไม่ระบุวันที่จะไม่ถูกนับ</p>}
       </div>
 
       <section
@@ -376,8 +364,8 @@ function TimelineOverview() {
         <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-center">
           <div>
             <p className="text-xs font-bold text-muted-foreground">ภาพรวม · {scopeLabel}</p>
-            <p className="mt-1 text-5xl font-extrabold tabular-nums text-foreground drop-shadow-sm">
-              {num(scoped.length)} <span className="text-lg font-bold text-muted-foreground">รายการ</span>
+            <p className="mt-1 text-[26px] font-extrabold tabular-nums text-foreground drop-shadow-sm sm:text-5xl">
+              {num(scoped.length)} <span className="text-base font-bold text-muted-foreground sm:text-lg">รายการ</span>
             </p>
             <div className="mt-4">
               <div className="mb-1.5 flex items-center justify-between text-xs">
@@ -414,7 +402,7 @@ function TimelineOverview() {
                     <span className="size-2.5 rounded-full" style={{ background: KIND_COLOR[k] }} aria-hidden />
                     {KIND_LABEL[k]}
                   </p>
-                  <p className="mt-1 text-2xl font-extrabold tabular-nums text-foreground">{num(kindCounts[k])}</p>
+                  <p className="mt-1 text-xl font-extrabold tabular-nums text-foreground sm:text-2xl">{num(kindCounts[k])}</p>
                   <p className="text-[11px] text-muted-foreground">{scoped.length ? ((kindCounts[k] / scoped.length) * 100).toFixed(0) : 0}%</p>
                 </li>
               ))}
@@ -490,7 +478,7 @@ function TimelineOverview() {
 
       <div className="glass-panel overflow-hidden rounded-2xl shadow-[0_18px_40px_-26px_rgba(43,168,162,0.45)]">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="stack-table stack-inline w-full min-w-[560px] text-sm">
             <caption className="sr-only">{mode === "month" ? "สรุปรายเดือน" : "สรุปรายวัน"}</caption>
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -532,14 +520,14 @@ function TimelineOverview() {
                         {label}
                       </button>
                     </th>
-                    <td className="px-3 py-2 text-right tabular-nums">{b.cancel ? num(b.cancel) : "–"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{b.ret ? num(b.ret) : "–"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{b.lost ? num(b.lost) : "–"}</td>
-                    <td className="px-3 py-2 text-right font-bold tabular-nums">{b.total ? num(b.total) : "–"}</td>
-                    <td className={cn("px-3 py-2 text-right tabular-nums", b.open > 0 && "font-bold text-amber-700 dark:text-amber-300")}>
+                    <td data-label={KIND_LABEL.cancel} className="px-3 py-2 text-right tabular-nums">{b.cancel ? num(b.cancel) : "–"}</td>
+                    <td data-label={KIND_LABEL.return} className="px-3 py-2 text-right tabular-nums">{b.ret ? num(b.ret) : "–"}</td>
+                    <td data-label={KIND_LABEL.lost} className="px-3 py-2 text-right tabular-nums">{b.lost ? num(b.lost) : "–"}</td>
+                    <td data-label="รวม" className="px-3 py-2 text-right font-bold tabular-nums">{b.total ? num(b.total) : "–"}</td>
+                    <td data-label="ค้างต้องตาม" className={cn("px-3 py-2 text-right tabular-nums", b.open > 0 && "font-bold text-amber-700 dark:text-amber-300")}>
                       {b.open ? num(b.open) : "–"}
                     </td>
-                    <td className="px-4 py-2" aria-hidden>
+                    <td className="stack-skip px-4 py-2" aria-hidden>
                       <div className="h-2 rounded-full bg-muted">
                         <div className="h-2 rounded-full bg-primary/70" style={{ width: `${(b.total / maxTotal) * 100}%` }} />
                       </div>

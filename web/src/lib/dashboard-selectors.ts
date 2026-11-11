@@ -37,6 +37,23 @@ export function latestOutputDate(employees: Employee[]): string | null {
   return latest
 }
 
+/** How many days back (counted from a crew's latest output day) someone must have worked to count as current staff. */
+export const ROSTER_WINDOW_DAYS = 30
+
+/**
+ * The people who still count as the crew's current staff: anyone with output (parcels or items above 0) on a day
+ * within `days` days up to `todayDate`. Hides one-day alias/test names and people away for over a month from
+ * headcounts and the follow-up list; their past output stays in every total.
+ */
+// shortcut: stands in for a real alias -> person mapping; revisit when the team supplies one
+export function recentlyActiveEmployees(employees: Employee[], todayDate: string, days = ROSTER_WINDOW_DAYS): Employee[] {
+  const end = new Date(`${todayDate}T00:00:00Z`).getTime()
+  const start = new Date(end - (days - 1) * 86_400_000).toISOString().slice(0, 10)
+  return employees.filter((e) =>
+    Object.entries(e.byDate).some(([date, entry]) => date >= start && date <= todayDate && ((entry.parcels ?? 0) > 0 || (entry.items ?? 0) > 0))
+  )
+}
+
 /** The latest date before `data.todayDate` on which the (scoped) crew had output — what "compared with the day
  * before" should mean: a Sunday with no work is not a day to compare against (it made +100% out of any Monday). */
 export function previousOutputDate(data: DashboardResponse): string | null {

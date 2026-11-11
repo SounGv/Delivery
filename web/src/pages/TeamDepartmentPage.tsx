@@ -48,7 +48,7 @@ function TeamDepartmentPage({ team }: { team: TeamId }) {
         title={`ฝ่าย${deptLabel}`}
         subtitle="ภาพรวมทีม พนักงาน เข้า-ออกงาน ผลงาน KPI และ OT รวมไว้ในที่เดียว"
       >
-        {data && <HeaderChip>👥 {data.employees.length} คน</HeaderChip>}
+        {data && <HeaderChip>👥 {data.roster.length} คน</HeaderChip>}
         {data && <HeaderChip>📅 ข้อมูลล่าสุด {formatFullDateLabel(data.todayDate)}</HeaderChip>}
       </PageHeader>
       <Tabs

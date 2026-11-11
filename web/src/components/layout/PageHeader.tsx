@@ -1,3 +1,4 @@
+import { ClampText } from "@/components/common/ClampText"
 import type { ComponentType, ReactNode } from "react"
 
 /** Flip7 hero band that opens a menu / sub-menu page: teal gradient, an icon chip, an
@@ -31,7 +32,7 @@ export function PageHeader({
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-extrabold tracking-wide">{title}</h1>
-          {subtitle && <p className="mt-0.5 text-sm text-white/85">{subtitle}</p>}
+          {subtitle && <ClampText className="mt-0.5 text-sm text-white/85">{subtitle}</ClampText>}
         </div>
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
       </div>

@@ -1,3 +1,5 @@
+import { ClampText } from "@/components/common/ClampText"
+import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, Clock, Layers, PackageCheck, XCircle } from "lucide-react"
 import type { EChartsOption } from "echarts"
@@ -5,7 +7,7 @@ import { ExportButton } from "@/components/common/ExportButton"
 import { DataNotice } from "@/components/common/DataNotice"
 import { ChartCard } from "@/components/charts/ChartCard"
 import { EChart } from "@/components/charts/EChart"
-import {
+import { DateInput,
   FilterField,
   ListToolbar,
   Pager,
@@ -36,7 +38,7 @@ import type { CancelledOrdersReport, CancelledRow, CancelledStatus } from "@/api
 const ALL = "__all__"
 const STALE = "stale"
 const DONE = "done"
-const PAGE_SIZE = 30
+const PAGE_SIZE = LIST_PAGE_SIZE
 const STALE_CHOICES = [1, 2, 3, 5, 7]
 const num = (n: number) => n.toLocaleString("th-TH")
 
@@ -190,9 +192,9 @@ export function CancelledView({
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="page-heading text-lg font-extrabold text-foreground">ยกเลิก · {kindLabel}</h2>
-          <p className="text-xs text-muted-foreground">
+          <ClampText className="text-xs text-muted-foreground">
             {description} · 1 แถว = 1 SKU · กดการ์ดสถานะเพื่อกรอง · ที่มา: ชีต gv-returns-sync
-          </p>
+          </ClampText>
         </div>
         {donePct !== null && (
           <StatusPill tone={donePct >= 90 ? "ok" : donePct >= 60 ? "warn" : "danger"} icon={CheckCircle2}>
@@ -282,10 +284,10 @@ export function CancelledView({
               </select>
             </FilterField>
             <FilterField label="ตั้งแต่วันที่">
-              <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className={filterSelectClass} />
+              <DateInput value={from} max={to || undefined} onChange={setFrom} label="ตั้งแต่วันที่" />
             </FilterField>
             <FilterField label="ถึงวันที่">
-              <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={filterSelectClass} />
+              <DateInput value={to} min={from || undefined} onChange={setTo} label="ถึงวันที่" />
             </FilterField>
             <FilterField label="เตือนเมื่อค้างเกิน">
               <select value={staleDays} onChange={(e) => setStaleDays(Number(e.target.value))} className={filterSelectClass}>

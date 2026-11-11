@@ -1,3 +1,4 @@
+import { ClampText } from "@/components/common/ClampText"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
@@ -30,7 +31,7 @@ export function SectionCard({
           )}
           <div className="min-w-0">
             <h3 className="truncate text-base font-extrabold tracking-wide text-foreground">{title}</h3>
-            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+            {subtitle && <ClampText className="text-xs text-muted-foreground">{subtitle}</ClampText>}
           </div>
         </div>
         {actions}

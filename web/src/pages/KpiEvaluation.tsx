@@ -127,7 +127,7 @@ export function KpiEvaluation() {
           </label>
           <input
             id="penalty-input"
-            type="number"
+            type="number" inputMode="numeric"
             min={0}
             step={1}
             value={penaltyPerIncident}

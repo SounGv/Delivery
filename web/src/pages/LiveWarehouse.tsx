@@ -18,7 +18,7 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank === 2) return <span className="text-sm leading-none">🥈</span>
   if (rank === 3) return <span className="text-sm leading-none">🥉</span>
   return (
-    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-brand-500/20 text-[9px] font-bold text-primary">
+    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-brand-500/20 text-[10px] font-bold text-primary">
       {rank}
     </span>
   )
@@ -44,7 +44,7 @@ export function LiveWarehouse() {
 
   const isActiveToday = (parcels: number | null, items: number | null) => (parcels ?? 0) > 0 || (items ?? 0) > 0
   const ranking = rankEmployeesForDate(data.employees, data.todayDate).filter((r) => isActiveToday(r.parcels, r.items))
-  const idle = data.employees.filter((e) => {
+  const idle = data.roster.filter((e) => {
     const entry = e.byDate[data.todayDate]
     return !isActiveToday(entry?.parcels ?? null, entry?.items ?? null)
   })
@@ -80,7 +80,7 @@ export function LiveWarehouse() {
           value={today.activeEmployees}
           icon={Users}
           gradient="bg-gradient-to-br from-sky-500 to-brand-600"
-          suffix={`/ ${data.employees.length} คน`}
+          suffix={`/ ${data.roster.length} คน`}
         />
       </div>
 

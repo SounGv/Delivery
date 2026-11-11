@@ -1,3 +1,4 @@
+import { ClampText } from "@/components/common/ClampText"
 import { lazy, Suspense, useMemo, useState } from "react"
 import {
   Coins,
@@ -52,7 +53,7 @@ function SectionHeading({ title, caption }: { title: string; caption?: string })
   return (
     <div className="px-1 pt-2">
       <h2 className="page-heading text-xl font-extrabold text-foreground">{title}</h2>
-      {caption && <p className="mt-0.5 text-sm text-muted-foreground">{caption}</p>}
+      {caption && <ClampText className="mt-0.5 text-sm text-muted-foreground">{caption}</ClampText>}
     </div>
   )
 }
@@ -86,7 +87,7 @@ function InsightCard({
         </span>
         {eyebrow}
       </p>
-      <p className="relative mt-3 text-3xl font-extrabold tabular-nums text-foreground">{big}</p>
+      <p className="relative mt-3 text-[22px] font-extrabold tabular-nums text-foreground sm:text-3xl">{big}</p>
       <h3 className="relative mt-0.5 text-base font-bold text-foreground">{title}</h3>
       <p className="relative mt-1.5 text-sm text-muted-foreground">{text}</p>
     </div>
@@ -109,7 +110,7 @@ function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]
         </span>
         {title}
       </h3>
-      <table className="w-full min-w-[480px] text-left text-base">
+      <table className="stack-table w-full min-w-[480px] text-left text-base">
         <thead>
           <tr className="border-b border-border text-sm text-muted-foreground">
             <th className="pb-2.5 font-medium">วันที่</th>
@@ -125,7 +126,7 @@ function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]
             const highlight = tone === "top" ? i === 0 : i < 3
             return (
               <tr key={d.date} className="border-b border-white/5 last:border-0">
-                <td className={highlight ? (tone === "top" ? "py-2.5 font-semibold text-emerald-glow" : "py-2.5 font-semibold text-destructive") : "py-2.5 text-foreground"}>
+                <td className={`stack-title ${highlight ? (tone === "top" ? "py-2.5 font-semibold text-emerald-glow" : "py-2.5 font-semibold text-destructive") : "py-2.5 text-foreground"}`}>
                   <span className="flex items-center gap-2">
                     <span
                       className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold shadow-sm ${
@@ -141,18 +142,18 @@ function DayTable({ title, rows, tone }: { title: string; rows: OrderReportDay[]
                     {formatFullDateLabel(d.date)}
                   </span>
                 </td>
-                <td className="py-2.5 text-right tabular-nums">
+                <td data-label="ยอดขาย (฿)" className="py-2.5 text-right tabular-nums">
                   {d.effSales.toLocaleString("th-TH", { maximumFractionDigits: 0 })}
-                  <span className="ml-auto mt-1 block h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                  <span className="ml-auto mt-1 block h-1.5 w-24 overflow-hidden rounded-full bg-muted max-sm:hidden">
                     <span
                       className={`block h-full rounded-full ${tone === "top" ? "bg-gradient-to-r from-emerald-300 to-emerald-500" : "bg-gradient-to-r from-rose-300 to-rose-500"}`}
                       style={{ width: `${(d.effSales / maxSales) * 100}%` }}
                     />
                   </span>
                 </td>
-                <td className="py-2.5 text-right tabular-nums text-muted-foreground">{d.effOrders.toLocaleString("th-TH")}</td>
-                <td className="py-2.5 text-right tabular-nums text-muted-foreground">{d.aov.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</td>
-                <td className="py-2.5 text-right tabular-nums text-muted-foreground">{cancelRate.toFixed(1)}%</td>
+                <td data-label="ออเดอร์" className="py-2.5 text-right tabular-nums text-muted-foreground">{d.effOrders.toLocaleString("th-TH")}</td>
+                <td data-label="AOV (฿)" className="py-2.5 text-right tabular-nums text-muted-foreground">{d.aov.toLocaleString("th-TH", { maximumFractionDigits: 0 })}</td>
+                <td data-label="อัตรายกเลิก" className="py-2.5 text-right tabular-nums text-muted-foreground">{cancelRate.toFixed(1)}%</td>
               </tr>
             )
           })}
