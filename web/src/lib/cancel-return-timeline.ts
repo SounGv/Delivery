@@ -1,4 +1,5 @@
 import type { CancelledRow, RefundCase, RestockRow } from "@/api/types"
+import { carrierFromTracking } from "@/lib/refund-selectors"
 import type { Tone } from "@/components/returns/ReturnsUi"
 
 /**
@@ -75,6 +76,11 @@ export interface TimelineItem {
   lostStage: LostStage | null
   /** Cancelled orders only: true = stock already deducted (T1, goods must come back), false = not yet (T2); null for other kinds. */
   stockDeducted: boolean | null
+  /** BigSeller shop name, "" for cancelled orders (the cancelled-order log does not carry it). */
+  store: string
+  /** Return tracking number (restock lines only) and the carrier read off its prefix; "" when unknown. */
+  tracking: string
+  carrier: string
 }
 
 const stripLeadingSymbols = (s: string) => s.replace(/^[^\p{L}\p{N}]+/u, "").trim()
@@ -185,6 +191,9 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       origin: "",
       lostStage: null,
       stockDeducted: r.stockDeducted,
+      store: "",
+      tracking: "",
+      carrier: "",
     })
   })
 
@@ -211,6 +220,9 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       origin: r.origin,
       lostStage: lost || refund ? lostStageOf(refund, r) : null,
       stockDeducted: null,
+      store: r.store,
+      tracking: r.returnTracking,
+      carrier: carrierFromTracking(r.returnTracking),
     })
   })
 
@@ -234,6 +246,9 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       origin: "",
       lostStage: lostStageOf(f),
       stockDeducted: null,
+      store: f.store,
+      tracking: "",
+      carrier: "",
     })
   })
 

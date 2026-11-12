@@ -5,18 +5,30 @@ import { ClampText } from "@/components/common/ClampText"
 import { DataNotice } from "@/components/common/DataNotice"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
-import { DateInput, FilterField, StatTile, StatusPill, chipClass, filterSelectClass, type Tone } from "@/components/returns/ReturnsUi"
+import { ActionList, BlockHeading, DailyBars, ExceptionRows, RankList, RankSwitch } from "@/components/reports/ReturnReportParts"
+import { ExportButton } from "@/components/common/ExportButton"
+import { DateInput, FilterField, Pager, StatTile, StatusPill, chipClass, filterSelectClass, type Tone } from "@/components/returns/ReturnsUi"
+import { TimelineRow } from "@/pages/CancelReturnTimeline"
+import { returnItemsReport } from "@/lib/reportExports"
+import { LIST_PAGE_SIZE } from "@/lib/page-size"
 import { buildTimelineItems, type LostStage } from "@/lib/cancel-return-timeline"
 import { formatFullDateLabel, isoDateOf } from "@/lib/format"
 import {
+  actionItems,
   applyFilters,
   changeVs,
+  dailyReceived,
   daysBetweenIso,
+  exceptions,
   latestDataDate,
   rangeFor,
+  rankBy,
+  segmentItems,
+  sortForSegment,
   summarize,
   type CountAndMoney,
   type PeriodPreset,
+  type Segment,
 } from "@/lib/return-report"
 
 const num = (n: number) => n.toLocaleString("th-TH")
@@ -37,6 +49,22 @@ const STAGES: { key: LostStage; label: string; hint: string; tone: Tone; bar: st
   { key: "claimed", label: "ทำเรื่องขอเงินคืนแล้ว · รอเงิน", hint: "ติดป้าย “รอเงินคืนจากขนส่ง” ไว้แล้ว", tone: "warn", bar: "bg-amber-500" },
   { key: "unnoted", label: "เงินเข้าแล้ว · ยังไม่ลงบันทึก", hint: "จ่ายแล้ว แต่ทีมยังไม่พิมพ์ข้อความใน BigSeller", tone: "info", bar: "bg-sky-500" },
   { key: "paid", label: "ได้เงินคืนแล้ว", hint: "ติดป้ายหรือพิมพ์ว่าได้เงินแล้ว", tone: "ok", bar: "bg-emerald-500" },
+]
+
+/** The sets the list can show. "ต้องตาม" is the default: goods still waiting plus the money stages that need someone. */
+const SEGMENTS: { key: Segment; label: string }[] = [
+  { key: "open", label: "ต้องตาม" },
+  { key: "received", label: "รับแล้ว" },
+  { key: "outstanding", label: "ค้างรับ" },
+  { key: "lost", label: "สูญหาย" },
+  { key: "none", label: "ยังไม่ได้ทำเรื่อง" },
+  { key: "claimed", label: "ขอเงินคืนอยู่" },
+  { key: "unnoted", label: "เงินเข้ายังไม่ลง" },
+  { key: "paid", label: "ได้เงินคืนแล้ว" },
+  { key: "cancelDeducted", label: "ยกเลิก · ตัดสต็อกแล้ว" },
+  { key: "cancelNotDeducted", label: "ยกเลิก · ยังไม่ตัดสต็อก" },
+  { key: "arrivedNotStockedIn", label: "ถึงคลังไม่ Stock-In" },
+  { key: "lostUndated", label: "สูญหายไม่มีวันที่" },
 ]
 
 const sub = (t: CountAndMoney) => [t.qty ? `${num(t.qty)} ชิ้น` : "", t.amount ? baht(t.amount) : ""].filter(Boolean).join(" · ")
@@ -80,6 +108,29 @@ export function ReturnSummary() {
   const items = useMemo(() => applyFilters(all, { channel, origin }), [all, channel, origin])
   const s = useMemo(() => summarize(items, range, today), [items, range, today])
 
+  const [segment, setSegment] = useState<Segment>("open")
+  const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+  const [rankKey, setRankKey] = useState<"store" | "carrier">("store")
+
+  const actions = useMemo(() => actionItems(items, today), [items, today])
+  const exc = useMemo(() => exceptions(items), [items])
+  const dailyEnd = range.to < today ? range.to : today
+  const days = useMemo(() => dailyReceived(items, dailyEnd, 14, asOf), [items, dailyEnd, asOf])
+  const returnOrigins = useMemo(() => [...new Set(items.filter((i) => i.kind === "return").map((i) => i.origin || "ไม่ระบุที่มา"))].sort(), [items])
+  const rank = useMemo(() => rankBy(items, range, rankKey), [items, range, rankKey])
+  const segCounts = useMemo(() => {
+    const m = new Map<Segment, number>()
+    for (const sg of SEGMENTS) m.set(sg.key, segmentItems(items, sg.key, range).length)
+    return m
+  }, [items, range])
+  const listItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return sortForSegment(segmentItems(items, segment, range), segment).filter(
+      (it) => !q || [it.sku, it.orderNo, it.packageNo, it.tracking, it.store, it.channel].some((v) => v.toLowerCase().includes(q))
+    )
+  }, [items, segment, range, search])
+
   const isLoading = cancelledQ.isLoading || restockQ.isLoading || refundsQ.isLoading
   const failed = cancelledQ.error ?? restockQ.error ?? refundsQ.error
   if (isLoading) return <LoadingSkeletonGrid count={5} />
@@ -91,6 +142,17 @@ export function ReturnSummary() {
   const behind = asOf ? daysBetweenIso(asOf, today) : null
   const rangeLabel = range.from === range.to ? formatFullDateLabel(range.from) : `${formatFullDateLabel(range.from)} – ${formatFullDateLabel(range.to)}`
   const maxStage = Math.max(1, ...STAGES.map((st) => s.money[st.key].count))
+  const totalPages = Math.max(1, Math.ceil(listItems.length / LIST_PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageItems = listItems.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE)
+  const pickSegment = (key: Segment) => {
+    setSegment(key)
+    setPage(1)
+  }
+  const openSegment = (key: Segment) => {
+    pickSegment(key)
+    setTimeout(() => document.getElementById("return-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0)
+  }
 
   return (
     <div className="space-y-5">
@@ -247,6 +309,34 @@ export function ReturnSummary() {
         </p>
       </section>
 
+      <section className="space-y-3" aria-label="ต้องตามวันนี้">
+        <BlockHeading title="ต้องตามวันนี้" caption="เรียงจากเรื่องที่ต้องลงมือก่อน แล้วตามด้วยที่รอนานสุด นับทุกวันที่ ไม่ขึ้นกับช่วงเวลา" />
+        <ActionList list={actions.list} total={actions.total} onSeeAll={() => openSegment("open")} />
+      </section>
+
+      <section className="space-y-3" aria-label="รับคืนรายวัน">
+        <BlockHeading title="รับคืนรายวัน" caption="จำนวนรายการที่ถึงคลังในแต่ละวัน แยกตามที่มาในชีต · 14 วันล่าสุดถึงปลายช่วงที่เลือก" />
+        <DailyBars days={days} origins={returnOrigins} />
+      </section>
+
+      <section className="space-y-3" aria-label="เกิดที่ร้านไหน ขนส่งไหน">
+        <BlockHeading title="เกิดที่ร้านไหน ขนส่งไหนมากสุด" caption="ของคืนที่ถึงคลังและพัสดุสูญหายในช่วงที่เลือก 8 อันดับแรก ขนส่งอ่านจากรูปแบบเลขพัสดุคืน (ไม่ใช่ข้อมูลที่ BigSeller ส่งมา) จึงว่างได้" />
+        <RankSwitch
+          value={rankKey}
+          options={[
+            { key: "store", label: "ร้านค้า" },
+            { key: "carrier", label: "ขนส่ง" },
+          ]}
+          onChange={setRankKey}
+        />
+        <RankList rows={rank.rows} rest={rank.rest} unit={rankKey === "store" ? "ร้าน" : "ขนส่ง"} emptyText="ไม่มีรายการในช่วงนี้ ลองเลือกช่วงที่ยาวขึ้น" />
+      </section>
+
+      <section className="space-y-3" aria-label="ข้อมูลที่ต้องตรวจ">
+        <BlockHeading title="ข้อมูลที่ต้องตรวจ" caption="เคสที่สองฝั่งไม่ตรงกันหรือข้อมูลไม่ครบ ควรเช็คก่อนปิดเรื่อง นับทุกวันที่ กดแถวเพื่อดูรายการ" />
+        <ExceptionRows ex={exc} onOpen={openSegment} />
+      </section>
+
       <section className="space-y-3" aria-label="สินค้ายกเลิก">
         <div>
           <h3 className="page-heading text-xl font-extrabold text-foreground">สินค้ายกเลิก</h3>
@@ -274,6 +364,45 @@ export function ReturnSummary() {
           <StatusPill tone="warn" icon={Clock} small>ค้างต้องตาม</StatusPill>
           คือออเดอร์ที่ยังรอตรวจสอบหรือสแกนไม่ตรง ดูรายการได้ที่แท็บ “ตัดสต็อกแล้ว” และ “ยังไม่ตัดสต็อก”
         </p>
+      </section>
+
+      <section id="return-list" className="scroll-mt-20 space-y-3" aria-label="รายการทั้งหมด">
+        <BlockHeading title="รายการทั้งหมด" caption="เลือกชุดรายการด้านล่าง ตรงกับตัวเลขในการ์ดและขั้นตอนด้านบน ค้นหาด้วยเลขพัสดุ ออเดอร์ SKU หรือร้านค้า" />
+        <div className="glass-panel space-y-3 rounded-2xl p-4">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="ชุดรายการ">
+            {SEGMENTS.filter((sg) => sg.key === "open" || sg.key === segment || (segCounts.get(sg.key) ?? 0) > 0).map((sg) => (
+              <button key={sg.key} type="button" aria-pressed={segment === sg.key} className={chipClass(segment === sg.key)} onClick={() => pickSegment(sg.key)}>
+                {sg.label} ({num(segCounts.get(sg.key) ?? 0)})
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+              placeholder="ค้นหา เลขพัสดุ / ออเดอร์ / SKU / ร้านค้า"
+              aria-label="ค้นหารายการ"
+              className={`${filterSelectClass} min-w-[200px] flex-1`}
+            />
+            <ExportButton disabled={listItems.length === 0} label={`ส่งออก ${num(listItems.length)} รายการ`} build={() => returnItemsReport(listItems, SEGMENTS.find((sg) => sg.key === segment)?.label ?? "รายการ")} />
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          แสดง {num(pageItems.length)} จาก {num(listItems.length)} รายการ
+        </p>
+        <div className="space-y-2.5">
+          {pageItems.map((it) => (
+            <TimelineRow key={it.id} item={it} />
+          ))}
+          {pageItems.length === 0 && (
+            <div className="glass-panel rounded-2xl p-6 text-center text-sm text-muted-foreground">ไม่พบรายการในชุดนี้ — ลองเลือกชุดอื่น เปลี่ยนช่วงเวลา หรือล้างคำค้นหา</div>
+          )}
+        </div>
+        <Pager page={safePage} totalPages={totalPages} onChange={setPage} />
       </section>
     </div>
   )

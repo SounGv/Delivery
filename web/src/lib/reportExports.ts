@@ -1,4 +1,5 @@
 import type { BacklogRow, CancelledRow, Category, RefundCase, RestockRow, StockValueRow } from "@/api/types"
+import type { TimelineItem } from "@/lib/cancel-return-timeline"
 import { carrierFromTracking, isRefundPaid } from "@/lib/refund-selectors"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
@@ -68,6 +69,19 @@ export function restockReport(rows: RestockRow[]): ExportTable {
       r.platform, r.store, r.packageNo, r.orderNo, r.productName, r.sku, r.qty, r.refundAmount,
       r.orderStatus, r.afterSalesStatus, r.stockInStatus, r.stockInQty, r.returnTracking, r.requestedAt,
       r.arrivedAt, r.stockInNote, r.receiptStatus, r.origin, r.owner, r.returnStatus,
+    ]),
+  }
+}
+
+/** Every line of the "สรุปตีกลับและเงินคืน" list (the caller passes the FILTERED set). */
+export function returnItemsReport(items: TimelineItem[], segmentLabel: string): ExportTable {
+  return {
+    filename: `สรุปตีกลับและเงินคืน_${segmentLabel}_${today()}.csv`,
+    headers: ["ประเภท", "สถานะ", "ที่มา", "ช่องทาง", "ร้านค้า", "SKU", "จำนวน", "ยอด (฿)", "ออเดอร์", "พัสดุ", "แทร็คกิ้งคืน", "ขนส่ง", "วันที่", "ความหมายของวันที่", "ถึงคลัง"],
+    rows: items.map((it) => [
+      it.kind === "cancel" ? (it.stockDeducted ? "ยกเลิก (ตัดสต็อกแล้ว)" : "ยกเลิก (ยังไม่ตัดสต็อก)") : it.kind === "lost" ? "สูญหาย" : "ตีกลับ/คืน",
+      it.status.label, it.origin, it.channel, it.store, it.sku, it.qty, it.amount ?? "", it.orderNo, it.packageNo, it.tracking, it.carrier,
+      it.date ?? "", it.dateNote, it.arrivedOn ?? "",
     ]),
   }
 }

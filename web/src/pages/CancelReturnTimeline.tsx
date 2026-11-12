@@ -544,7 +544,7 @@ export function TimelineOverview() {
   )
 }
 
-function TimelineRow({ item }: { item: TimelineItem }) {
+export function TimelineRow({ item }: { item: TimelineItem }) {
   const StatusIcon = TONE_ICON[item.status.tone]
   const KindIcon = KIND_ICON[item.kind]
   return (
@@ -573,7 +573,8 @@ function TimelineRow({ item }: { item: TimelineItem }) {
         <>
           <p className="break-all">ออเดอร์ {item.orderNo || "-"}</p>
           <p className="mt-0.5 break-all">พัสดุ {item.packageNo || "-"}</p>
-          <p className="mt-0.5 text-muted-foreground">{item.channel || "-"}</p>
+          <p className="mt-0.5 text-muted-foreground">{[item.channel || "-", item.store].filter(Boolean).join(" · ")}</p>
+          {item.carrier && <p className="mt-0.5 text-muted-foreground">{item.carrier}</p>}
         </>
       }
       dates={
