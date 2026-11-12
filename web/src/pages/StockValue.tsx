@@ -9,6 +9,7 @@ import { ExportButton } from "@/components/common/ExportButton"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { ListToolbar, Pager, StatusPill, chipClass } from "@/components/returns/ReturnsUi"
 import { stockValueReport } from "@/lib/reportExports"
+import { formatFullDateLabel, formatTime, isoDateOf } from "@/lib/format"
 import {
   ALL_WAREHOUSES,
   STOCK_DIFF_WARN_PERCENT,
@@ -314,7 +315,7 @@ export function StockValue() {
             <p className="text-xs text-muted-foreground">
               เว็บคิด จำนวน × ราคาต้นทุนจากไฟล์ SKU Merchant · BigSeller คิด จำนวน × ต้นทุนเฉลี่ยถ่วงน้ำหนักของมันเอง (SKU ที่ BigSeller ไม่มีต้นทุนนับเป็น 0)
               ตัวเลขสองฝั่งจึงไม่เท่ากัน ยังไม่ได้ตัดสินว่าฝั่งไหนตรงกับบัญชี
-              {snapshot.asOf ? ` · ข้อมูล BigSeller ณ ${new Date(snapshot.asOf).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}` : ""}
+              {snapshot.asOf ? ` · ข้อมูล BigSeller ณ ${formatFullDateLabel(isoDateOf(new Date(snapshot.asOf)))} ${formatTime(snapshot.asOf)}` : ""}
             </p>
             <div className="overflow-x-auto">
               <table className="stack-table w-full min-w-[560px] text-left text-sm">

@@ -111,12 +111,13 @@ export function ReturnSummary() {
   const [segment, setSegment] = useState<Segment>("open")
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
-  const [rankKey, setRankKey] = useState<"store" | "carrier">("store")
+  const [rankKey, setRankKey] = useState<"store" | "carrier" | "reason">("store")
 
   const actions = useMemo(() => actionItems(items, today), [items, today])
   const exc = useMemo(() => exceptions(items), [items])
   const dailyEnd = range.to < today ? range.to : today
   const days = useMemo(() => dailyReceived(items, dailyEnd, 14, asOf), [items, dailyEnd, asOf])
+  const hasReasons = useMemo(() => items.some((i) => i.reason), [items])
   const returnOrigins = useMemo(() => [...new Set(items.filter((i) => i.kind === "return").map((i) => i.origin || "ไม่ระบุที่มา"))].sort(), [items])
   const rank = useMemo(() => rankBy(items, range, rankKey), [items, range, rankKey])
   const segCounts = useMemo(() => {
@@ -210,6 +211,9 @@ export function ReturnSummary() {
           </FilterField>
         </div>
         {origin && <p className="text-xs text-muted-foreground">ตอนเลือกที่มา สินค้ายกเลิกไม่แสดง เพราะไม่มีช่อง “ที่มา”</p>}
+        <ClampText className="text-xs text-muted-foreground">
+          ที่มาตามชีต: “คืนจากลูกค้า” = ลูกค้ายื่นคืนผ่านแพลตฟอร์ม (มีสถานะหลังการขาย เช่น ยอมรับการคืนสินค้า) · “ยกเลิก-ตีกลับ” = ออเดอร์ที่ยกเลิกหรือพัสดุถูกตีกลับ ไม่มีสถานะหลังการขาย เหตุผลขึ้นต้นว่า “ตีกลับ:” เช่น คำเตือน พัสดุสูญหาย จัดส่งล้มเหลว สองกลุ่มนี้นับรวมกันในหน้านี้
+        </ClampText>
       </div>
 
       {asOf && behind !== null && behind > 1 && (
@@ -326,10 +330,19 @@ export function ReturnSummary() {
           options={[
             { key: "store", label: "ร้านค้า" },
             { key: "carrier", label: "ขนส่ง" },
+            { key: "reason", label: "เหตุผล" },
           ]}
           onChange={setRankKey}
         />
-        <RankList rows={rank.rows} rest={rank.rest} unit={rankKey === "store" ? "ร้าน" : "ขนส่ง"} emptyText="ไม่มีรายการในช่วงนี้ ลองเลือกช่วงที่ยาวขึ้น" />
+        <RankList
+          rows={rank.rows}
+          rest={rank.rest}
+          unit={rankKey === "store" ? "ร้าน" : rankKey === "carrier" ? "ขนส่ง" : "เหตุผล"}
+          emptyText="ไม่มีรายการในช่วงนี้ ลองเลือกช่วงที่ยาวขึ้น"
+        />
+        {rankKey === "reason" && !hasReasons && (
+          <p className="text-xs text-muted-foreground">ยังไม่มีเหตุผลในข้อมูลที่อ่านมา (ต้องใช้ Apps Script รุ่นที่อ่านคอลัมน์ “เหตุผล”) จึงขึ้น “ไม่ระบุ” ทั้งหมด</p>
+        )}
       </section>
 
       <section className="space-y-3" aria-label="ข้อมูลที่ต้องตรวจ">

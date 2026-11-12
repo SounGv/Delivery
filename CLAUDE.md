@@ -28,7 +28,7 @@ npm run build    # tsc -b && vite build
 
 CI (`.github/workflows/deploy-teamklang.yml`) runs lint, test, build, then deploys on every push to `main` that touches `web/**`. Lint and test run before any step that holds a secret.
 
-Apps Script release (only when `apps-script/` changed): `cd apps-script && npx clasp push --force`, then `clasp deploy --deploymentId <live id>`. `clasp push --force` deletes remote files that are not in the folder, so check `git status` first. Check `clasp deployments` for the live version before changing anything.
+Apps Script release (only when `apps-script/` changed; bump `CACHE_VERSION_` in `Code.js` when the parsed shape changes). Try it first on the TEST deployment (`clasp deployments` marks it "TEST … (not live)"), compare `?path=core` / `?path=restock` with the live URL, then deploy to the live id. Roll back with `clasp deploy --deploymentId <live id> --versionNumber <previous version>`. `cd apps-script && npx clasp push --force`, then `clasp deploy --deploymentId <live id>`. `clasp push --force` deletes remote files that are not in the folder, so check `git status` first. Check `clasp deployments` for the live version before changing anything.
 
 ## Rules this app follows
 
@@ -43,5 +43,7 @@ Apps Script release (only when `apps-script/` changed): `cd apps-script && npx c
 ## Open questions
 
 - "ตีกลับ" vs "คืนสินค้า": `cn-restock` column "ที่มา" has "คืนจากลูกค้า" (customer return) and "ยกเลิก-ตีกลับ" (carrier bounce). The app currently counts both as "ตีกลับ". Suggested names: "ลูกค้าส่งคืน" / "ขนส่งตีกลับ" — waiting for the warehouse team to confirm.
-- ฝ่ายรับเข้า page shows two per-person categories both titled "จำนวนสินค้าที่รับเข้า", and the second one has numeric "names" (250, 300, …). Source cells not located yet.
-- Year shown as ค.ศ.; the UI skill prefers พ.ศ. for staff-facing screens. Not decided.
+- ฝ่ายรับเข้า duplicate headings and numeric "names" (250, 300, …): cause found and fixed in `SheetParser.js` (months were merged by category number, but the team renumbered the categories between ก.ค. and ส. ค.; and a figure in the "ชื่อ" column was read as a person). Tested in `apps-script-tests/`. Verified on the TEST deployment; **not yet on the live deployment** (see "Apps Script release").
+- Reason ranking (`cn-restock` column "เหตุผล"): the parser now sends `reason`; the page shows it as soon as the live deployment has it (until then it says so).
+
+Decided: the year is shown as ค.ศ. on purpose (the code says "never Buddhist-era", to match the sheets), which is the repo's own decision the UI skill allows.

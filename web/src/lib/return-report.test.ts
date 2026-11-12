@@ -25,6 +25,7 @@ function item(p: Partial<TimelineItem>): TimelineItem {
     store: "",
     tracking: "",
     carrier: "",
+    reason: "",
     ...p,
   }
 }
@@ -256,6 +257,20 @@ describe("rankBy", () => {
     expect(r.total).toBe(12)
     expect(r.rows.map((x) => [x.name, x.count])).toEqual([["A", 5], ["B", 3]])
     expect(r.rest).toEqual({ names: 3, count: 4, share: 33 })
+  })
+})
+
+describe("rankBy reason", () => {
+  it("ranks the reasons the sheet gives and files lines without one under ไม่ระบุ", () => {
+    const range = { from: "2026-11-01", to: "2026-11-07" }
+    const items = [
+      item({ arrivedOn: "2026-11-02", reason: "เปลี่ยนใจ" }),
+      item({ arrivedOn: "2026-11-03", reason: "เปลี่ยนใจ" }),
+      item({ arrivedOn: "2026-11-04", reason: "ตีกลับ: คำเตือน" }),
+      item({ kind: "lost", date: "2026-11-05" }),
+    ]
+    const r = rankBy(items, range, "reason")
+    expect(r.rows.map((x) => [x.name, x.count])).toEqual([["เปลี่ยนใจ", 2], ["ตีกลับ: คำเตือน", 1], ["ไม่ระบุ", 1]])
   })
 })
 

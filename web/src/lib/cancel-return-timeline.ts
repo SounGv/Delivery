@@ -81,6 +81,8 @@ export interface TimelineItem {
   /** Return tracking number (restock lines only) and the carrier read off its prefix; "" when unknown. */
   tracking: string
   carrier: string
+  /** The sheet's "เหตุผล" for restock lines; "" for other lines or when the Apps Script does not send it yet. */
+  reason: string
 }
 
 const stripLeadingSymbols = (s: string) => s.replace(/^[^\p{L}\p{N}]+/u, "").trim()
@@ -194,6 +196,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       store: "",
       tracking: "",
       carrier: "",
+      reason: "",
     })
   })
 
@@ -223,6 +226,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       store: r.store,
       tracking: r.returnTracking,
       carrier: carrierFromTracking(r.returnTracking),
+      reason: r.reason ?? "",
     })
   })
 
@@ -249,6 +253,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       store: f.store,
       tracking: "",
       carrier: "",
+      reason: "",
     })
   })
 

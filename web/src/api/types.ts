@@ -379,6 +379,8 @@ export interface RestockRow {
   origin: string
   owner: string
   returnStatus: string
+  /** "เหตุผล" column of the sheet (e.g. "เปลี่ยนใจ", "ตีกลับ: พัสดุสูญหาย"). Absent until the Apps Script that reads it is deployed. */
+  reason?: string
 }
 
 export interface RestockReport {

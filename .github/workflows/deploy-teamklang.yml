@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "apps-script/**"
+      - "apps-script-tests/**"
       - ".github/workflows/deploy-teamklang.yml"
 
 jobs:
@@ -22,6 +24,9 @@ jobs:
       - name: Install dependencies
         working-directory: web
         run: npm ci
+
+      - name: Test the Apps Script parser helpers
+        run: node --test apps-script-tests
 
       # Lint and tests run before anything that holds a secret (the build gets the sheet URL, the deploy gets Cloudflare).
       - name: Lint

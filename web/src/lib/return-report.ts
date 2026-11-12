@@ -283,7 +283,7 @@ export interface RankRow {
  * Where returns and losses happen most, in the period: returned goods by arrival day plus lost parcels by their date.
  * The first `top` names are listed; the rest are summed into `rest` (never drawn as a bar, so "อื่นๆ" cannot read as a group).
  */
-export function rankBy(items: TimelineItem[], range: DateRange, key: "store" | "carrier", top = 8): { rows: RankRow[]; rest: { names: number; count: number; share: number }; total: number } {
+export function rankBy(items: TimelineItem[], range: DateRange, key: "store" | "carrier" | "reason", top = 8): { rows: RankRow[]; rest: { names: number; count: number; share: number }; total: number } {
   const counts = new Map<string, number>()
   let total = 0
   for (const it of items) {

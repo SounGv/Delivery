@@ -52,6 +52,18 @@ function normalizeHeaderDate_(date) {
  * Returns null if the sheet doesn't look like a data tab (e.g. no date row) so
  * callers can skip stray/non-data tabs without failing the whole request.
  */
+/**
+ * True when a cell in the "ชื่อ" column is a person's name. Department KPI rows (e.g. "2. จำนวนสินค้าที่รับเข้า")
+ * put the day's figure in that same column — 250, 300, "911 GTE231026=1701" — and those are not people. A real
+ * name is text without digits and short enough to be a name; a number cell is never a name.
+ */
+function isPersonName_(raw) {
+  if (raw === '' || raw === null || raw === undefined) return false;
+  if (typeof raw === 'number') return false;
+  var name = String(raw).trim();
+  return name.length > 0 && name.length <= 20 && !/\d/.test(name);
+}
+
 function parseSheetTab_(sheet, tz) {
   var range = sheet.getDataRange();
   var values = range.getValues();
@@ -177,7 +189,7 @@ function parseSheetTab_(sheet, tz) {
           var nameRaw = row[b.col + nameIdx];
           var name = (nameRaw === '' || nameRaw === null || nameRaw === undefined) ? '' : String(nameRaw).trim();
 
-          if (name && name.length <= 20 && !isProblemRow) {
+          if (isPersonName_(nameRaw) && !isProblemRow) {
             var parcels = numberOrNull_(row[b.col + parcelsIdx]);
             var items = numberOrNull_(row[b.col + itemsIdx]);
             var checkIn = inIdx !== -1 ? timeFromCell_(row[b.col + inIdx], displayRow[b.col + inIdx]) : null;
@@ -1237,17 +1249,28 @@ function mergeReceivingWarehouse_(a, b) {
       Object.keys(e.byDate).forEach(function (dk) { map[e.name].byDate[dk] = e.byDate[dk]; });
     });
   }
+  // Categories are matched by their TITLE, not their number: the team renumbered them between months (ก.ค. had
+  // "1. จำนวนสินค้าที่รับเข้า", ส.ค. onwards has "1. จำนวน SKU ที่รับสินค้าเข้า"), and matching on the number glued
+  // different categories together and showed one title twice. The newer month (the one with the later last date)
+  // decides the number shown next to a title.
+  function titleKey(title) { return String(title || '').replace(/\s+/g, '').toLowerCase(); }
+  function lastDate(rw) { return rw.dates.length ? rw.dates.slice().sort()[rw.dates.length - 1] : ''; }
+  var newer = lastDate(b) >= lastDate(a) ? b : a;
   [a, b].forEach(function (rw) {
+    var isNewer = rw === newer;
     rw.departments.forEach(function (dep) {
       var t = ensure(dep.title);
       mergePeople(t.staffMap, dep.staff);
       (dep.staffCategories || []).forEach(function (c) {
-        if (!t.catMap[c.id]) t.catMap[c.id] = { id: c.id, title: c.title, target: c.target, empMap: {} };
-        mergePeople(t.catMap[c.id].empMap, c.employees);
+        var key = titleKey(c.title);
+        if (!t.catMap[key]) t.catMap[key] = { id: c.id, title: c.title, target: c.target, empMap: {} };
+        else if (isNewer) { t.catMap[key].id = c.id; t.catMap[key].target = c.target || t.catMap[key].target; }
+        mergePeople(t.catMap[key].empMap, c.employees);
       });
       (dep.metrics || []).forEach(function (m) {
-        var key = m.id || m.title;
+        var key = titleKey(m.title);
         if (!t.metricMap[key]) t.metricMap[key] = { id: m.id, title: m.title, target: m.target, byDate: {} };
+        else if (isNewer) { t.metricMap[key].id = m.id; t.metricMap[key].target = m.target || t.metricMap[key].target; }
         Object.keys(m.byDate).forEach(function (dk) { t.metricMap[key].byDate[dk] = m.byDate[dk]; });
       });
     });
@@ -2130,6 +2153,7 @@ function loadCnRestock_() {
       else if (name === 'ที่มา') col.origin = c;
       else if (name === 'ฝ่ายที่ดูแล') col.owner = c;
       else if (name === 'สถานะคืนสินค้า') col.returnStatus = c;
+      else if (name === 'เหตุผล') col.reason = c;
     });
     if (col.orderNo === undefined || col.packageNo === undefined) {
       throw new Error('tab "' + CN_RESTOCK_TAB_ + '": header columns not found');
@@ -2169,7 +2193,8 @@ function loadCnRestock_() {
         receiptStatus: text(i, 'receiptStatus'),
         origin: text(i, 'origin'),
         owner: text(i, 'owner'),
-        returnStatus: text(i, 'returnStatus')
+        returnStatus: text(i, 'returnStatus'),
+        reason: text(i, 'reason')
       });
     }
     return result;
