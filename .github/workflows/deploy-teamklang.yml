@@ -23,6 +23,15 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # Lint and tests run before anything that holds a secret (the build gets the sheet URL, the deploy gets Cloudflare).
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+
+      - name: Test
+        working-directory: web
+        run: npm test
+
       - name: Build
         working-directory: web
         env:
