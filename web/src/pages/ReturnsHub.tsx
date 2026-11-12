@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Ban, CalendarRange, Hourglass, ListChecks, PackageSearch, PackageX } from "lucide-react"
+import { Ban, CalendarRange, Hourglass, ListChecks, PackageSearch, PackageX, Wallet } from "lucide-react"
 import { useCancelledQuery, useFocusQuery, useRefundsQuery, useRestockQuery } from "@/api/queries"
 import { ClampText } from "@/components/common/ClampText"
 import { Tabs } from "@/components/ui/Tabs"
@@ -8,11 +8,12 @@ import { CancelledView, CancelledWarning } from "@/pages/Cancelled"
 import { TimelineOverview } from "@/pages/CancelReturnTimeline"
 import { RefundsView } from "@/pages/ReturnsRefunds"
 import { RestockView } from "@/pages/ReturnsRestock"
+import { ReturnSummary } from "@/pages/ReturnSummary"
 
 const num = (n: number) => n.toLocaleString("th-TH")
 const withCount = (label: string, count: number | undefined) => (count === undefined ? label : `${label} (${num(count)})`)
 
-type HubTab = "backlog" | "deducted" | "not-deducted" | "restock" | "refunds" | "overview"
+type HubTab = "backlog" | "deducted" | "not-deducted" | "restock" | "refunds" | "summary" | "overview"
 
 /** The one page for everything about cancelled, returned and lost goods, all from the gv-returns-sync workbook.
  * Tabs sit under four sub-headings: the work to do (backlog queues), cancelled orders (stock already deducted / not yet),
@@ -95,6 +96,13 @@ function CaseWorkPage({ initialTab }: { initialTab: HubTab }) {
             render: () => <RefundsView key="refunds" />,
           },
           {
+            key: "summary",
+            group: "รายงาน",
+            label: "สรุปตีกลับและเงินคืน",
+            icon: Wallet,
+            render: () => <ReturnSummary key="summary" />,
+          },
+          {
             key: "overview",
             group: "รายงาน",
             label: "ภาพรวมตามช่วงเวลา",
@@ -122,7 +130,7 @@ export function CancelledHub() {
   return <CaseWorkPage initialTab="deducted" />
 }
 
-/** Opens on the period report (old "รายงานยกเลิก/ตีกลับ" entry). */
+/** Opens on the summary report (the old "รายงานยกเลิก/ตีกลับ" entry now leads to the report group). */
 export function ReportHub() {
-  return <CaseWorkPage initialTab="overview" />
+  return <CaseWorkPage initialTab="summary" />
 }

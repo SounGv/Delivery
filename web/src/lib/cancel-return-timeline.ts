@@ -63,6 +63,18 @@ export interface TimelineItem {
   tag: string
   /** Free text for the last column (money, who printed…). */
   extra: string
+  /** Money on the line as a number: the selling price in the refund tab when the line has a refund case (the figure the
+   * team's own sheet totals), else the buyer refund amount of the restock row; null when unknown. */
+  amount: number | null
+  /** yyyy-MM-dd the parcel reached the warehouse (cn-restock "เวลาถึงคลัง"); null when not arrived or not a restock line. */
+  arrivedOn: string | null
+  /** The sheet's "ที่มา" ("คืนจากลูกค้า" / "ยกเลิก-ตีกลับ") for restock lines; "" otherwise. */
+  origin: string
+  /** Where the money of a refund case is: set on every lost parcel and on every line that has a refund case
+   * (the team's "รอเงินคืนจากขนส่ง" label also sits on goods the platform shows as returned); null otherwise. */
+  lostStage: LostStage | null
+  /** Cancelled orders only: true = stock already deducted (T1, goods must come back), false = not yet (T2); null for other kinds. */
+  stockDeducted: boolean | null
 }
 
 const stripLeadingSymbols = (s: string) => s.replace(/^[^\p{L}\p{N}]+/u, "").trim()
@@ -104,6 +116,29 @@ export const LOST_STATUSES = [LOST_PAID, LOST_CHASING, LOST_UNNOTED]
  * the note yet; see RefundCase.knownFrom. */
 const KNOWN_FROM_COLOUR_ONLY = "ป้ายสี"
 
+/** Where the money of a lost parcel is. Exactly one per lost line, so the four add up to all lost lines.
+ *  none     no refund case and no money yet: nobody has started the claim
+ *  claimed  the claim is open ("รอเงินคืนจากขนส่ง"), no money yet
+ *  unnoted  the money is in but the team has not typed the note
+ *  paid     the money is in and noted */
+export type LostStage = "none" | "claimed" | "unnoted" | "paid"
+
+export function lostStageOf(refund: RefundCase | undefined, restock?: RestockRow): LostStage {
+  if (refund) {
+    if (!refund.caseResult.includes("ได้เงินคืนแล้ว")) return "claimed"
+    return refund.knownFrom === KNOWN_FROM_COLOUR_ONLY ? "unnoted" : "paid"
+  }
+  if (restock && stripLeadingSymbols(restock.receiptStatus) === "ได้เงินคืนแล้ว") return "unnoted"
+  return "none"
+}
+
+const LOST_STATUS_OF_STAGE: Record<LostStage, TimelineStatus> = {
+  none: LOST_CHASING,
+  claimed: LOST_CHASING,
+  unnoted: LOST_UNNOTED,
+  paid: LOST_PAID,
+}
+
 /**
  * - the refund tab says paid and the team typed a note        -> LOST_PAID
  * - the refund tab says paid but only the colour label shows it -> LOST_UNNOTED
@@ -113,17 +148,20 @@ const KNOWN_FROM_COLOUR_ONLY = "ป้ายสี"
  * - no refund case and no money yet                              -> LOST_CHASING
  */
 function lostStatus(refund: RefundCase | undefined, restock?: RestockRow): TimelineStatus {
-  if (refund) {
-    if (!refund.caseResult.includes("ได้เงินคืนแล้ว")) return LOST_CHASING
-    return refund.knownFrom === KNOWN_FROM_COLOUR_ONLY ? LOST_UNNOTED : LOST_PAID
-  }
-  if (restock && stripLeadingSymbols(restock.receiptStatus) === "ได้เงินคืนแล้ว") return LOST_UNNOTED
-  return LOST_CHASING
+  return LOST_STATUS_OF_STAGE[lostStageOf(refund, restock)]
 }
 
 export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRow[], refunds: RefundCase[]): TimelineItem[] {
   const refundByPackage = new Map<string, RefundCase>()
-  for (const f of refunds) if (f.packageNo && !refundByPackage.has(f.packageNo)) refundByPackage.set(f.packageNo, f)
+  const refundByPackageAndSku = new Map<string, RefundCase>()
+  for (const f of refunds) {
+    if (f.packageNo && !refundByPackage.has(f.packageNo)) refundByPackage.set(f.packageNo, f)
+    const key = `${f.packageNo}|${f.sku}`
+    if (f.packageNo && !refundByPackageAndSku.has(key)) refundByPackageAndSku.set(key, f)
+  }
+  // A parcel with several SKUs has one refund case per SKU: match on package + SKU first so each line gets its own
+  // case and price, and fall back to the package alone when the SKUs are written differently.
+  const refundFor = (packageNo: string, sku: string) => refundByPackageAndSku.get(`${packageNo}|${sku}`) ?? refundByPackage.get(packageNo)
   const restockPackages = new Set(restock.map((r) => r.packageNo).filter(Boolean))
 
   const items: TimelineItem[] = []
@@ -142,6 +180,11 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       status: cancelStatus(r),
       tag: r.stockDeducted ? "ตัดสต็อกแล้ว (T1)" : "ยังไม่ตัดสต็อก (T2)",
       extra: r.printer ? `พิมพ์โดย ${r.printer}` : "",
+      amount: null,
+      arrivedOn: null,
+      origin: "",
+      lostStage: null,
+      stockDeducted: r.stockDeducted,
     })
   })
 
@@ -149,7 +192,7 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
     const requested = dayOf(r.requestedAt)
     const arrived = dayOf(r.arrivedAt)
     const lost = r.returnStatus === "สูญหาย"
-    const refund = refundByPackage.get(r.packageNo)
+    const refund = refundFor(r.packageNo, r.sku)
     items.push({
       id: `r:${r.packageNo || r.orderNo}:${r.sku}:${i}`,
       kind: lost ? "lost" : "return",
@@ -163,6 +206,11 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       status: lost ? lostStatus(refund, r) : returnStatus(r),
       tag: r.origin,
       extra: money(r.refundAmount),
+      amount: refund?.sellPrice && refund.sellPrice > 0 ? refund.sellPrice : r.refundAmount > 0 ? r.refundAmount : null,
+      arrivedOn: arrived || null,
+      origin: r.origin,
+      lostStage: lost || refund ? lostStageOf(refund, r) : null,
+      stockDeducted: null,
     })
   })
 
@@ -181,6 +229,11 @@ export function buildTimelineItems(cancelled: CancelledRow[], restock: RestockRo
       status: lostStatus(f),
       tag: f.platformStatus,
       extra: money(f.sellPrice),
+      amount: f.sellPrice && f.sellPrice > 0 ? f.sellPrice : null,
+      arrivedOn: null,
+      origin: "",
+      lostStage: lostStageOf(f),
+      stockDeducted: null,
     })
   })
 
