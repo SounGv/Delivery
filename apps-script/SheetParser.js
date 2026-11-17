@@ -2106,6 +2106,69 @@ function focusDateIso_(raw, displayText, tz) {
 }
 
 /**
+ * "รายงานออเดอร์พิมพ์ซ้ำรายวัน": the tab of the team report workbook that lists, per day, every order whose shipping
+ * label was printed more than once, with who pressed print, when, and whether it was pressed by hand
+ * ("กดพิมพ์เอง") or marked by the system ("ระบบทำเครื่องหมายอัตโนมัติ"). Columns are matched by header text. The
+ * details cell is returned as written; the web parses it. Read-only; a missing tab or an unreadable file is reported
+ * in the result and never breaks the payload.
+ */
+var REPRINT_TAB_ = 'รายงานออเดอร์พิมพ์ซ้ำรายวัน';
+
+function loadReprintReport_() {
+  var result = { rows: [], missingTab: '', error: '' };
+  try {
+    var ss = SpreadsheetApp.openById(TEAM_REPORT_SOURCE_ID_);
+    var sheet = ss.getSheetByName(REPRINT_TAB_);
+    if (!sheet) { result.missingTab = REPRINT_TAB_; return result; }
+    var tz = ss.getSpreadsheetTimeZone();
+    var lastRow = sheet.getLastRow();
+    var lastCol = Math.min(sheet.getLastColumn(), 12);
+    if (lastRow < 2 || lastCol < 1) return result;
+    var range = sheet.getRange(1, 1, lastRow, lastCol);
+    var values = range.getValues();
+    var display = range.getDisplayValues();
+
+    var col = {};
+    display[0].forEach(function (h, c) {
+      var name = String(h == null ? '' : h).trim();
+      if (name.normalize) name = name.normalize('NFC');
+      if (name === 'วันที่') col.date = c;
+      else if (name === 'เลขพัสดุ') col.packageNo = c;
+      else if (name === 'เลขคำสั่งซื้อ') col.orderNo = c;
+      else if (name.indexOf('จำนวนครั้งที่พิมพ์') === 0) col.printCount = c;
+      else if (name.indexOf('รายละเอียดการพิมพ์') === 0) col.details = c;
+      else if (name === 'รายการสินค้า') col.items = c;
+    });
+    if (col.date === undefined || col.packageNo === undefined) {
+      throw new Error('tab "' + REPRINT_TAB_ + '": header columns not found');
+    }
+    var text = function (r, key) {
+      return col[key] === undefined ? '' : String(display[r][col[key]] == null ? '' : display[r][col[key]]).trim();
+    };
+    for (var i = 1; i < lastRow; i++) {
+      var packageNo = text(i, 'packageNo');
+      var orderNo = text(i, 'orderNo');
+      if (!packageNo && !orderNo) continue;
+      var count = parseInt(text(i, 'printCount'), 10);
+      result.rows.push({
+        date: focusDateIso_(values[i][col.date], text(i, 'date'), tz),
+        packageNo: packageNo,
+        orderNo: orderNo,
+        printCount: isFinite(count) ? count : 0,
+        details: text(i, 'details'),
+        items: text(i, 'items')
+      });
+    }
+    return result;
+  } catch (err) {
+    Logger.log('reprint report unreadable: ' + err);
+    result.rows = [];
+    result.error = String(err && err.message ? err.message : err);
+    return result;
+  }
+}
+
+/**
  * "สินค้าตีกลับ" as the gv-returns-sync workbook counts it: the "cn-restock" tab, one row
  * per SKU of every return/bounce that is not fully stocked in yet. Unlike the returns
  * page's own source (DB_RETURN_CURRENT in this workbook) it also holds cancelled orders
@@ -2367,6 +2430,13 @@ function buildDashboardPayload_(part) {
       generatedAt: new Date().toISOString(),
       todayDate: calendarToday,
       refunds: loadRefundCases_()
+    };
+  }
+  if (part === 'reprints') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      reprints: loadReprintReport_()
     };
   }
   if (part === 'stockValue') {

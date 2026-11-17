@@ -10,6 +10,7 @@ import type {
   Employee,
   FocusPart,
   RefundsPart,
+  ReprintsPart,
   RestockPart,
   StockValuePart,
   TeamId,
@@ -40,6 +41,17 @@ export function useRefundsQuery() {
   return useQuery({
     queryKey: ["refunds"],
     queryFn: ({ signal }) => fetchPayloadPart<RefundsPart>("refunds", signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: getRefreshIntervalMs(),
+  })
+}
+
+export function useReprintsQuery() {
+  return useQuery({
+    queryKey: ["reprints"],
+    queryFn: ({ signal }) => fetchPayloadPart<ReprintsPart>("reprints", signal),
+    // An Apps Script release from before this part answers "Unknown path" every time: do not keep retrying it.
+    retry: (count, error) => count < 2 && !/unknown path/i.test(error instanceof Error ? error.message : ""),
     placeholderData: keepPreviousData,
     refetchInterval: getRefreshIntervalMs(),
   })

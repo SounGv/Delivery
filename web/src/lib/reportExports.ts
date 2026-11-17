@@ -1,5 +1,6 @@
 import type { BacklogRow, CancelledRow, Category, RefundCase, RestockRow, StockValueRow } from "@/api/types"
 import type { TimelineItem } from "@/lib/cancel-return-timeline"
+import type { ReprintCase } from "@/lib/reprint-report"
 import { carrierFromTracking, isRefundPaid } from "@/lib/refund-selectors"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
@@ -83,6 +84,15 @@ export function returnItemsReport(items: TimelineItem[], segmentLabel: string): 
       it.status.label, it.origin, it.channel, it.store, it.sku, it.qty, it.amount ?? "", it.orderNo, it.packageNo, it.tracking, it.carrier,
       it.date ?? "", it.dateNote, it.arrivedOn ?? "",
     ]),
+  }
+}
+
+/** Every reprinted order of the "ออเดอร์พิมพ์ซ้ำ" list (the caller passes the FILTERED set). */
+export function reprintCasesReport(cases: ReprintCase[], segmentLabel: string): ExportTable {
+  return {
+    filename: `ออเดอร์พิมพ์ซ้ำ_${segmentLabel}_${today()}.csv`,
+    headers: ["วันที่", "เลขพัสดุ", "เลขคำสั่งซื้อ", "จำนวนครั้งที่พิมพ์", "กดพิมพ์เอง", "ระบบทำเครื่องหมายอัตโนมัติ", "ผู้พิมพ์", "พิมพ์ห่างกันไม่เกิน 1 นาที", "หลายบัญชีพิมพ์", "รายการสินค้า", "รายละเอียดการพิมพ์"],
+    rows: cases.map((c) => [c.date, c.packageNo, c.orderNo, c.printCount, c.manualPresses, c.autoMarks, c.staff.join(", "), c.rapid ? "ใช่" : "", c.multiStaff ? "ใช่" : "", c.items, c.details]),
   }
 }
 

@@ -13,6 +13,7 @@ const CACHE_API_ENDPOINTS: Record<PayloadPartPath, string> = {
   focus: "focus",
   restock: "restock",
   refunds: "refunds",
+  reprints: "reprints",
   stockValue: "stock-value",
 }
 

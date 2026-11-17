@@ -61,12 +61,23 @@ export function ActionList({ list, total, onSeeAll }: { list: ActionItem[]; tota
 const ORIGIN_COLOURS = ["#2ba8a2", "#f5c542", "#9fb5b3"]
 
 /** "รับคืนรายวัน": one bar per day, split by origin. A day with no data yet is drawn hatched and labelled, never as 0. */
-export function DailyBars({ days, origins }: { days: DayCount[]; origins: string[] }) {
+export function DailyBars({
+  days,
+  origins,
+  title = "รับของคืนเข้าคลังรายวัน",
+  colours = ORIGIN_COLOURS,
+}: {
+  days: DayCount[]
+  origins: string[]
+  /** What the bars count, read out by screen readers. */
+  title?: string
+  colours?: string[]
+}) {
   const max = Math.max(1, ...days.map((d) => d.total))
   const summary = days.map((d) => `${formatFullDateLabel(d.date)}: ${d.noData ? "ยังไม่มีข้อมูล" : `${d.total} รายการ`}`).join(", ")
   return (
     <div className="glass-panel rounded-2xl p-4">
-      <div className="flex h-32 items-end gap-1" role="img" aria-label={`รับของคืนเข้าคลังรายวัน ${summary}`}>
+      <div className="flex h-32 items-end gap-1" role="img" aria-label={`${title} ${summary}`}>
         {days.map((d) => (
           <div key={d.date} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${formatFullDateLabel(d.date)} · ${d.noData ? "ยังไม่มีข้อมูล" : `${d.total} รายการ`}`}>
             {!d.noData && d.total > 0 && <span className="mb-0.5 text-center text-[10px] font-bold tabular-nums text-foreground">{d.total}</span>}
@@ -75,7 +86,7 @@ export function DailyBars({ days, origins }: { days: DayCount[]; origins: string
             ) : (
               origins.map((o, i) => {
                 const n = d.byOrigin[o] ?? 0
-                return n > 0 ? <span key={o} className="block w-full first:rounded-t" style={{ height: `${(n / max) * 100}%`, background: ORIGIN_COLOURS[i % ORIGIN_COLOURS.length] }} /> : null
+                return n > 0 ? <span key={o} className="block w-full first:rounded-t" style={{ height: `${(n / max) * 100}%`, background: colours[i % colours.length] }} /> : null
               })
             )}
           </div>
@@ -91,7 +102,7 @@ export function DailyBars({ days, origins }: { days: DayCount[]; origins: string
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {origins.map((o, i) => (
           <span key={o} className="inline-flex items-center gap-1.5">
-            <i className="inline-block size-2.5 rounded-sm" style={{ background: ORIGIN_COLOURS[i % ORIGIN_COLOURS.length] }} />
+            <i className="inline-block size-2.5 rounded-sm" style={{ background: colours[i % colours.length] }} />
             {o}
           </span>
         ))}

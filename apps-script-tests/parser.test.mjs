@@ -60,3 +60,42 @@ test("mergeReceivingWarehouse_: the newer month's number is shown, and dates are
   assert.deepEqual(plain(merged.dates), ["2026-07-31", "2026-08-01"])
   assert.equal(merged.departments[0].staffCategories[0].employees[0].totalValue1, 3)
 })
+
+// ---- loadReprintReport_ against a fake sheet ----------------------------------------------------------------
+function fakeSheet(rows) {
+  const grid = rows
+  return {
+    getLastRow: () => grid.length,
+    getLastColumn: () => grid[0].length,
+    getRange: (_r, _c, nRows, nCols) => ({
+      getValues: () => grid.slice(0, nRows).map((r) => r.slice(0, nCols)),
+      getDisplayValues: () => grid.slice(0, nRows).map((r) => r.slice(0, nCols).map((v) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v)))),
+    }),
+  }
+}
+function withSheet(sheet) {
+  context.SpreadsheetApp = { openById: () => ({ getSheetByName: () => sheet, getSpreadsheetTimeZone: () => "Asia/Bangkok" }) }
+  context.TEAM_REPORT_SOURCE_ID_ = "test"
+  context.Logger = { log() {} }
+}
+
+test("loadReprintReport_: reads the rows by header text", () => {
+  const header = ["วันที่", "เลขพัสดุ", "เลขคำสั่งซื้อ", "จำนวนครั้งที่พิมพ์", "รายละเอียดการพิมพ์", "รายการสินค้า"]
+  const details = "ครั้งที่ 1: a@U1 2026-11-13 10:16:05 (กดพิมพ์เอง) | ครั้งที่ 2: a@U1 2026-11-13 10:16:17 (กดพิมพ์เอง)"
+  withSheet(fakeSheet([header, ["2026-11-13", "BSUJR3R85160", "1128652601602384", 2, details, "75628 (สีดำ)"], ["", "", "", "", "", ""]]))
+  const r = plain(context.loadReprintReport_())
+  assert.equal(r.error, "")
+  assert.equal(r.rows.length, 1)
+  assert.deepEqual(r.rows[0], { date: "2026-11-13", packageNo: "BSUJR3R85160", orderNo: "1128652601602384", printCount: 2, details, items: "75628 (สีดำ)" })
+})
+
+test("loadReprintReport_: a missing tab or missing headers is reported, never thrown", () => {
+  context.SpreadsheetApp = { openById: () => ({ getSheetByName: () => null, getSpreadsheetTimeZone: () => "Asia/Bangkok" }) }
+  context.TEAM_REPORT_SOURCE_ID_ = "test"
+  context.Logger = { log() {} }
+  assert.equal(plain(context.loadReprintReport_()).missingTab, "รายงานออเดอร์พิมพ์ซ้ำรายวัน")
+  withSheet(fakeSheet([["a", "b"], ["1", "2"]]))
+  const bad = plain(context.loadReprintReport_())
+  assert.match(bad.error, /header columns not found/)
+  assert.deepEqual(bad.rows, [])
+})

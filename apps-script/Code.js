@@ -48,6 +48,8 @@ var CACHE_CHUNK_SIZE_ = 90000;
  *   ?path=focus           "งานค้าง": the 6 backlog queues (gv-returns-sync, tab โฟกัสทีม-งานค้าง)
  *   ?path=restock         "สินค้าตีกลับ" as gv-returns-sync counts it (tab cn-restock)
  *   ?path=refunds         lost/bounced parcels + refund received or not (tab ได้เงินคืนแล้ว-พัสดุหาย)
+ *   ?path=reprints        orders whose shipping label was printed more than once, per day (team report workbook, tab
+ *                         รายงานออเดอร์พิมพ์ซ้ำรายวัน)
  *   ?path=stockValue      มูลค่าสต็อกแต่ละคลัง — reads STOCK_VALUE_BY_WAREHOUSE from the
  *                         BigSeller-Inventory spreadsheet (cross-spreadsheet read, see
  *                         STOCK_VALUE_SOURCE_ID_ in SheetParser.js)
@@ -64,6 +66,7 @@ var PAYLOAD_PARTS_ = {
   focus: 'focus',
   restock: 'restock',
   refunds: 'refunds',
+  reprints: 'reprints',
   stockValue: 'stockValue'
 };
 
@@ -115,7 +118,7 @@ function setCachedDashboardPayload_(part, payload) {
 // web page requests it any more and it is the slowest part (~48 s to rebuild), which
 // alone would push the trigger past the daily runtime quota. It is still built on
 // demand by doGet when something asks for it.
-var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock', 'refunds'];
+var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock', 'refunds', 'reprints'];
 var WARM_FROM_HOUR_ = 7;  // Asia/Bangkok, inclusive
 var WARM_TO_HOUR_ = 22;   // Asia/Bangkok, exclusive
 

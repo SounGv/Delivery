@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds" | "stockValue"
+export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds" | "reprints" | "stockValue"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -441,6 +441,29 @@ export interface RefundsReport {
 
 export interface RefundsPart extends PayloadPartMeta {
   refunds: RefundsReport
+}
+
+/** One row of the team workbook tab "รายงานออเดอร์พิมพ์ซ้ำรายวัน": an order printed more than once on `date`. */
+export interface ReprintRow {
+  /** yyyy-MM-dd the prints happened. */
+  date: string
+  packageNo: string
+  orderNo: string
+  printCount: number
+  /** "ครั้งที่ 1: user@id yyyy-MM-dd HH:mm:ss (กดพิมพ์เอง) | ครั้งที่ 2: …", as the sheet wrote it. */
+  details: string
+  items: string
+}
+
+export interface ReprintReportData {
+  rows: ReprintRow[]
+  /** Set (and `rows` empty) when the tab cannot be found. */
+  missingTab: string
+  error: string
+}
+
+export interface ReprintsPart extends PayloadPartMeta {
+  reprints: ReprintReportData
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)
