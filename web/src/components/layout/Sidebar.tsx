@@ -143,7 +143,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
                       collapsed && "justify-center px-0",
                       isActive
                         ? "bg-gradient-to-r from-[#17706b] to-[#1a7f79] text-white shadow-[0_12px_24px_-10px_rgba(23,112,107,0.9),inset_0_1px_0_rgba(255,255,255,0.28)] ring-1 ring-white/15"
-                        : "text-foreground/80 hover:-translate-y-px hover:bg-accent hover:text-foreground hover:shadow-[0_8px_18px_-12px_rgba(43,168,162,0.7)]",
+                        : "text-foreground hover:-translate-y-px hover:bg-accent hover:text-foreground hover:shadow-[0_8px_18px_-12px_rgba(43,168,162,0.7)]",
                       !item.enabled && "cursor-not-allowed opacity-40 hover:translate-y-0 hover:bg-transparent hover:shadow-none"
                     )}
                   >

@@ -14,7 +14,7 @@ export function DataNotice({ title, body, detail }: { title: string; body?: stri
         <p className="mt-1 text-xs text-muted-foreground">
           {body ?? "ลองรีเฟรชหน้านี้อีกครั้ง ถ้ายังไม่ขึ้นให้แจ้งผู้ดูแลระบบ"}
         </p>
-        {detail && <p className="mt-1 text-[11px] text-muted-foreground/80">รายละเอียดสำหรับผู้ดูแลระบบ: {detail}</p>}
+        {detail && <p className="mt-1 text-[11px] text-muted-foreground">รายละเอียดสำหรับผู้ดูแลระบบ: {detail}</p>}
       </div>
     </div>
   )

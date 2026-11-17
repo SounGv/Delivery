@@ -23,6 +23,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.classList.toggle("light", theme === "light")
+    // Tailwind's `dark:` variants (the status colours, the shadcn parts) look for this class.
+    document.documentElement.classList.toggle("dark", theme === "dark")
     localStorage.setItem(STORAGE_KEY, theme)
   }, [theme])
 

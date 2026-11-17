@@ -48,7 +48,7 @@ export function Tabs({ items, initialKey }: { items: TabItem[]; initialKey?: str
                         "flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all active:scale-95 max-sm:gap-1 max-sm:px-3 max-sm:text-[13px]",
                         isActive
                           ? "bg-primary text-primary-foreground shadow-md"
-                          : "border border-border text-foreground/70 hover:bg-muted hover:text-foreground"
+                          : "border border-border text-foreground hover:bg-muted hover:text-foreground"
                       )}
                     >
                       {Icon && <Icon className="size-4 max-sm:hidden" />}
@@ -83,7 +83,7 @@ export function Tabs({ items, initialKey }: { items: TabItem[]; initialKey?: str
                   "flex min-h-12 items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-extrabold transition-all active:scale-95 max-sm:min-h-11 max-sm:flex-1 max-sm:basis-[calc(50%-0.25rem)] max-sm:px-2 max-sm:py-1.5 max-sm:text-xs sm:shrink-0 sm:whitespace-nowrap",
                   isActive
                     ? "bg-primary text-primary-foreground shadow-md"
-                    : "border border-border text-foreground/70 hover:bg-muted hover:text-foreground"
+                    : "border border-border text-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 {Icon && <Icon className="size-5 max-sm:size-4" />}

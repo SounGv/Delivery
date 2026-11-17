@@ -26,7 +26,7 @@ function HeroTrend({ value }: { value: number | null }) {
       )}
     >
       <Icon className="size-3" />
-      {Math.abs(value).toFixed(1)}% <span className="font-medium opacity-80">เทียบวันก่อน</span>
+      {Math.abs(value).toFixed(1)}% <span className="font-medium">เทียบวันก่อน</span>
     </span>
   )
 }

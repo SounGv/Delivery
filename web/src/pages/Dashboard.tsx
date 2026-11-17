@@ -103,7 +103,7 @@ function TrendPill({ value, label }: { value: number | null; label: string }) {
   const Icon = flat ? Minus : value > 0 ? ArrowUp : ArrowDown
   return (
     <StatusPill tone={tone} icon={Icon}>
-      {Math.abs(value).toFixed(1)}% <span className="font-normal opacity-80">{label}</span>
+      {Math.abs(value).toFixed(1)}% <span className="font-normal">{label}</span>
     </StatusPill>
   )
 }
