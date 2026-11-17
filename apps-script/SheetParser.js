@@ -2106,6 +2106,106 @@ function focusDateIso_(raw, displayText, tz) {
 }
 
 /**
+ * "เบิกค่าข้าว": the tab of the team report workbook where the team notes who stayed late and claimed the meal
+ * allowance. One header row of dates (text like "02-11-69": day-month-Buddhist year, two digits) and two blocks of
+ * names under it, each closed by a "รวม" row and a "หมายเหตุ" row:
+ *   block 1  the allowance claimed per person per day ("80", or "-" for none)
+ *   block 2  late-stay time per person per day ("60 นาที"), for people who do not claim separately
+ * The "รวม" rows are not read (block 2's shows #VALUE! because the cells hold text); the web adds up the cells.
+ * In block 1 a "-" is kept as 0 (the team wrote "no claim") and an empty cell is left out (not filled in yet): the web
+ * tells the two apart. A cell that is neither empty, "-", nor readable is returned in `unreadCells` instead of being dropped.
+ */
+var MEALS_TAB_ = 'เบิกค่าข้าว';
+
+/**
+ * "02-11-69" -> "2026-11-02" (two-digit years are Buddhist-era, 69 = 2569); '' when unreadable. The text on screen wins:
+ * the header cells are real dates formatted dd-mm-yy, and the date underneath is the year 1969, not 2026. A real Date
+ * cell is used only when there is no readable text.
+ */
+function mealHeaderDateIso_(raw, displayText, tz) {
+  var m = String(displayText || '').trim().match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})$/);
+  if (!m) {
+    return Object.prototype.toString.call(raw) === '[object Date]' ? Utilities.formatDate(raw, tz, 'yyyy-MM-dd') : '';
+  }
+  var year = Number(m[3]);
+  if (year < 100) year += 2500;
+  if (year > 2400) year -= 543;
+  var month = Number(m[2]);
+  var day = Number(m[1]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  return year + '-' + ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
+}
+
+function loadMealClaims_() {
+  var result = { dates: [], claims: [], lateStays: [], notes: [], unreadCells: [], missingTab: '', error: '' };
+  try {
+    var ss = SpreadsheetApp.openById(TEAM_REPORT_SOURCE_ID_);
+    var sheet = ss.getSheetByName(MEALS_TAB_);
+    if (!sheet) { result.missingTab = MEALS_TAB_; return result; }
+    var tz = ss.getSpreadsheetTimeZone();
+    var lastRow = sheet.getLastRow();
+    var lastCol = Math.min(sheet.getLastColumn(), 80);
+    if (lastRow < 2 || lastCol < 2) return result;
+    var range = sheet.getRange(1, 1, lastRow, lastCol);
+    var values = range.getValues();
+    var display = range.getDisplayValues();
+
+    var dateCols = [];
+    for (var c = 1; c < lastCol; c++) {
+      var iso = mealHeaderDateIso_(values[0][c], display[0][c], tz);
+      if (iso) dateCols.push({ col: c, iso: iso });
+    }
+    if (dateCols.length === 0) throw new Error('tab "' + MEALS_TAB_ + '": no date headers found');
+    result.dates = dateCols.map(function (d) { return d.iso; });
+
+    var block = 0; // 0 = allowance claimed, 1 = late-stay time; a second "รวม" ends the data
+    for (var r = 1; r < lastRow; r++) {
+      var name = String(display[r][0] == null ? '' : display[r][0]).trim();
+      if (!name) continue;
+      if (name === 'รวม') { block++; continue; }
+      if (name === 'หมายเหตุ') {
+        dateCols.forEach(function (d) {
+          var note = String(display[r][d.col] == null ? '' : display[r][d.col]).trim();
+          // the หมายเหตุ row follows its block's รวม row, so it belongs to the block just closed
+          if (note) result.notes.push({ date: d.iso, text: note, block: Math.max(0, block - 1) });
+        });
+        continue;
+      }
+      if (block > 1) break;
+      var byDate = {};
+      dateCols.forEach(function (d) {
+        var cell = String(display[r][d.col] == null ? '' : display[r][d.col]).trim();
+        if (!cell) return;
+        if (cell === '-') {
+          if (block === 0) byDate[d.iso] = 0;
+          return;
+        }
+        if (block === 0) {
+          var amount = parseFloat(cell.replace(/,/g, ''));
+          if (isFinite(amount)) byDate[d.iso] = amount;
+          else result.unreadCells.push({ name: name, date: d.iso, text: cell });
+        } else {
+          var minutes = cell.match(/(\d+)\s*นาที/);
+          if (minutes) byDate[d.iso] = { minutes: Number(minutes[1]), text: cell };
+          else result.unreadCells.push({ name: name, date: d.iso, text: cell });
+        }
+      });
+      (block === 0 ? result.claims : result.lateStays).push({ name: name, byDate: byDate });
+    }
+    return result;
+  } catch (err) {
+    Logger.log('meal claims unreadable: ' + err);
+    result.dates = [];
+    result.claims = [];
+    result.lateStays = [];
+    result.notes = [];
+    result.unreadCells = [];
+    result.error = String(err && err.message ? err.message : err);
+    return result;
+  }
+}
+
+/**
  * "รายงานออเดอร์พิมพ์ซ้ำรายวัน": the tab of the team report workbook that lists, per day, every order whose shipping
  * label was printed more than once, with who pressed print, when, and whether it was pressed by hand
  * ("กดพิมพ์เอง") or marked by the system ("ระบบทำเครื่องหมายอัตโนมัติ"). Columns are matched by header text. The
@@ -2430,6 +2530,13 @@ function buildDashboardPayload_(part) {
       generatedAt: new Date().toISOString(),
       todayDate: calendarToday,
       refunds: loadRefundCases_()
+    };
+  }
+  if (part === 'meals') {
+    return {
+      generatedAt: new Date().toISOString(),
+      todayDate: calendarToday,
+      meals: loadMealClaims_()
     };
   }
   if (part === 'reprints') {

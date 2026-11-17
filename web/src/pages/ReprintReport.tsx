@@ -62,16 +62,17 @@ function ReprintCard({ c }: { c: ReprintCase }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="break-all text-sm font-bold tabular-nums text-foreground">{c.packageNo || c.orderNo}</p>
         <StatusPill tone={c.heavy ? "danger" : "warn"} icon={Printer} small>
-          พิมพ์ {num(c.printCount)} ครั้ง
+          พิมพ์ {num(c.prints)} ครั้ง
         </StatusPill>
       </div>
       <p className="mt-0.5 break-all text-xs text-muted-foreground">
         {[formatFullDateLabel(c.date), c.orderNo && `ออเดอร์ ${c.orderNo}`].filter(Boolean).join(" · ")}
       </p>
-      {(c.rapid || c.multiStaff) && (
+      {(c.rapid || c.multiStaff || c.countMismatch) && (
         <p className="mt-1.5 flex flex-wrap gap-1.5">
           {c.rapid && <StatusPill tone="warn" icon={Zap} small>พิมพ์ห่างกันไม่เกิน 1 นาที</StatusPill>}
           {c.multiStaff && <StatusPill tone="info" icon={Users} small>{`พิมพ์ ${c.staff.length} บัญชี`}</StatusPill>}
+          {c.countMismatch && <StatusPill tone="neutral" icon={AlertTriangle} small>{`ชีตเขียน ${num(c.printCount)} ครั้ง ไม่ตรงรายละเอียด`}</StatusPill>}
         </p>
       )}
       {c.items && <p className="mt-1.5 text-sm text-foreground">{c.items}</p>}
@@ -253,7 +254,7 @@ export function ReprintReport() {
             icon={Copy}
             label={`พิมพ์ ${HEAVY_PRINTS} ครั้งขึ้นไป`}
             value={<>{num(s.heavy)} <span className="text-sm font-semibold text-muted-foreground">ออเดอร์</span></>}
-            sub="ในชีตขึ้นสีแดง"
+            sub="นับจากรายละเอียดการพิมพ์ทีละครั้ง"
           />
           <StatTile
             tone={s.rapid > 0 ? "warn" : "ok"}
@@ -273,6 +274,12 @@ export function ReprintReport() {
           </div>
         </div>
       </section>
+
+      {s.countMismatch > 0 && (
+        <p className="text-xs text-muted-foreground">
+          มี {num(s.countMismatch)} ออเดอร์ที่ “จำนวนครั้งที่พิมพ์” ในชีตไม่ตรงกับรายละเอียดการพิมพ์ หน้านี้นับตามรายละเอียด (บันทึกทีละครั้ง) ควรตรวจสูตรหรือสคริปต์ที่สร้างแท็บ
+        </p>
+      )}
 
       <section className="space-y-3" aria-label="พิมพ์ซ้ำรายวัน">
         <BlockHeading title="พิมพ์ซ้ำรายวัน" caption="จำนวนออเดอร์ที่พิมพ์ซ้ำในแต่ละวัน 14 วันล่าสุดถึงปลายช่วงที่เลือก แยกตามจำนวนครั้ง" />

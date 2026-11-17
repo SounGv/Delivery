@@ -256,7 +256,7 @@ export interface DashboardResponse {
 /** Backend payload slices, one per `?path=` (see PAYLOAD_PARTS_ in apps-script/Code.js).
  * "core" is the DashboardResponse above; the other three are heavy and are fetched
  * only by the page that shows them. Each carries the calendar `todayDate`. */
-export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds" | "reprints" | "stockValue"
+export type PayloadPartPath = "core" | "workPerformance" | "cancelled" | "focus" | "restock" | "refunds" | "reprints" | "meals" | "stockValue"
 
 interface PayloadPartMeta {
   generatedAt: string
@@ -464,6 +464,34 @@ export interface ReprintReportData {
 
 export interface ReprintsPart extends PayloadPartMeta {
   reprints: ReprintReportData
+}
+
+/** One person's row of the "เบิกค่าข้าว" tab, block 1: the allowance claimed per day (baht). */
+export interface MealClaimPerson {
+  name: string
+  byDate: Record<string, number>
+}
+
+/** Block 2: late-stay time per day, for people who do not claim separately ("60 นาที"). */
+export interface LateStayPerson {
+  name: string
+  byDate: Record<string, { minutes: number; text: string }>
+}
+
+export interface MealsReportData {
+  /** Every date column of the tab, yyyy-MM-dd (includes days still to come). */
+  dates: string[]
+  claims: MealClaimPerson[]
+  lateStays: LateStayPerson[]
+  notes: { date: string; text: string; block: number }[]
+  /** Cells that were neither empty, "-", nor readable as a number / minutes. */
+  unreadCells: { name: string; date: string; text: string }[]
+  missingTab: string
+  error: string
+}
+
+export interface MealsPart extends PayloadPartMeta {
+  meals: MealsReportData
 }
 
 /** Metric keys straight from BigSeller's "รายงานผลการทำงาน" (work-performance)

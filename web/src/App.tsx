@@ -15,6 +15,7 @@ import { WorkIssues } from "@/pages/WorkIssues"
 import { BacklogHub, CancelledHub, ReportHub, ReturnsStockHub } from "@/pages/ReturnsHub"
 import { StockValue } from "@/pages/StockValue"
 import { ReprintReport } from "@/pages/ReprintReport"
+import { MealClaims } from "@/pages/MealClaims"
 import { OnlineTeamPage, OfflineTeamPage } from "@/pages/TeamDepartmentPage"
 import { useDashboardQuery } from "@/api/queries"
 import { formatDateTime } from "@/lib/format"
@@ -48,6 +49,7 @@ const PAGES: Record<string, React.ComponentType> = {
   backlog: BacklogHub,
   "stock-value": StockValue,
   reprints: ReprintReport,
+  meals: MealClaims,
   settings: Settings,
   // legacy aliases -> original standalone pages (no longer in the main nav)
   "receiving-warehouse": ReceivingWarehouse,

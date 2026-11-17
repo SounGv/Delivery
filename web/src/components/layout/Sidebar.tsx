@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   ListChecks,
   Printer,
+  Utensils,
   Coins,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -54,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: "work-issues", label: "งานที่ต้องเช็ค", icon: ClipboardCheck, enabled: true },
       { key: "backlog", label: "งานค้าง/ยกเลิก/ตีกลับ", shortLabel: "งานค้าง", icon: ListChecks, enabled: true },
       { key: "reprints", label: "ออเดอร์พิมพ์ซ้ำ", icon: Printer, enabled: true },
+      { key: "meals", label: "เบิกค่าข้าว", icon: Utensils, enabled: true },
       { key: "stock-value", label: "มูลค่าสต็อก", icon: Coins, enabled: true },
     ],
   },

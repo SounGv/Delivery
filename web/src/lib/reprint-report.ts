@@ -45,17 +45,22 @@ export function parsePrintDetails(details: string): PrintEvent[] {
 
 /** Two prints this close together are almost certainly one press registered twice (e.g. a double click). */
 export const RAPID_SECONDS = 60
-/** The sheet paints the print count red from this value on (4 and 5 in the sheet). */
+/** Four prints or more: the sheet used to paint the count red from here (4 and 5 in the sheet). */
 export const HEAVY_PRINTS = 4
 
 export interface ReprintCase extends ReprintRow {
   events: PrintEvent[]
+  /** How many times it was printed: the prints listed in the details (the log, one entry per print); the sheet's own
+   * count column only when the details cannot be read. */
+  prints: number
+  /** The count column and the details disagree (e.g. count 2, five prints listed): the details are used. */
+  countMismatch: boolean
   /** Distinct accounts that pressed print, in order of appearance. */
   staff: string[]
   /** Prints pressed by hand / marked by the system. */
   manualPresses: number
   autoMarks: number
-  /** Printed HEAVY_PRINTS times or more. */
+  /** Printed HEAVY_PRINTS times or more (by `prints`). */
   heavy: boolean
   /** Some two consecutive prints were at most RAPID_SECONDS apart. */
   rapid: boolean
@@ -78,9 +83,11 @@ export function toCase(row: ReprintRow): ReprintCase {
     ...row,
     events,
     staff,
+    prints: events.length > 0 ? events.length : row.printCount,
+    countMismatch: events.length > 0 && events.length !== row.printCount,
     manualPresses: events.filter((e) => e.method === "manual").length,
     autoMarks: events.filter((e) => e.method === "auto").length,
-    heavy: row.printCount >= HEAVY_PRINTS,
+    heavy: (events.length > 0 ? events.length : row.printCount) >= HEAVY_PRINTS,
     rapid,
     multiStaff: staff.length > 1,
   }
@@ -108,6 +115,8 @@ export interface ReprintSummary {
   heavy: number
   rapid: number
   multiStaff: number
+  /** Orders whose count column does not match their details. */
+  countMismatch: number
 }
 
 export function summarizeReprints(cases: ReprintCase[], range: DateRange): ReprintSummary {
@@ -117,11 +126,12 @@ export function summarizeReprints(cases: ReprintCase[], range: DateRange): Repri
     range,
     orders: now.length,
     ordersBefore: before.length,
-    prints: now.reduce((a, c) => a + c.printCount, 0),
+    prints: now.reduce((a, c) => a + c.prints, 0),
     manualPresses: now.reduce((a, c) => a + c.manualPresses, 0),
     heavy: now.filter((c) => c.heavy).length,
     rapid: now.filter((c) => c.rapid).length,
     multiStaff: now.filter((c) => c.multiStaff).length,
+    countMismatch: now.filter((c) => c.countMismatch).length,
   }
 }
 
@@ -182,5 +192,5 @@ export function inReprintSegment(c: ReprintCase, seg: ReprintSegment): boolean {
 
 /** Newest day first, then the most prints first. */
 export function sortReprints(list: ReprintCase[]): ReprintCase[] {
-  return [...list].sort((a, b) => b.date.localeCompare(a.date) || b.printCount - a.printCount || a.packageNo.localeCompare(b.packageNo))
+  return [...list].sort((a, b) => b.date.localeCompare(a.date) || b.prints - a.prints || a.packageNo.localeCompare(b.packageNo))
 }

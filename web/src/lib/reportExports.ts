@@ -1,6 +1,7 @@
 import type { BacklogRow, CancelledRow, Category, RefundCase, RestockRow, StockValueRow } from "@/api/types"
 import type { TimelineItem } from "@/lib/cancel-return-timeline"
 import type { ReprintCase } from "@/lib/reprint-report"
+import type { DayLine } from "@/lib/meal-claims"
 import { carrierFromTracking, isRefundPaid } from "@/lib/refund-selectors"
 import { daysBetween } from "@/lib/cancelled-selectors"
 import type { RankedEmployeeMetric } from "@/lib/workforce"
@@ -87,12 +88,26 @@ export function returnItemsReport(items: TimelineItem[], segmentLabel: string): 
   }
 }
 
+/** One row per person per day of the "เบิกค่าข้าว" page (the caller passes the filtered days). */
+export function mealClaimsReport(lines: DayLine[]): ExportTable {
+  const rows: (string | number)[][] = []
+  for (const l of lines) {
+    for (const c of l.claimed) rows.push([l.date, c.name, c.amount, ""])
+    for (const c of l.late) rows.push([l.date, c.name, "", c.minutes])
+  }
+  return {
+    filename: `เบิกค่าข้าว_${today()}.csv`,
+    headers: ["วันที่", "ชื่อ", "เบิกค่าข้าว (บาท)", "อยู่ดึก ไม่เบิกแยก (นาที)"],
+    rows,
+  }
+}
+
 /** Every reprinted order of the "ออเดอร์พิมพ์ซ้ำ" list (the caller passes the FILTERED set). */
 export function reprintCasesReport(cases: ReprintCase[], segmentLabel: string): ExportTable {
   return {
     filename: `ออเดอร์พิมพ์ซ้ำ_${segmentLabel}_${today()}.csv`,
-    headers: ["วันที่", "เลขพัสดุ", "เลขคำสั่งซื้อ", "จำนวนครั้งที่พิมพ์", "กดพิมพ์เอง", "ระบบทำเครื่องหมายอัตโนมัติ", "ผู้พิมพ์", "พิมพ์ห่างกันไม่เกิน 1 นาที", "หลายบัญชีพิมพ์", "รายการสินค้า", "รายละเอียดการพิมพ์"],
-    rows: cases.map((c) => [c.date, c.packageNo, c.orderNo, c.printCount, c.manualPresses, c.autoMarks, c.staff.join(", "), c.rapid ? "ใช่" : "", c.multiStaff ? "ใช่" : "", c.items, c.details]),
+    headers: ["วันที่", "เลขพัสดุ", "เลขคำสั่งซื้อ", "จำนวนครั้งที่พิมพ์ (ตามรายละเอียด)", "จำนวนครั้งที่ชีตเขียน", "กดพิมพ์เอง", "ระบบทำเครื่องหมายอัตโนมัติ", "ผู้พิมพ์", "พิมพ์ห่างกันไม่เกิน 1 นาที", "หลายบัญชีพิมพ์", "รายการสินค้า", "รายละเอียดการพิมพ์"],
+    rows: cases.map((c) => [c.date, c.packageNo, c.orderNo, c.prints, c.printCount, c.manualPresses, c.autoMarks, c.staff.join(", "), c.rapid ? "ใช่" : "", c.multiStaff ? "ใช่" : "", c.items, c.details]),
   }
 }
 

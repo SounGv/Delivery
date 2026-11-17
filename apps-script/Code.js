@@ -22,7 +22,7 @@
  * a bump — they're only ever CACHE_TTL_SECONDS_ stale at most, an explicit and small
  * trade for going from tens-of-seconds to near-instant on every repeat load.
  */
-var CACHE_VERSION_ = 'v21';
+var CACHE_VERSION_ = 'v23';
 // Was 90s. The sheets this reads have grown a lot (55k+ row stock-move log, months
 // of order-report history, ...) so a real cache-miss rebuild now takes ~80s — too
 // close to a 90s TTL, meaning most real visits (more than 90s apart) paid that full
@@ -48,6 +48,7 @@ var CACHE_CHUNK_SIZE_ = 90000;
  *   ?path=focus           "งานค้าง": the 6 backlog queues (gv-returns-sync, tab โฟกัสทีม-งานค้าง)
  *   ?path=restock         "สินค้าตีกลับ" as gv-returns-sync counts it (tab cn-restock)
  *   ?path=refunds         lost/bounced parcels + refund received or not (tab ได้เงินคืนแล้ว-พัสดุหาย)
+ *   ?path=meals           who stayed late and claimed the meal allowance (team report workbook, tab เบิกค่าข้าว)
  *   ?path=reprints        orders whose shipping label was printed more than once, per day (team report workbook, tab
  *                         รายงานออเดอร์พิมพ์ซ้ำรายวัน)
  *   ?path=stockValue      มูลค่าสต็อกแต่ละคลัง — reads STOCK_VALUE_BY_WAREHOUSE from the
@@ -67,6 +68,7 @@ var PAYLOAD_PARTS_ = {
   restock: 'restock',
   refunds: 'refunds',
   reprints: 'reprints',
+  meals: 'meals',
   stockValue: 'stockValue'
 };
 
@@ -118,7 +120,7 @@ function setCachedDashboardPayload_(part, payload) {
 // web page requests it any more and it is the slowest part (~48 s to rebuild), which
 // alone would push the trigger past the daily runtime quota. It is still built on
 // demand by doGet when something asks for it.
-var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock', 'refunds', 'reprints'];
+var WARMED_PARTS_ = ['core', 'cancelled', 'focus', 'restock', 'refunds', 'reprints', 'meals'];
 var WARM_FROM_HOUR_ = 7;  // Asia/Bangkok, inclusive
 var WARM_TO_HOUR_ = 22;   // Asia/Bangkok, exclusive
 

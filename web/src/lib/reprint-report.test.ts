@@ -71,6 +71,33 @@ describe("toCase flags", () => {
   })
 })
 
+describe("when the sheet's count column disagrees with its details", () => {
+  // A row of the tab on 2026-11-17: count column 2, six prints listed.
+  const row: ReprintRow = {
+    date: "2026-11-17", packageNo: "BSUJR3R96229", orderNo: "x", printCount: 2, items: "",
+    details: [1, 2, 3, 4, 5, 6].map((n) => `ครั้งที่ ${n}: St_Cat@UJR3162873 2026-11-17 09:18:${40 + n} (กดพิมพ์เอง)`).join(" | "),
+  }
+  const c = toCase(row)
+
+  it("counts the prints from the details and says the sheet disagrees", () => {
+    expect(c.prints).toBe(6)
+    expect(c.countMismatch).toBe(true)
+    expect(c.heavy).toBe(true)
+  })
+
+  it("adds up the details in the summary and counts the mismatches", () => {
+    const s = summarizeReprints([c, ...cases], { from: "2026-11-10", to: "2026-11-17" })
+    expect(s.prints).toBe(15 + 6)
+    expect(s.countMismatch).toBe(1)
+  })
+
+  it("falls back to the sheet's count when the details cannot be read", () => {
+    const unreadable = toCase({ ...row, details: "texto desconocido" })
+    expect(unreadable.prints).toBe(2)
+    expect(unreadable.countMismatch).toBe(false)
+  })
+})
+
 describe("summaries", () => {
   const week = { from: "2026-11-10", to: "2026-11-16" }
 
