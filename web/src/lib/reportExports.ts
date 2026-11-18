@@ -106,8 +106,8 @@ export function mealClaimsReport(lines: DayLine[]): ExportTable {
 export function reprintCasesReport(cases: ReprintCase[], segmentLabel: string): ExportTable {
   return {
     filename: `ออเดอร์พิมพ์ซ้ำ_${segmentLabel}_${today()}.csv`,
-    headers: ["วันที่", "เลขพัสดุ", "เลขคำสั่งซื้อ", "จำนวนครั้งที่พิมพ์ (ตามรายละเอียด)", "จำนวนครั้งที่ชีตเขียน", "กดพิมพ์เอง", "ระบบทำเครื่องหมายอัตโนมัติ", "ผู้พิมพ์", "พิมพ์ห่างกันไม่เกิน 1 นาที", "หลายบัญชีพิมพ์", "รายการสินค้า", "รายละเอียดการพิมพ์"],
-    rows: cases.map((c) => [c.date, c.packageNo, c.orderNo, c.prints, c.printCount, c.manualPresses, c.autoMarks, c.staff.join(", "), c.rapid ? "ใช่" : "", c.multiStaff ? "ใช่" : "", c.items, c.details]),
+    headers: ["วันที่", "เลขพัสดุ", "เลขคำสั่งซื้อ", "จำนวนครั้งที่พิมพ์ (ตามชีต)", "จำนวนบรรทัดในรายละเอียด", "กดพิมพ์เอง", "ระบบทำเครื่องหมายอัตโนมัติ", "ผู้พิมพ์", "พิมพ์ห่างกันไม่เกิน 1 นาที", "หลายบัญชีพิมพ์", "รายการสินค้า", "รายละเอียดการพิมพ์"],
+    rows: cases.map((c) => [c.date, c.packageNo, c.orderNo, c.prints, c.logLines, c.manualPresses, c.autoMarks, c.staff.join(", "), c.rapid ? "ใช่" : "", c.multiStaff ? "ใช่" : "", c.items, c.details]),
   }
 }
 

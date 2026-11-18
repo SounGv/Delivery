@@ -50,10 +50,12 @@ export const HEAVY_PRINTS = 4
 
 export interface ReprintCase extends ReprintRow {
   events: PrintEvent[]
-  /** How many times it was printed: the prints listed in the details (the log, one entry per print); the sheet's own
-   * count column only when the details cannot be read. */
+  /** How many times it was printed: the sheet's own count column, the number the team uses (owner's decision, 18 Nov
+   * 2026). The prints listed in the details are `logLines`; they are used only when the column holds no usable number. */
   prints: number
-  /** The count column and the details disagree (e.g. count 2, five prints listed): the details are used. */
+  /** How many lines the details list (one per press in the log). */
+  logLines: number
+  /** The count column and the number of detail lines differ (e.g. count 2, six lines listed): both are shown. */
   countMismatch: boolean
   /** Distinct accounts that pressed print, in order of appearance. */
   staff: string[]
@@ -74,6 +76,7 @@ export function toCase(row: ReprintRow): ReprintCase {
   const events = parsePrintDetails(row.details).sort((a, b) => a.n - b.n)
   const staff: string[] = []
   for (const e of events) if (!staff.includes(e.user)) staff.push(e.user)
+  const prints = Number.isFinite(row.printCount) && row.printCount > 0 ? row.printCount : events.length
   let rapid = false
   for (let i = 1; i < events.length; i++) {
     const gap = (atMs(events[i]!) - atMs(events[i - 1]!)) / 1000
@@ -83,11 +86,12 @@ export function toCase(row: ReprintRow): ReprintCase {
     ...row,
     events,
     staff,
-    prints: events.length > 0 ? events.length : row.printCount,
+    prints,
+    logLines: events.length,
     countMismatch: events.length > 0 && events.length !== row.printCount,
     manualPresses: events.filter((e) => e.method === "manual").length,
     autoMarks: events.filter((e) => e.method === "auto").length,
-    heavy: (events.length > 0 ? events.length : row.printCount) >= HEAVY_PRINTS,
+    heavy: prints >= HEAVY_PRINTS,
     rapid,
     multiStaff: staff.length > 1,
   }
@@ -115,7 +119,7 @@ export interface ReprintSummary {
   heavy: number
   rapid: number
   multiStaff: number
-  /** Orders whose count column does not match their details. */
+  /** Orders whose count column differs from the number of lines in their details. */
   countMismatch: number
 }
 

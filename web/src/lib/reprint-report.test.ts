@@ -71,7 +71,7 @@ describe("toCase flags", () => {
   })
 })
 
-describe("when the sheet's count column disagrees with its details", () => {
+describe("when the sheet's count column differs from the lines of its details", () => {
   // A row of the tab on 2026-11-17: count column 2, six prints listed.
   const row: ReprintRow = {
     date: "2026-11-17", packageNo: "BSUJR3R96229", orderNo: "x", printCount: 2, items: "",
@@ -79,22 +79,25 @@ describe("when the sheet's count column disagrees with its details", () => {
   }
   const c = toCase(row)
 
-  it("counts the prints from the details and says the sheet disagrees", () => {
-    expect(c.prints).toBe(6)
+  it("uses the sheet's count as the number of prints and keeps the number of detail lines beside it", () => {
+    expect(c.prints).toBe(2)
+    expect(c.logLines).toBe(6)
     expect(c.countMismatch).toBe(true)
-    expect(c.heavy).toBe(true)
+    expect(c.heavy).toBe(false)
   })
 
-  it("adds up the details in the summary and counts the mismatches", () => {
+  it("adds up the sheet's counts in the summary and counts the mismatches", () => {
     const s = summarizeReprints([c, ...cases], { from: "2026-11-10", to: "2026-11-17" })
-    expect(s.prints).toBe(15 + 6)
+    expect(s.prints).toBe(15 + 2)
     expect(s.countMismatch).toBe(1)
   })
 
-  it("falls back to the sheet's count when the details cannot be read", () => {
+  it("keeps the sheet's count when the details cannot be read, with no lines to compare", () => {
     const unreadable = toCase({ ...row, details: "texto desconocido" })
     expect(unreadable.prints).toBe(2)
+    expect(unreadable.logLines).toBe(0)
     expect(unreadable.countMismatch).toBe(false)
+    expect(toCase({ ...row, printCount: 0 }).prints).toBe(6)
   })
 })
 

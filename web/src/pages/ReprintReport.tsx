@@ -72,7 +72,7 @@ function ReprintCard({ c }: { c: ReprintCase }) {
         <p className="mt-1.5 flex flex-wrap gap-1.5">
           {c.rapid && <StatusPill tone="warn" icon={Zap} small>พิมพ์ห่างกันไม่เกิน 1 นาที</StatusPill>}
           {c.multiStaff && <StatusPill tone="info" icon={Users} small>{`พิมพ์ ${c.staff.length} บัญชี`}</StatusPill>}
-          {c.countMismatch && <StatusPill tone="neutral" icon={AlertTriangle} small>{`ชีตเขียน ${num(c.printCount)} ครั้ง ไม่ตรงรายละเอียด`}</StatusPill>}
+          {c.countMismatch && <StatusPill tone="neutral" icon={AlertTriangle} small>{`บันทึกการกด ${num(c.logLines)} บรรทัด (ชีตนับ ${num(c.prints)} ครั้ง)`}</StatusPill>}
         </p>
       )}
       {c.items && <p className="mt-1.5 text-sm text-foreground">{c.items}</p>}
@@ -277,7 +277,7 @@ export function ReprintReport() {
 
       {s.countMismatch > 0 && (
         <p className="text-xs text-muted-foreground">
-          มี {num(s.countMismatch)} ออเดอร์ที่ “จำนวนครั้งที่พิมพ์” ในชีตไม่ตรงกับรายละเอียดการพิมพ์ หน้านี้นับตามรายละเอียด (บันทึกทีละครั้ง) ควรตรวจสูตรหรือสคริปต์ที่สร้างแท็บ
+          มี {num(s.countMismatch)} ออเดอร์ที่จำนวนบรรทัดในรายละเอียดการพิมพ์ไม่เท่ากับ “จำนวนครั้งที่พิมพ์” ของชีต หน้านี้ใช้เลขของชีตเป็นจำนวนครั้ง และแสดงบรรทัดรายละเอียดไว้ใต้การ์ดให้เทียบ ผมยังไม่ทราบสูตรของคอลัมน์นี้
         </p>
       )}
 
