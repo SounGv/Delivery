@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from "react"
 import { CalendarClock, Download, PackageCheck, Timer, Users } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
+import { usePeopleFilter } from "@/lib/people-type"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -45,7 +46,8 @@ export function OtReport({ defaultDepartment }: { defaultDepartment?: string } =
     () => (data ? [...new Set(data.dates.map((d) => d.slice(0, 7)))].sort() : []),
     [data]
   )
-  const deptEmployees = useMemo(() => (data ? buildDepartmentEmployees(data) : []), [data])
+  const { keep } = usePeopleFilter()
+  const deptEmployees = useMemo(() => (data ? buildDepartmentEmployees(data).filter((e) => keep(e.name)) : []), [data, keep])
   const departments = useMemo(() => availableDepartments(deptEmployees), [deptEmployees])
 
   if (isLoading) return <LoadingSkeletonGrid count={5} />

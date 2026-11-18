@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { Moon, RefreshCw, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { chipClass, filterSelectClass } from "@/components/returns/ReturnsUi"
+import { TYPE_FILTERS, TYPE_LABEL, usePeopleFilter } from "@/lib/people-type"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
@@ -23,9 +25,12 @@ function Clock() {
 
 export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: HeaderProps) {
   const { theme, toggleTheme } = useTheme()
+  const people = usePeopleFilter()
+  // The person list follows the chosen type; under "ทั้งหมด" each name carries its type when it is known.
+  const options = people.names.filter((n) => people.type === "all" || people.types.get(n) === people.type)
 
   return (
-    <header className="glass-panel topbar-surface sticky top-0 z-10 flex items-center justify-between gap-3 rounded-none border-x-0 border-t-0 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] md:px-6">
+    <header className="glass-panel topbar-surface sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-none border-x-0 border-t-0 px-4 pb-2.5 pt-[calc(0.625rem+env(safe-area-inset-top))] md:px-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <h1 className="truncate text-base font-semibold text-foreground md:text-lg">แดชบอร์ดทีมคลัง</h1>
@@ -58,6 +63,45 @@ export function Header({ isConnected, isFetching, lastUpdated, onRefresh }: Head
         <Button variant="ghost" size="icon-sm" className="btn-raised" onClick={toggleTheme} aria-label="สลับโหมดสว่าง/มืด">
           {theme === "dark" ? <Sun className="size-4 text-primary" /> : <Moon className="size-4 text-primary" />}
         </Button>
+      </div>
+
+      <div className="flex basis-full flex-wrap items-center gap-2" role="group" aria-label="กรองพนักงาน">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="ประเภทพนักงาน">
+          {TYPE_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={people.type === f.key}
+              disabled={f.key !== "all" && !people.typesReady}
+              title={f.key !== "all" && !people.typesReady ? "ยังแยกประเภทไม่ได้ เพราะอ่านแท็บเบิกค่าข้าวไม่ได้" : undefined}
+              className={cn(chipClass(people.type === f.key), "disabled:cursor-not-allowed disabled:opacity-50")}
+              onClick={() => people.setType(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={people.staff}
+          onChange={(e) => people.setStaff(e.target.value)}
+          className={cn(filterSelectClass, "min-w-0 max-w-[11rem] flex-1 sm:flex-none")}
+          aria-label="เลือกพนักงาน"
+        >
+          <option value="">ทุกคน</option>
+          {options.map((n) => {
+            const type = people.types.get(n)
+            return (
+              <option key={n} value={n}>
+                {people.type === "all" && type ? `${n} · ${TYPE_LABEL[type]}` : n}
+              </option>
+            )
+          })}
+        </select>
+        {people.active && (
+          <span className="text-xs text-muted-foreground max-sm:basis-full">
+            กำลังกรองข้อมูลรายคน · ยอดขาย ยกเลิก มูลค่าสต็อกไม่ถูกกรอง
+          </span>
+        )}
       </div>
     </header>
   )

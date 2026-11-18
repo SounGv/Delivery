@@ -97,7 +97,7 @@ export function mealClaimsReport(lines: DayLine[]): ExportTable {
   }
   return {
     filename: `เบิกค่าข้าว_${today()}.csv`,
-    headers: ["วันที่", "ชื่อ", "เบิกค่าข้าว (บาท)", "อยู่ดึก ไม่เบิกแยก (นาที)"],
+    headers: ["วันที่", "ชื่อ", "เบิกค่าข้าว (บาท)", "OT พนักงานรายวัน (นาที)"],
     rows,
   }
 }

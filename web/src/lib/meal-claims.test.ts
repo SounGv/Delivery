@@ -125,8 +125,21 @@ describe("crossCheckMeals", () => {
   })
 
   it("does not look at days the tab is not filled to yet, or at people who do not claim", () => {
-    expect(crossCheckMeals(report, employees, { from: "2026-11-13", to: "2026-11-25" }, "2026-11-12")).toEqual({ checks: [], unfilled: [] })
-    expect(crossCheckMeals(report, employees, week, null)).toEqual({ checks: [], unfilled: [] })
+    expect(crossCheckMeals(report, employees, { from: "2026-11-13", to: "2026-11-25" }, "2026-11-12")).toEqual({ checks: [], unfilled: [], notFound: [] })
+    expect(crossCheckMeals(report, employees, week, null)).toEqual({ checks: [], unfilled: [], notFound: [] })
     expect(checks.some((c) => c.name === "แคท")).toBe(false)
+  })
+
+  it("reads a name spelled differently in the tab through NAME_ALIASES, so the claim meets the right check-out", () => {
+    const r = { ...report, claims: [...report.claims, { name: "เอิท", byDate: { "2026-11-03": 80 } }] }
+    const out = crossCheckMeals(r, [...employees, person("เอิร์ท", { "2026-11-03": "20:46" })], week, "2026-11-12")
+    expect(out.checks.some((c) => c.name === "เอิท")).toBe(false)
+    expect(out.notFound.some((n) => n.name === "เอิท")).toBe(false)
+  })
+
+  it("sets a claimant with no name in the team sheet apart as not found, not as a missing check-out", () => {
+    const out = crossCheckMeals(report, employees.filter((e) => e.name !== "บี้"), week, "2026-11-12")
+    expect(out.checks.some((c) => c.name === "บี้")).toBe(false)
+    expect(out.notFound).toEqual([{ name: "บี้", days: ["2026-11-11"] }])
   })
 })

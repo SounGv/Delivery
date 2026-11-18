@@ -12,7 +12,16 @@ import { addDaysIso, previousRange, type DateRange, type DayCount } from "@/lib/
 export const LATE_CHECKOUT_FROM = "19:00"
 
 export const CLAIM_LABEL = "เบิกค่าข้าว"
-export const LATE_LABEL = "อยู่ดึก (ไม่เบิกแยก)"
+/** The late-stay block of the tab is the OT of daily-wage staff (the team's rule: 60 minutes counts as 1 hour). */
+export const LATE_LABEL = "OT พนักงานรายวัน"
+
+/** Hours of OT from minutes of late stay: 60 minutes = 1 hour. */
+export const otHours = (minutes: number): number => minutes / 60
+
+/** A name as written in the tab "เบิกค่าข้าว" -> the same person as written in the team output sheet. The two sheets are typed by
+ * hand and match names letter for letter, so a different spelling looks like a missing person.
+ * shortcut: hand-kept list; add a line when `notFound` shows a name that is only spelled differently. */
+export const NAME_ALIASES: Record<string, string> = { เอิท: "เอิร์ท" }
 
 const inRange = (day: string, r: DateRange) => !!day && day >= r.from && day <= r.to
 
@@ -192,12 +201,20 @@ export interface MealUnfilled {
   days: { date: string; checkOut: string }[]
 }
 
+/** A person who claimed in the tab but has no name in the team output sheet, so their check-out cannot be compared. */
+export interface MealNotFound {
+  name: string
+  /** The days in the period (up to the newest filled day) on which the person claimed. */
+  days: string[]
+}
+
 /**
  * Lines worth a look, by comparing the claims with the check-out times of the team output sheet (same names, any crew):
  *  - left at LATE_CHECKOUT_FROM or later but no claim that day, where the team wrote "-" or left a gap between filled days
  *  - claimed but no check-out at that time or later (either an earlier time, or none recorded)
  * Cells after a person's last filled day are "not filled in yet", not "forgot to claim": those are returned apart in
- * `unfilled`, one entry per person. Only people who have a row among the claimants, only days up to `asOf` (the newest day
+ * `unfilled`, one entry per person. A claimant whose name is not in the team sheet at all (after NAME_ALIASES) is returned
+ * apart in `notFound`: there is nothing to compare, which is not the same as "no check-out". Only people who have a row among the claimants, only days up to `asOf` (the newest day
  * the tab is filled to), only the period. This does not say anyone is wrong: the time rule is an observation, and the
  * sheets are filled by hand.
  */
@@ -206,14 +223,20 @@ export function crossCheckMeals(
   employees: Employee[],
   range: DateRange,
   asOf: string | null
-): { checks: MealCheck[]; unfilled: MealUnfilled[] } {
-  if (!asOf) return { checks: [], unfilled: [] }
+): { checks: MealCheck[]; unfilled: MealUnfilled[]; notFound: MealNotFound[] } {
+  if (!asOf) return { checks: [], unfilled: [], notFound: [] }
   const byName = new Map<string, Employee[]>()
   for (const e of employees) byName.set(e.name, [...(byName.get(e.name) ?? []), e])
   const out: MealCheck[] = []
   const unfilled: MealUnfilled[] = []
+  const notFound: MealNotFound[] = []
   for (const p of report.claims) {
-    const people = byName.get(p.name) ?? []
+    const people = byName.get(NAME_ALIASES[p.name] ?? p.name) ?? []
+    if (people.length === 0) {
+      const days = report.dates.filter((date) => inRange(date, range) && date <= asOf && (p.byDate[date] ?? 0) > 0)
+      if (days.length > 0) notFound.push({ name: p.name, days })
+      continue
+    }
     // the cell exists in the payload when the team wrote something (a number, or "-" as 0)
     const lastFilled = Object.keys(p.byDate).sort().at(-1) ?? null
     const waiting: { date: string; checkOut: string }[] = []
@@ -233,5 +256,6 @@ export function crossCheckMeals(
   return {
     checks: out.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name)),
     unfilled: unfilled.sort((a, b) => b.days.length - a.days.length || a.name.localeCompare(b.name)),
+    notFound: notFound.sort((a, b) => a.name.localeCompare(b.name)),
   }
 }

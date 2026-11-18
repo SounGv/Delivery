@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react
 import { fetchDashboard, fetchPayloadPart } from "./client"
 import { getRefreshIntervalMs, getSlowRefreshIntervalMs } from "@/lib/settingsStorage"
 import { useSettings } from "@/lib/settingsContext"
+import { usePeopleFilter } from "@/lib/people-type"
 import { computeTeamTotalsByDate, employeesForTeam, latestOutputDate, recentlyActiveEmployees } from "@/lib/dashboard-selectors"
 import type {
   CancelledPart,
@@ -121,8 +122,10 @@ export type UseTeamDashboardResult = Omit<UseQueryResult<DashboardResponse, Erro
 
 /** The dashboard payload scoped to one crew: its employees, its own "today" (latest day with output),
  * its totals, month totals and target. */
-function scopeDashboard(raw: DashboardResponse, team: TeamId, targetOverride: number | null): ScopedDashboard {
-  const employees = employeesForTeam(raw.employees, team)
+function scopeDashboard(raw: DashboardResponse, team: TeamId, targetOverride: number | null, keep: (name: string) => boolean): ScopedDashboard {
+  // The person filter of the top bar (type and/or one person) narrows the crew before anything is added up, so the
+  // totals, ranking and headcounts of every page agree with the people shown.
+  const employees = employeesForTeam(raw.employees, team).filter((e) => keep(e.name))
   const teamTotalsByDate = computeTeamTotalsByDate(employees, raw.dates)
   // "Today" for this crew: its own latest day with output (see latestOutputDate), not the all-crew one.
   const todayDate = latestOutputDate(employees) ?? raw.todayDate
@@ -148,11 +151,12 @@ function scopeDashboard(raw: DashboardResponse, team: TeamId, targetOverride: nu
 export function useTeamDashboard(): UseTeamDashboardResult {
   const query = useDashboardQuery()
   const { selectedTeam, targetOverride } = useSettings()
+  const { keep } = usePeopleFilter()
   const raw = query.data
 
   const data = useMemo<ScopedDashboard | undefined>(
-    () => (raw ? scopeDashboard(raw, selectedTeam, targetOverride) : undefined),
-    [raw, selectedTeam, targetOverride]
+    () => (raw ? scopeDashboard(raw, selectedTeam, targetOverride, keep) : undefined),
+    [raw, selectedTeam, targetOverride, keep]
   )
 
   return { ...query, data } as UseTeamDashboardResult
@@ -164,12 +168,13 @@ export function useTeamDashboard(): UseTeamDashboardResult {
 export function useCrewDashboards(): Partial<Record<TeamId, ScopedDashboard>> {
   const raw = useDashboardQuery().data
   const { targetOverride } = useSettings()
+  const { keep } = usePeopleFilter()
   return useMemo(() => {
     if (!raw) return {}
     const out: Partial<Record<TeamId, ScopedDashboard>> = {}
     for (const team of ["online", "offline"] as const) {
-      if (employeesForTeam(raw.employees, team).length > 0) out[team] = scopeDashboard(raw, team, targetOverride)
+      if (employeesForTeam(raw.employees, team).some((e) => keep(e.name))) out[team] = scopeDashboard(raw, team, targetOverride, keep)
     }
     return out
-  }, [raw, targetOverride])
+  }, [raw, targetOverride, keep])
 }

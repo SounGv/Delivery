@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from '@/lib/theme'
 import { SettingsProvider } from '@/lib/settingsContext'
+import { PeopleFilterProvider } from '@/lib/people-filter'
 import { getRefreshIntervalMs } from '@/lib/settingsStorage'
 import './styles/globals.css'
 import App from './App.tsx'
@@ -25,9 +26,11 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SettingsProvider>
-          <TooltipProvider delayDuration={150}>
-            <App />
-          </TooltipProvider>
+          <PeopleFilterProvider>
+            <TooltipProvider delayDuration={150}>
+              <App />
+            </TooltipProvider>
+          </PeopleFilterProvider>
         </SettingsProvider>
       </ThemeProvider>
     </QueryClientProvider>

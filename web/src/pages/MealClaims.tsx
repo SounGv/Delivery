@@ -7,7 +7,7 @@ import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { BlockHeading, DailyBars } from "@/components/reports/ReturnReportParts"
-import { DateInput, FilterField, Pager, StatTile, StatusPill, chipClass, filterSelectClass } from "@/components/returns/ReturnsUi"
+import { DateInput, FilterField, Pager, StatTile, StatusPill, chipClass } from "@/components/returns/ReturnsUi"
 import { formatDateLabel, formatFullDateLabel, isoDateOf } from "@/lib/format"
 import {
   CLAIM_LABEL,
@@ -17,17 +17,22 @@ import {
   dailyMeals,
   dayLines,
   latestMealDate,
+  otHours,
   summarizeMeals,
   type MealCheck,
   type MealPersonRow,
+  type MealNotFound,
   type MealUnfilled,
 } from "@/lib/meal-claims"
 import { LIST_PAGE_SIZE } from "@/lib/page-size"
+import { usePeopleFilter } from "@/lib/people-type"
 import { mealClaimsReport } from "@/lib/reportExports"
 import { changeVs, daysBetweenIso, rangeFor, type PeriodPreset } from "@/lib/return-report"
 
 const num = (n: number) => n.toLocaleString("th-TH")
 const baht = (n: number) => `฿${Math.round(n).toLocaleString("th-TH")}`
+/** OT hours from minutes of late stay (the team's rule: 60 minutes counts as 1 hour). */
+const hours = (minutes: number) => otHours(minutes).toLocaleString("th-TH", { maximumFractionDigits: 1 })
 
 const PRESETS: { key: PeriodPreset; label: string }[] = [
   { key: "today", label: "วันนี้" },
@@ -70,7 +75,7 @@ function PersonCard({ p }: { p: MealPersonRow }) {
       {p.lateDays > 0 && (
         <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <StatusPill tone="info" icon={Moon} small>
-            อยู่ดึก {num(p.lateDays)} วัน · {num(p.lateMinutes)} นาที
+            OT {num(p.lateDays)} วัน · {hours(p.lateMinutes)} ชม.
           </StatusPill>
           {p.lateDates.map((d) => (
             <span key={d} className="tabular-nums">{shortDate(d)}</span>
@@ -111,29 +116,32 @@ export function MealClaims() {
   const [preset, setPreset] = useState<PeriodPreset>("month")
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
-  const [staff, setStaff] = useState("")
   const [page, setPage] = useState(1)
 
+  const { keep, active: filterOn } = usePeopleFilter()
   const report = q.data?.meals
   const empty = useMemo(() => ({ dates: [], claims: [], lateStays: [], notes: [], unreadCells: [], missingTab: "", error: "" }), [])
-  const data = report ?? empty
+  const full = report ?? empty
+  // The person filter of the top bar decides who is counted. The newest filled day still comes from the whole tab.
+  const data = useMemo(
+    () => (full === empty ? empty : { ...full, claims: full.claims.filter((p) => keep(p.name)), lateStays: full.lateStays.filter((p) => keep(p.name)) }),
+    [full, empty, keep]
+  )
   const employees = useMemo(() => dash.data?.employees ?? [], [dash.data])
   // The check against check-out times needs the team output data; without it every claim would look unmatched.
   const outReady = !!dash.data
 
   const today = isoDateOf(new Date())
-  const asOf = useMemo(() => latestMealDate(data), [data])
+  const asOf = useMemo(() => latestMealDate(full), [full])
   const range = useMemo(() => rangeFor(preset, today, asOf, { from: customFrom, to: customTo }), [preset, today, asOf, customFrom, customTo])
-  const names = useMemo(() => [...new Set([...data.claims, ...data.lateStays].map((p) => p.name))].sort((a, b) => a.localeCompare(b)), [data])
-  const { summary: s, people } = useMemo(() => summarizeMeals(data, range, staff), [data, range, staff])
+  const { summary: s, people } = useMemo(() => summarizeMeals(data, range), [data, range])
   const dailyEnd = range.to < today ? range.to : today
-  const days = useMemo(() => dailyMeals(data, dailyEnd, 14, asOf, staff), [data, dailyEnd, asOf, staff])
-  const lines = useMemo(() => dayLines(data, range, staff), [data, range, staff])
-  const { checks, unfilled } = useMemo(() => {
-    if (!outReady) return { checks: [] as MealCheck[], unfilled: [] as MealUnfilled[] }
-    const r = crossCheckMeals(data, employees, range, asOf)
-    return { checks: r.checks.filter((c) => !staff || c.name === staff), unfilled: r.unfilled.filter((u) => !staff || u.name === staff) }
-  }, [data, employees, range, asOf, staff, outReady])
+  const days = useMemo(() => dailyMeals(data, dailyEnd, 14, asOf), [data, dailyEnd, asOf])
+  const lines = useMemo(() => dayLines(data, range), [data, range])
+  const { checks, unfilled, notFound } = useMemo(() => {
+    if (!outReady) return { checks: [] as MealCheck[], unfilled: [] as MealUnfilled[], notFound: [] as MealNotFound[] }
+    return crossCheckMeals(data, employees, range, asOf)
+  }, [data, employees, range, asOf, outReady])
 
   if (q.isLoading) return <LoadingSkeletonGrid count={5} />
   const message = q.error instanceof Error ? q.error.message : ""
@@ -213,22 +221,7 @@ export function MealClaims() {
             </FilterField>
           </div>
         )}
-        <FilterField label="พนักงาน">
-          <select
-            value={staff}
-            onChange={(e) => {
-              setStaff(e.target.value)
-              setPage(1)
-            }}
-            className={`${filterSelectClass} w-full`}
-            aria-label="พนักงาน"
-          >
-            <option value="">ทุกคน</option>
-            {names.map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-        </FilterField>
+        {filterOn && <p className="text-xs text-muted-foreground">กำลังกรองตามตัวกรองพนักงานที่แถบด้านบน (ประเภท / รายคน)</p>}
       </div>
 
       {asOf && behind !== null && behind > 1 && (
@@ -263,9 +256,9 @@ export function MealClaims() {
           <StatTile
             tone="info"
             icon={Moon}
-            label="อยู่ดึกที่ไม่ได้เบิกแยก"
-            value={<>{num(s.lateDays)} <span className="text-sm font-semibold text-muted-foreground">ครั้ง</span></>}
-            sub={`${num(s.lateMinutes)} นาที · ${num(s.latePeople)} คน (คนคลัง/รับเข้า)`}
+            label="OT พนักงานรายวัน"
+            value={<>{hours(s.lateMinutes)} <span className="text-sm font-semibold text-muted-foreground">ชม.</span></>}
+            sub={`${num(s.lateDays)} ครั้ง · ${num(s.latePeople)} คน · 60 นาทีนับเป็น 1 ชม.`}
           />
           <StatTile
             tone={!outReady ? "neutral" : checks.length > 0 ? "warn" : "ok"}
@@ -314,11 +307,25 @@ export function MealClaims() {
             </ul>
           </div>
         )}
+        {outReady && notFound.length > 0 && (
+          <div className="glass-panel rounded-2xl p-3 text-sm">
+            <p className="font-bold text-foreground">ไม่พบชื่อในข้อมูลผลงานทีม (เทียบเวลาออกงานไม่ได้)</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">คนเหล่านี้เบิกค่าข้าวในแท็บ แต่ไม่มีชื่อเดียวกันในชีตผลงานทีม อาจสะกดไม่ตรงกันหรือไม่ได้ลงชีตนั้น จึงไม่นับเป็นรายการควรเช็ค</p>
+            <ul className="mt-2 space-y-1">
+              {notFound.map((n) => (
+                <li key={n.name} className="text-foreground">
+                  <b>{n.name}</b>
+                  <span className="text-muted-foreground"> · เบิก {n.days.map((d) => formatDateLabel(d)).join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       <section className="space-y-3" aria-label="รายวัน">
-        <BlockHeading title="รายวัน" caption="จำนวนคนต่อวัน 14 วันล่าสุดถึงปลายช่วงที่เลือก แยกคนเบิกค่าข้าวกับคนอยู่ดึกที่ไม่ได้เบิกแยก" />
-        <DailyBars days={days} origins={[CLAIM_LABEL, LATE_LABEL]} title="คนอยู่ดึกและเบิกค่าข้าวรายวัน" colours={["#2ba8a2", "#f5c542"]} />
+        <BlockHeading title="รายวัน" caption="จำนวนคนต่อวัน 14 วันล่าสุดถึงปลายช่วงที่เลือก แยกพนักงานประจำที่เบิกค่าข้าวกับพนักงานรายวันที่ได้ OT" />
+        <DailyBars days={days} origins={[CLAIM_LABEL, LATE_LABEL]} title="เบิกค่าข้าวและ OT รายวัน" colours={["#2ba8a2", "#f5c542"]} />
         <div className="space-y-2">
           {pageLines.map((l) => (
             <div key={l.date} className="glass-panel rounded-2xl p-3">
@@ -334,24 +341,24 @@ export function MealClaims() {
               )}
               {l.late.length > 0 && (
                 <p className="mt-0.5 text-sm text-foreground">
-                  <span className="text-xs text-muted-foreground">อยู่ดึก {num(l.late.length)} คน: </span>
-                  {l.late.map((c) => `${c.name} (${num(c.minutes)} นาที)`).join(", ")}
+                  <span className="text-xs text-muted-foreground">OT {num(l.late.length)} คน: </span>
+                  {l.late.map((c) => `${c.name} (${hours(c.minutes)} ชม.)`).join(", ")}
                 </p>
               )}
             </div>
           ))}
-          {lines.length === 0 && <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีรายการในช่วงนี้ — ลองเลือกช่วงที่ยาวขึ้นหรือเลือก “ทุกคน”</div>}
+          {lines.length === 0 && <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีรายการในช่วงนี้ — ลองเลือกช่วงที่ยาวขึ้น หรือปรับตัวกรองพนักงานที่แถบด้านบน</div>}
         </div>
         <Pager page={safePage} totalPages={totalPages} onChange={setPage} />
       </section>
 
       <section className="space-y-3" aria-label="รายคน">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <BlockHeading title="รายคน" caption="เรียงจากยอดเบิกมากไปน้อย รวมจากรายช่องเอง ไม่ใช้แถว “รวม” ของชีต เพราะแถวรวมของกลุ่มอยู่ดึกขึ้น #VALUE! (มีข้อความ “60 นาที” ในช่อง)" />
+          <BlockHeading title="รายคน" caption="เรียงจากยอดเบิกมากไปน้อย รวมจากรายช่องเอง ไม่ใช้แถว “รวม” ของชีต เพราะแถวรวมของกลุ่ม OT ขึ้น #VALUE! (มีข้อความ “60 นาที” ในช่อง)" />
           <ExportButton disabled={lines.length === 0} label={`ส่งออก ${num(lines.length)} วัน`} build={() => mealClaimsReport(lines)} />
         </div>
         {people.length === 0 ? (
-          <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีใครเบิกหรืออยู่ดึกในช่วงนี้</div>
+          <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีใครเบิกหรือได้ OT ในช่วงนี้</div>
         ) : (
           <div className="space-y-2">
             {people.map((p) => (

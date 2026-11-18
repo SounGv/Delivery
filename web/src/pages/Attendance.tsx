@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { Boxes, CalendarCheck2, Clock, Download, Gauge, LogIn, PackageCheck, Timer, Users } from "lucide-react"
 import { useDashboardQuery } from "@/api/queries"
+import { usePeopleFilter } from "@/lib/people-type"
 import { KpiCard } from "@/components/kpi/KpiCard"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
@@ -36,7 +37,8 @@ export function Attendance({ defaultDepartment }: { defaultDepartment?: string }
     [data]
   )
   // All people across every department (ออนไลน์/ออฟไลน์/ฝ่ายรับเข้า/ฝ่ายคลัง).
-  const deptEmployees = useMemo(() => (data ? buildDepartmentEmployees(data) : []), [data])
+  const { keep } = usePeopleFilter()
+  const deptEmployees = useMemo(() => (data ? buildDepartmentEmployees(data).filter((e) => keep(e.name)) : []), [data, keep])
   const departments = useMemo(() => availableDepartments(deptEmployees), [deptEmployees])
 
   if (isLoading) return <LoadingSkeletonGrid count={4} />
