@@ -5,6 +5,7 @@ import { ClampText } from "@/components/common/ClampText"
 import { DataNotice } from "@/components/common/DataNotice"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
+import { SimpleTable, type SimpleColumn, type SimpleRow } from "@/components/common/SimpleTable"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { BlockHeading, DailyBars } from "@/components/reports/ReturnReportParts"
 import { DateInput, FilterField, Pager, StatTile, StatusPill, chipClass } from "@/components/returns/ReturnsUi"
@@ -19,6 +20,7 @@ import {
   latestMealDate,
   otHours,
   summarizeMeals,
+  type DayLine,
   type MealCheck,
   type MealPersonRow,
   type MealNotFound,
@@ -51,61 +53,92 @@ function deltaText(now: number, before: number, unit: string): string {
 
 const shortDate = (iso: string) => formatDateLabel(iso)
 
-function PersonCard({ p }: { p: MealPersonRow }) {
-  return (
-    <div className="glass-panel rounded-2xl p-3">
-      <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 break-words text-base font-bold text-foreground">{p.name}</p>
-        {p.claimDays > 0 && (
-          <div className="shrink-0 text-right tabular-nums">
-            <p className="text-lg font-extrabold text-foreground">{baht(p.amount)}</p>
-            <p className="text-xs text-muted-foreground">เบิก {num(p.claimDays)} วัน</p>
-          </div>
-        )}
-      </div>
-      {p.claimDays > 0 && (
-        <p className="mt-1 flex flex-wrap gap-1.5">
-          {p.claimDates.map((d) => (
-            <span key={d} className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-foreground">
-              {shortDate(d)}
-            </span>
-          ))}
-        </p>
-      )}
-      {p.lateDays > 0 && (
-        <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <StatusPill tone="info" icon={Moon} small>
-            OT {num(p.lateDays)} วัน · {hours(p.lateMinutes)} ชม.
-          </StatusPill>
-          {p.lateDates.map((d) => (
-            <span key={d} className="tabular-nums">{shortDate(d)}</span>
-          ))}
-        </p>
-      )}
-    </div>
-  )
-}
+const PERSON_COLUMNS: SimpleColumn[] = [
+  { label: "ชื่อ" },
+  { label: "เบิก (฿)", align: "right" },
+  { label: "วัน", align: "right", className: "w-12" },
+  { label: "OT (ชม.)", align: "right" },
+]
 
-function CheckCard({ c }: { c: MealCheck }) {
-  const late = c.kind === "late-no-claim"
-  return (
-    <div className="glass-panel flex items-start justify-between gap-3 rounded-2xl border-l-[6px] border-l-amber-500 p-3">
-      <div className="min-w-0">
-        <p className="text-sm font-bold text-foreground">
-          {c.name} <span className="font-normal text-muted-foreground">· {formatFullDateLabel(c.date)}</span>
-        </p>
-        <p className="mt-0.5 text-sm text-foreground">
-          {late
-            ? `ออกงาน ${c.checkOut} แต่ไม่ได้เบิกค่าข้าววันนี้`
-            : c.checkOut
-              ? `เบิกค่าข้าวแล้ว แต่ในข้อมูลผลงานทีมออกงาน ${c.checkOut} (ก่อน ${LATE_CHECKOUT_FROM})`
-              : "เบิกค่าข้าวแล้ว แต่ในข้อมูลผลงานทีมไม่มีเวลาออกงานของวันนี้"}
-        </p>
+const NONE = "—"
+
+/** One row per person: name, money claimed, days claimed, OT hours. The days themselves are behind the row. */
+const personRows = (people: MealPersonRow[]): SimpleRow[] =>
+  people.map((p) => ({
+    key: p.name,
+    cells: [
+      <span key="n" className="break-words font-bold text-foreground">{p.name}</span>,
+      <span key="a" className="font-extrabold text-foreground">{p.claimDays > 0 ? baht(p.amount) : NONE}</span>,
+      <span key="d" className="text-foreground">{p.claimDays > 0 ? num(p.claimDays) : NONE}</span>,
+      <span key="o" className="text-foreground">{p.lateDays > 0 ? hours(p.lateMinutes) : NONE}</span>,
+    ],
+    detail: (
+      <div className="space-y-1.5">
+        {p.claimDays > 0 && <p><span className="text-muted-foreground">เบิก </span>{p.claimDates.map(shortDate).join(", ")}</p>}
+        {p.lateDays > 0 && <p><span className="text-muted-foreground">OT </span>{p.lateDates.map(shortDate).join(", ")}</p>}
       </div>
-      <StatusPill tone={late ? "warn" : "neutral"} small>{late ? "ลืมเบิก?" : "เช็คเวลาออก"}</StatusPill>
-    </div>
-  )
-}
+    ),
+  }))
+
+const CHECK_COLUMNS: SimpleColumn[] = [
+  { label: "ชื่อ · วันที่" },
+  { label: "ออกงาน", align: "right" },
+  { label: "สถานะ" },
+]
+
+/** One row per line worth a look: who and when, the check-out time found, and a short status. */
+const checkRows = (checks: MealCheck[]): SimpleRow[] =>
+  checks.map((c) => ({
+    key: `${c.name}:${c.date}`,
+    cells: [
+      <div key="n">
+        <p className="font-bold text-foreground">{c.name}</p>
+        <p className="text-xs text-muted-foreground">{shortDate(c.date)}</p>
+      </div>,
+      <span key="t" className="text-foreground">{c.checkOut ?? NONE}</span>,
+      <StatusPill key="s" tone="warn" small>{c.kind === "late-no-claim" ? "ลืมเบิก?" : "เช็คเวลาออก"}</StatusPill>,
+    ],
+  }))
+
+const UNFILLED_COLUMNS: SimpleColumn[] = [{ label: "ชื่อ" }, { label: "วันที่ว่าง", align: "right" }]
+
+/** One row per person with days still empty in the tab: the name and how many days; the dates are behind the row. */
+const unfilledRows = (list: MealUnfilled[]): SimpleRow[] =>
+  list.map((u) => ({
+    key: u.name,
+    cells: [
+      <span key="n" className="font-bold text-foreground">{u.name}</span>,
+      <span key="d" className="font-extrabold text-foreground">{num(u.days.length)}</span>,
+    ],
+    detail: (
+      <div className="space-y-1.5">
+        <p><span className="text-muted-foreground">{u.lastFilled ? "กรอกถึง " : ""}</span>{u.lastFilled ? shortDate(u.lastFilled) : "ยังไม่กรอกเลย"}</p>
+        <p><span className="text-muted-foreground">ออกดึก </span>{u.days.map((d) => `${shortDate(d.date)} (${d.checkOut})`).join(", ")}</p>
+      </div>
+    ),
+  }))
+
+const DAY_COLUMNS: SimpleColumn[] = [
+  { label: "วันที่" },
+  { label: "ยอด (฿)", align: "right" },
+  { label: "ชื่อ" },
+]
+
+/** One row per day: the date, the money claimed, and the names (claimed first, then OT). */
+const dayRows = (days: DayLine[]): SimpleRow[] =>
+  days.map((l) => ({
+    key: l.date,
+    cells: [
+      <span key="d" className="font-bold text-foreground">{shortDate(l.date)}</span>,
+      <span key="a" className="font-extrabold text-foreground">{l.amount > 0 ? baht(l.amount) : NONE}</span>,
+      <div key="n" className="space-y-0.5">
+        {l.claimed.length > 0 && <p className="break-words text-foreground">{l.claimed.map((c) => c.name).join(", ")}</p>}
+        {l.late.length > 0 && (
+          <p className="break-words text-xs text-muted-foreground">OT {l.late.map((c) => `${c.name} ${hours(c.minutes)} ชม.`).join(", ")}</p>
+        )}
+      </div>,
+    ],
+  }))
 
 /** "อยู่ดึก · เบิกค่าข้าว": who stayed late and claimed the meal allowance each day, from the team workbook tab
  * "เบิกค่าข้าว", with a check of the claims against the check-out times of the team output sheet. Read-only. */
@@ -285,26 +318,20 @@ export function MealClaims() {
           </div>
         ) : (
           <div className="space-y-2">
-            {checks.slice(0, 12).map((c) => (
-              <CheckCard key={`${c.name}:${c.date}`} c={c} />
-            ))}
+            <SimpleTable caption="รายการที่ควรเช็ค: ชื่อ วันที่ เวลาออกงาน" columns={CHECK_COLUMNS} rows={checkRows(checks.slice(0, 12))} />
+            <p className="text-xs text-muted-foreground">
+              ลืมเบิก? = ออกงาน {LATE_CHECKOUT_FROM} ขึ้นไปแต่ไม่ได้เบิก · เช็คเวลาออก = เบิกแล้วแต่ออกก่อนเวลานั้นหรือไม่มีเวลาออก
+            </p>
             {checks.length > 12 && <p className="text-center text-xs text-muted-foreground">แสดง 12 รายการแรกจาก {num(checks.length)} รายการ ลองเลือกช่วงที่สั้นลงหรือเลือกพนักงาน</p>}
           </div>
         )}
         {outReady && unfilled.length > 0 && (
-          <div className="glass-panel rounded-2xl p-3 text-sm">
-            <p className="font-bold text-foreground">ช่องที่ยังว่างในแท็บ (ยังไม่นับว่าลืมเบิก)</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">คนเหล่านี้ออกงาน {LATE_CHECKOUT_FROM} ขึ้นไปในวันที่แท็บยังไม่ได้กรอกช่องของเขา ถ้าทีมกรอกครบแล้วค่อยกลับมาดูใหม่</p>
-            <ul className="mt-2 space-y-1">
-              {unfilled.map((u) => (
-                <li key={u.name} className="text-foreground">
-                  <b>{u.name}</b>
-                  <span className="text-muted-foreground">
-                    {" "}· {u.lastFilled ? `กรอกถึง ${formatDateLabel(u.lastFilled)}` : "ยังไม่กรอกเลย"} · ออกดึก {u.days.map((d) => `${formatDateLabel(d.date)} (${d.checkOut})`).join(", ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <div className="space-y-2">
+            <div>
+              <p className="font-bold text-foreground">ช่องที่ยังว่างในแท็บ (ยังไม่นับว่าลืมเบิก)</p>
+              <p className="text-xs text-muted-foreground">ออกงาน {LATE_CHECKOUT_FROM} ขึ้นไปในวันที่แท็บยังไม่ได้กรอก กดลูกศรเพื่อดูวันที่</p>
+            </div>
+            <SimpleTable caption="ช่องที่ยังว่างในแท็บ: ชื่อและจำนวนวัน" columns={UNFILLED_COLUMNS} rows={unfilledRows(unfilled)} />
           </div>
         )}
         {outReady && notFound.length > 0 && (
@@ -326,29 +353,11 @@ export function MealClaims() {
       <section className="space-y-3" aria-label="รายวัน">
         <BlockHeading title="รายวัน" caption="จำนวนคนต่อวัน 14 วันล่าสุดถึงปลายช่วงที่เลือก แยกพนักงานประจำที่เบิกค่าข้าวกับพนักงานรายวันที่ได้ OT" />
         <DailyBars days={days} origins={[CLAIM_LABEL, LATE_LABEL]} title="เบิกค่าข้าวและ OT รายวัน" colours={["#2ba8a2", "#f5c542"]} />
-        <div className="space-y-2">
-          {pageLines.map((l) => (
-            <div key={l.date} className="glass-panel rounded-2xl p-3">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-bold text-foreground">{formatFullDateLabel(l.date)}</p>
-                <p className="text-sm font-extrabold tabular-nums text-foreground">{l.amount > 0 ? baht(l.amount) : "—"}</p>
-              </div>
-              {l.claimed.length > 0 && (
-                <p className="mt-1 text-sm text-foreground">
-                  <span className="text-xs text-muted-foreground">เบิก {num(l.claimed.length)} คน: </span>
-                  {l.claimed.map((c) => c.name).join(", ")}
-                </p>
-              )}
-              {l.late.length > 0 && (
-                <p className="mt-0.5 text-sm text-foreground">
-                  <span className="text-xs text-muted-foreground">OT {num(l.late.length)} คน: </span>
-                  {l.late.map((c) => `${c.name} (${hours(c.minutes)} ชม.)`).join(", ")}
-                </p>
-              )}
-            </div>
-          ))}
-          {lines.length === 0 && <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีรายการในช่วงนี้ — ลองเลือกช่วงที่ยาวขึ้น หรือปรับตัวกรองพนักงานที่แถบด้านบน</div>}
-        </div>
+        {pageLines.length > 0 ? (
+          <SimpleTable caption="เบิกค่าข้าวและ OT รายวัน" columns={DAY_COLUMNS} rows={dayRows(pageLines)} />
+        ) : (
+          <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีรายการในช่วงนี้ — ลองเลือกช่วงที่ยาวขึ้น หรือปรับตัวกรองพนักงานที่แถบด้านบน</div>
+        )}
         <Pager page={safePage} totalPages={totalPages} onChange={setPage} />
       </section>
 
@@ -360,11 +369,7 @@ export function MealClaims() {
         {people.length === 0 ? (
           <div className="glass-panel rounded-2xl p-5 text-center text-sm text-muted-foreground">ไม่มีใครเบิกหรือได้ OT ในช่วงนี้</div>
         ) : (
-          <div className="space-y-2">
-            {people.map((p) => (
-              <PersonCard key={p.name} p={p} />
-            ))}
-          </div>
+          <SimpleTable caption="เบิกค่าข้าวและ OT รายคน" columns={PERSON_COLUMNS} rows={personRows(people)} />
         )}
       </section>
     </div>

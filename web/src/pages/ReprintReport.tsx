@@ -5,6 +5,7 @@ import { ClampText } from "@/components/common/ClampText"
 import { DataNotice } from "@/components/common/DataNotice"
 import { ErrorPanel } from "@/components/common/ErrorPanel"
 import { ExportButton } from "@/components/common/ExportButton"
+import { SimpleTable, type SimpleColumn, type SimpleRow } from "@/components/common/SimpleTable"
 import { LoadingSkeletonGrid } from "@/components/common/LoadingSkeletonGrid"
 import { BlockHeading, DailyBars, RankList } from "@/components/reports/ReturnReportParts"
 import { DateInput, FilterField, Pager, StatTile, StatusPill, chipClass, filterSelectClass } from "@/components/returns/ReturnsUi"
@@ -56,28 +57,21 @@ function deltaText(now: number, before: number): string {
 
 const methodPill = (m: "manual" | "auto" | "other") => (m === "auto" ? "info" : "neutral")
 
-function ReprintCard({ c }: { c: ReprintCase }) {
+/** What is behind a row: the order number, the product text, the flags, and one line per press. */
+function ReprintDetail({ c }: { c: ReprintCase }) {
   return (
-    <div className={cn("glass-panel rounded-2xl border-l-[6px] p-3", c.heavy ? "border-l-rose-500" : "border-l-amber-500")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="break-all text-sm font-bold tabular-nums text-foreground">{c.packageNo || c.orderNo}</p>
-        <StatusPill tone={c.heavy ? "danger" : "warn"} icon={Printer} small>
-          พิมพ์ {num(c.prints)} ครั้ง
-        </StatusPill>
-      </div>
-      <p className="mt-0.5 break-all text-xs text-muted-foreground">
-        {[formatFullDateLabel(c.date), c.orderNo && `ออเดอร์ ${c.orderNo}`].filter(Boolean).join(" · ")}
-      </p>
+    <div className="space-y-2">
+      {c.orderNo && <p className="break-all text-muted-foreground">ออเดอร์ {c.orderNo}</p>}
+      {c.items && <p className="text-sm text-foreground">{c.items}</p>}
       {(c.rapid || c.multiStaff || c.countMismatch) && (
-        <p className="mt-1.5 flex flex-wrap gap-1.5">
+        <p className="flex flex-wrap gap-1.5">
           {c.rapid && <StatusPill tone="warn" icon={Zap} small>พิมพ์ห่างกันไม่เกิน 1 นาที</StatusPill>}
           {c.multiStaff && <StatusPill tone="info" icon={Users} small>{`พิมพ์ ${c.staff.length} บัญชี`}</StatusPill>}
           {c.countMismatch && <StatusPill tone="neutral" icon={AlertTriangle} small>{`บันทึกการกด ${num(c.logLines)} บรรทัด (ชีตนับ ${num(c.prints)} ครั้ง)`}</StatusPill>}
         </p>
       )}
-      {c.items && <p className="mt-1.5 text-sm text-foreground">{c.items}</p>}
       {c.events.length > 0 ? (
-        <ol className="mt-2 space-y-1 border-t border-dashed border-border pt-2 text-xs">
+        <ol className="space-y-1 border-t border-dashed border-border pt-2">
           {c.events.map((e) => (
             <li key={e.n} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="w-12 shrink-0 text-muted-foreground">ครั้งที่ {e.n}</span>
@@ -88,11 +82,32 @@ function ReprintCard({ c }: { c: ReprintCase }) {
           ))}
         </ol>
       ) : (
-        c.details && <p className="mt-2 break-words border-t border-dashed border-border pt-2 text-xs text-muted-foreground">{c.details}</p>
+        c.details && <p className="break-words border-t border-dashed border-border pt-2 text-muted-foreground">{c.details}</p>
       )}
     </div>
   )
 }
+
+const REPRINT_COLUMNS: SimpleColumn[] = [
+  { label: "เลขพัสดุ · วันที่" },
+  { label: "ครั้ง", align: "right", className: "w-14" },
+  { label: "ผู้พิมพ์" },
+]
+
+/** One row per order: the parcel number and day, how many times it was printed, and who printed it. */
+const reprintRows = (items: ReprintCase[]): SimpleRow[] =>
+  items.map((c) => ({
+    key: `${c.date}:${c.packageNo}:${c.orderNo}`,
+    cells: [
+      <div key="p">
+        <p className="break-all font-bold text-foreground">{c.packageNo || c.orderNo}</p>
+        <p className="text-xs text-muted-foreground">{formatFullDateLabel(c.date)}</p>
+      </div>,
+      <span key="n" className={cn("text-lg font-extrabold", c.heavy ? "text-rose-600 dark:text-rose-300" : "text-foreground")}>{num(c.prints)}</span>,
+      <span key="s" className="break-words text-foreground">{c.staff.join(", ") || "—"}</span>,
+    ],
+    detail: <ReprintDetail c={c} />,
+  }))
 
 /** "ออเดอร์พิมพ์ซ้ำ": orders whose shipping label was printed more than once, per day, from the team workbook tab
  * "รายงานออเดอร์พิมพ์ซ้ำรายวัน" — who pressed print, when, by hand or marked by the system. Read-only. */
@@ -333,14 +348,11 @@ export function ReprintReport() {
         <p className="text-sm text-muted-foreground">
           แสดง {num(pageItems.length)} จาก {num(listItems.length)} รายการ
         </p>
-        <div className="space-y-2.5">
-          {pageItems.map((c) => (
-            <ReprintCard key={`${c.date}:${c.packageNo}:${c.orderNo}`} c={c} />
-          ))}
-          {pageItems.length === 0 && (
-            <div className="glass-panel rounded-2xl p-6 text-center text-sm text-muted-foreground">ไม่พบรายการ — ลองเลือกชุดอื่น เปลี่ยนช่วงเวลา หรือล้างคำค้นหา</div>
-          )}
-        </div>
+        {pageItems.length > 0 ? (
+          <SimpleTable caption="ออเดอร์พิมพ์ซ้ำ: เลขพัสดุ จำนวนครั้ง และผู้พิมพ์" columns={REPRINT_COLUMNS} rows={reprintRows(pageItems)} />
+        ) : (
+          <div className="glass-panel rounded-2xl p-6 text-center text-sm text-muted-foreground">ไม่พบรายการ — ลองเลือกชุดอื่น เปลี่ยนช่วงเวลา หรือล้างคำค้นหา</div>
+        )}
         <Pager page={safePage} totalPages={totalPages} onChange={setPage} />
       </section>
     </div>
