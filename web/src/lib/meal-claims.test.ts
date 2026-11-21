@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Employee, MealsReportData } from "@/api/types"
-import { CLAIM_LABEL, LATE_LABEL, crossCheckMeals, dailyMeals, dayLines, latestMealDate, summarizeMeals } from "./meal-claims"
+import { CLAIM_LABEL, LATE_LABEL, crossCheckMeals, dailyMeals, dayLines, filterMealsByCrew, latestMealDate, makeCrewResolver, summarizeMeals } from "./meal-claims"
 
 // A slice of the real tab "เบิกค่าข้าว" (Nov 2026): 80 baht claims, and late-stay minutes of people who do not claim.
 const report: MealsReportData = {
@@ -141,5 +141,44 @@ describe("crossCheckMeals", () => {
     const out = crossCheckMeals(report, employees.filter((e) => e.name !== "บี้"), week, "2026-11-12")
     expect(out.checks.some((c) => c.name === "บี้")).toBe(false)
     expect(out.notFound).toEqual([{ name: "บี้", days: ["2026-11-11"] }])
+  })
+})
+
+describe("the online / offline filter", () => {
+  const row = (name: string, team: "online" | "offline", days: Record<string, string>): Employee => ({
+    name,
+    team,
+    byDate: Object.fromEntries(Object.entries(days).map(([d, t]) => [d, { parcels: 1, items: 1, checkIn: "08:30", checkOut: t }])),
+    totalParcels: 0,
+    totalItems: 0,
+  })
+  const employees = [
+    // in both crews: the crew with output that day is the one that counts
+    row("ปู", "online", {}),
+    row("ปู", "offline", { "2026-11-02": "19:00" }),
+    row("ใหม่", "offline", {}),
+    row("เอิร์ท", "online", { "2026-11-03": "20:00" }),
+  ]
+  const resolve = makeCrewResolver(employees)
+
+  it("puts a person in the crew that has output or a check-in that day", () => {
+    expect(resolve("ปู", "2026-11-02")).toEqual(["offline"])
+  })
+
+  it("uses the person's own crew on a day with nothing recorded, when there is only one", () => {
+    expect(resolve("ใหม่", "2026-11-11")).toEqual(["offline"])
+    expect(resolve("ปู", "2026-11-11")).toEqual([])
+  })
+
+  it("reads a name spelled differently in the tab through NAME_ALIASES, and knows nothing about a stranger", () => {
+    expect(resolve("เอิท", "2026-11-03")).toEqual(["online"])
+    expect(resolve("บี้", "2026-11-11")).toEqual([])
+  })
+
+  it("keeps only the days of the chosen crew in claims and in OT, and everything for \"all\"", () => {
+    const offline = filterMealsByCrew(report, "offline", resolve)
+    expect(offline.claims.find((p) => p.name === "ปู")?.byDate).toEqual({ "2026-11-02": 80 })
+    expect(offline.claims.find((p) => p.name === "ตอม")?.byDate).toEqual({})
+    expect(filterMealsByCrew(report, "all", resolve)).toBe(report)
   })
 })

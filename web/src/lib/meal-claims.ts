@@ -1,4 +1,4 @@
-import type { Employee, MealsReportData } from "@/api/types"
+import type { Employee, EmployeeDailyEntry, MealsReportData } from "@/api/types"
 import { addDaysIso, previousRange, type DateRange, type DayCount } from "@/lib/return-report"
 
 /**
@@ -22,6 +22,47 @@ export const otHours = (minutes: number): number => minutes / 60
  * hand and match names letter for letter, so a different spelling looks like a missing person.
  * shortcut: hand-kept list; add a line when `notFound` shows a name that is only spelled differently. */
 export const NAME_ALIASES: Record<string, string> = { เอิท: "เอิร์ท" }
+
+/** The two crews the filter on the meal page separates. */
+export type MealCrew = "online" | "offline"
+export type MealCrewFilter = "all" | MealCrew
+export const CREW_LABEL: Record<MealCrew, string> = { online: "ออนไลน์", offline: "ออฟไลน์" }
+const CREWS: MealCrew[] = ["online", "offline"]
+
+const worked = (cell: EmployeeDailyEntry | undefined) => !!cell && !!(cell.checkIn || cell.checkOut || cell.parcels || cell.items)
+
+/** Which crew or crews a person belongs to on a day. */
+export type CrewResolver = (name: string, date: string) => MealCrew[]
+
+/**
+ * The crews a person worked with on a day: the crew whose team output sheet has a check-in, a check-out or output for that
+ * name that day (both when both do). A day with nothing recorded counts for the person's own crew when they belong to only
+ * one; a person in both crews, or in neither, has no crew on such a day and shows only under "ทั้งหมด".
+ * shortcut: names are matched letter for letter after NAME_ALIASES, like the check against check-out times.
+ */
+export function makeCrewResolver(employees: Employee[]): CrewResolver {
+  const byName = new Map<string, Employee[]>()
+  for (const e of employees) byName.set(e.name, [...(byName.get(e.name) ?? []), e])
+  return (name, date) => {
+    const rows = byName.get(NAME_ALIASES[name] ?? name) ?? []
+    const that = CREWS.filter((c) => rows.some((e) => (e.team ?? "online") === c && worked(e.byDate[date])))
+    if (that.length > 0) return that
+    const own = CREWS.filter((c) => rows.some((e) => (e.team ?? "online") === c))
+    return own.length === 1 ? own : []
+  }
+}
+
+/** The report with only the days that belong to `crew` (claims and OT alike); "all" returns it as it is. */
+export function filterMealsByCrew(report: MealsReportData, crew: MealCrewFilter, resolve: CrewResolver): MealsReportData {
+  if (crew === "all") return report
+  const pick = <T,>(byDate: Record<string, T>, name: string): Record<string, T> =>
+    Object.fromEntries(Object.entries(byDate).filter(([date]) => resolve(name, date).includes(crew)))
+  return {
+    ...report,
+    claims: report.claims.map((p) => ({ ...p, byDate: pick(p.byDate, p.name) })),
+    lateStays: report.lateStays.map((p) => ({ ...p, byDate: pick(p.byDate, p.name) })),
+  }
+}
 
 const inRange = (day: string, r: DateRange) => !!day && day >= r.from && day <= r.to
 

@@ -14,19 +14,24 @@ import {
   CLAIM_LABEL,
   LATE_CHECKOUT_FROM,
   LATE_LABEL,
+  CREW_LABEL,
   crossCheckMeals,
   dailyMeals,
   dayLines,
+  filterMealsByCrew,
   latestMealDate,
+  makeCrewResolver,
   otHours,
   summarizeMeals,
   type DayLine,
   type MealCheck,
   type MealPersonRow,
+  type MealCrewFilter,
   type MealNotFound,
   type MealUnfilled,
 } from "@/lib/meal-claims"
 import { LIST_PAGE_SIZE } from "@/lib/page-size"
+import { cn } from "@/lib/utils"
 import { usePeopleFilter } from "@/lib/people-type"
 import { mealClaimsReport } from "@/lib/reportExports"
 import { changeVs, daysBetweenIso, rangeFor, type PeriodPreset } from "@/lib/return-report"
@@ -100,6 +105,12 @@ const checkRows = (checks: MealCheck[]): SimpleRow[] =>
     ],
   }))
 
+const CREW_FILTERS: { key: MealCrewFilter; label: string }[] = [
+  { key: "all", label: "ทั้งหมด" },
+  { key: "online", label: CREW_LABEL.online },
+  { key: "offline", label: CREW_LABEL.offline },
+]
+
 const UNFILLED_COLUMNS: SimpleColumn[] = [{ label: "ชื่อ" }, { label: "วันที่ว่าง", align: "right" }]
 
 /** One row per person with days still empty in the tab: the name and how many days; the dates are behind the row. */
@@ -150,6 +161,7 @@ export function MealClaims() {
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
   const [page, setPage] = useState(1)
+  const [crew, setCrew] = useState<MealCrewFilter>("all")
 
   const { keep, active: filterOn } = usePeopleFilter()
   const report = q.data?.meals
@@ -163,18 +175,31 @@ export function MealClaims() {
   const employees = useMemo(() => dash.data?.employees ?? [], [dash.data])
   // The check against check-out times needs the team output data; without it every claim would look unmatched.
   const outReady = !!dash.data
+  // Online / offline: each claim day goes to the crew the person worked with that day (needs the team output sheet).
+  const resolveCrew = useMemo(() => makeCrewResolver(employees), [employees])
+  const crewData = useMemo(() => (outReady ? filterMealsByCrew(data, crew, resolveCrew) : data), [data, crew, resolveCrew, outReady])
 
   const today = isoDateOf(new Date())
   const asOf = useMemo(() => latestMealDate(full), [full])
   const range = useMemo(() => rangeFor(preset, today, asOf, { from: customFrom, to: customTo }), [preset, today, asOf, customFrom, customTo])
-  const { summary: s, people } = useMemo(() => summarizeMeals(data, range), [data, range])
+  const { summary: s, people } = useMemo(() => summarizeMeals(crewData, range), [crewData, range])
   const dailyEnd = range.to < today ? range.to : today
-  const days = useMemo(() => dailyMeals(data, dailyEnd, 14, asOf), [data, dailyEnd, asOf])
-  const lines = useMemo(() => dayLines(data, range), [data, range])
+  const days = useMemo(() => dailyMeals(crewData, dailyEnd, 14, asOf), [crewData, dailyEnd, asOf])
+  const lines = useMemo(() => dayLines(crewData, range), [crewData, range])
   const { checks, unfilled, notFound } = useMemo(() => {
     if (!outReady) return { checks: [] as MealCheck[], unfilled: [] as MealUnfilled[], notFound: [] as MealNotFound[] }
-    return crossCheckMeals(data, employees, range, asOf)
-  }, [data, employees, range, asOf, outReady])
+    const r = crossCheckMeals(data, employees, range, asOf)
+    if (crew === "all") return r
+    // The check runs on every day of the person, then keeps what belongs to the chosen crew; a name missing from the team
+    // sheet has no crew, so it shows only under "ทั้งหมด".
+    return {
+      checks: r.checks.filter((c) => resolveCrew(c.name, c.date).includes(crew)),
+      unfilled: r.unfilled
+        .map((u) => ({ ...u, days: u.days.filter((d) => resolveCrew(u.name, d.date).includes(crew)) }))
+        .filter((u) => u.days.length > 0),
+      notFound: [] as MealNotFound[],
+    }
+  }, [data, employees, range, asOf, outReady, crew, resolveCrew])
 
   if (q.isLoading) return <LoadingSkeletonGrid count={5} />
   const message = q.error instanceof Error ? q.error.message : ""
@@ -254,6 +279,31 @@ export function MealClaims() {
             </FilterField>
           </div>
         )}
+        <div>
+          <span className="mb-1 block text-[11px] text-muted-foreground">ฝ่าย</span>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="ฝ่าย">
+            {CREW_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={crew === f.key}
+                disabled={f.key !== "all" && !outReady}
+                className={cn(chipClass(crew === f.key), "disabled:cursor-not-allowed disabled:opacity-50")}
+                onClick={() => {
+                  setCrew(f.key)
+                  setPage(1)
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {crew !== "all" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              นับแต่ละวันตามฝ่ายที่คนนั้นมีผลงานหรือเวลาเข้างานในวันนั้น วันที่ไม่มีข้อมูล นับตามฝ่ายของเขา (ถ้ามีฝ่ายเดียว)
+            </p>
+          )}
+        </div>
         {filterOn && <p className="text-xs text-muted-foreground">กำลังกรองตามตัวกรองพนักงานที่แถบด้านบน (ประเภท / รายคน)</p>}
       </div>
 
